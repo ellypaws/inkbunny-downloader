@@ -1,11 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
@@ -38,6 +47,10 @@ func main() {
 
 		keywordBuilder       strings.Builder
 		keywordAutocompletes []inkbunny.KeywordAutocomplete
+
+		toDownload int
+		downloaded atomic.Int64
+		search     inkbunny.SubmissionSearchResponse
 	)
 
 	user, err := login()
@@ -68,6 +81,7 @@ func main() {
 		}, username
 	}
 
+Search:
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().Title("Logged in as").Description(user.Username),
@@ -192,8 +206,16 @@ func main() {
 
 			huh.NewInput().
 				Title("Max number of submissions to download").
+				Description("This is just a soft limit").
 				Placeholder("Unlimited").
-				Value(&maxDownloads),
+				Value(&maxDownloads).
+				Validate(func(s string) error {
+					if s == "" {
+						return nil
+					}
+					_, err := strconv.Atoi(s)
+					return err
+				}),
 		),
 	)
 
@@ -223,7 +245,13 @@ func main() {
 		}
 	}
 
-	var search inkbunny.SubmissionSearchResponse
+	if maxDownloads != "" {
+		toDownload, err = strconv.Atoi(maxDownloads)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	spinner.New().
 		Title("Searching...").
 		Action(func() {
@@ -233,8 +261,125 @@ func main() {
 		log.Fatal("failed to search submissions", "err", err)
 	}
 	log.Infof("Total number of submissions: %d", search.ResultsCountAll)
+	log.Infof("To download: %d", toDownload)
 
-	select {}
+	client := &http.Client{
+		Timeout: 5 * time.Minute,
+	}
+
+	downloader := utils.NewWorkerPool(runtime.NumCPU(), func(details inkbunny.SubmissionDetails) error {
+		var keywords bytes.Buffer
+		for i, keyword := range details.Keywords {
+			if i > 0 {
+				keywords.WriteString(", ")
+			}
+			keywords.WriteString(keyword.KeywordName)
+		}
+		numOfFiles := len(details.Files)
+		if numOfFiles == 0 {
+			return nil
+		}
+		padding := (numOfFiles / 10) + 1
+		log.Debug("Downloading submission", "url", fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID), "files", numOfFiles)
+		for i, file := range details.Files {
+			if int(downloaded.Load()) >= toDownload {
+				return nil
+			}
+			if !strings.HasPrefix(file.MimeType, "image") {
+				log.Warn("Skipping file", "url", file.FileURLFull, "mimetype", file.MimeType)
+				continue
+			}
+			folder := filepath.Join("inkbunny", details.Username)
+			filename := filepath.Join(folder, filepath.Base(file.FileName))
+			if fileExists(filename) {
+				return nil
+			}
+			err := os.MkdirAll(folder, os.ModePerm)
+			if err != nil {
+				return err
+			}
+			f, err := os.Create(filename)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			resp, err := client.Get(file.FileURLFull)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			_, err = io.Copy(f, resp.Body)
+			if err != nil {
+				return err
+			}
+
+			if keywords.Len() == 0 {
+				return nil
+			}
+			c, err := os.Create(strings.TrimSuffix(filename, filepath.Ext(filename)) + ".txt")
+			if err != nil {
+				return err
+			}
+
+			_, err = io.Copy(c, &keywords)
+			if err != nil {
+				return err
+			}
+
+			log.Debug(fmt.Sprintf("Downloaded file %0*d/%0*d", padding, i+1, padding, numOfFiles), "url", file.FileURLFull)
+			downloaded.Add(1)
+		}
+		log.Info("Downloaded submission", "url", fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID), "files", numOfFiles)
+		return nil
+	})
+
+	go func() {
+		defer downloader.Close()
+		for page, err := range search.AllPages() {
+			if err != nil {
+				log.Error("Failed to search submissions", "err", err)
+			}
+			details, err := page.Details()
+			if err != nil {
+				log.Error("Failed to get submission details", "err", err)
+				continue
+			}
+			downloader.Add(details.Submissions...)
+			if toDownload > 0 && int(downloaded.Load()) >= toDownload {
+				return
+			}
+		}
+	}()
+
+	for err := range downloader.Work() {
+		if err != nil {
+			log.Error("Failed to download submissions", "err", err)
+		}
+	}
+
+	log.Infof("Downloaded %d files", downloaded.Load())
+
+	var exit bool
+	huh.NewForm(huh.NewGroup(huh.NewConfirm().
+		Title("Do you want to restart?").
+		Affirmative("Exit").
+		Negative("Restart").
+		Value(&exit),
+	),
+	).Run()
+
+	if exit {
+		os.Exit(0)
+	} else {
+		goto Search
+	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 func keywordCache(ratings types.Ratings) func(string) ([]inkbunny.KeywordAutocomplete, error) {
