@@ -1,0 +1,22 @@
+.idea
+vendor
+
+# config
+*.txt
+*.json
+*.exe
+*.env
+
+# images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# other files
+*.js
+*.ts
+*.css
+*.html
+*.zip
