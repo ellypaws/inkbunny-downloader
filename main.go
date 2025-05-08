@@ -311,7 +311,7 @@ Search:
 		}
 
 		submissionURL := fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID)
-		padding := (numOfFiles / 10) + 1
+		padding := digitCount(numOfFiles)
 		log.Debug("Downloading submission", "url", submissionURL, "files", numOfFiles)
 		for i, file := range details.Files {
 			if toDownload > 0 && int(downloaded.Load()) >= toDownload {
@@ -406,6 +406,18 @@ Search:
 	if !exit {
 		goto Search
 	}
+}
+
+func digitCount(i int) int {
+	if i == 0 {
+		return 1
+	}
+	count := 0
+	for i != 0 {
+		i /= 10
+		count++
+	}
+	return count
 }
 
 func fileExists(path string) bool {
