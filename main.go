@@ -54,7 +54,14 @@ func main() {
 		search          inkbunny.SubmissionSearchResponse
 	)
 
+Login:
 	user, err := login()
+	if err != nil {
+		log.Error("Failed to login", "err", err)
+		goto Login
+	} else {
+		log.Info("Logged in", "username", user.Username)
+	}
 	defer func() {
 		var err error
 		spinner.New().
@@ -432,12 +439,6 @@ func login() (*inkbunny.User, error) {
 		Action(func() {
 			user, err = inkbunny.Login(username, password)
 		}).Run()
-
-	if err != nil {
-		log.Error("Failed to login", "err", err)
-	} else {
-		log.Info("Logged in", "username", username)
-	}
 
 	return user, err
 }
