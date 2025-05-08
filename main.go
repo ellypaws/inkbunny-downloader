@@ -81,7 +81,6 @@ func main() {
 		}, username
 	}
 
-Search:
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().Title("Logged in as").Description(user.Username),
@@ -219,6 +218,7 @@ Search:
 		),
 	)
 
+Search:
 	if err := form.Run(); err != nil {
 		log.Fatal(err)
 	}
