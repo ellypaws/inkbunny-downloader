@@ -342,7 +342,9 @@ Search:
 			log.Debug(fmt.Sprintf("Downloaded file %0*d/%0*d", padding, i+1, padding, numOfFiles), "url", file.FileURLFull)
 			downloaded.Add(1)
 		}
-		log.Warn("There are no keywords on the submission", "url", submissionURL)
+		if downloadCaption && keywords.Len() < 1 {
+			log.Warn("There are no keywords on the submission", "url", submissionURL)
+		}
 		log.Info("Downloaded submission", "url", submissionURL, "files", numOfFiles)
 		return nil
 	})
