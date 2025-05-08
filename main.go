@@ -223,6 +223,11 @@ Search:
 		log.Fatal(err)
 	}
 
+	request.Keywords = false
+	request.Title = false
+	request.Description = false
+	request.MD5 = false
+
 	for _, v := range searchIn {
 		switch v {
 		case Keywords:
