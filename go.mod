@@ -6,7 +6,7 @@ require (
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/huh/spinner v0.0.0-20250505102704-9e8811d319bf
 	github.com/charmbracelet/log v0.4.1
-	github.com/ellypaws/inkbunny v0.0.0-20250508194005-2a513966d01d
+	github.com/ellypaws/inkbunny v0.0.0-20250508225012-7c12125610c9
 	github.com/muesli/termenv v0.16.0
 )
 
