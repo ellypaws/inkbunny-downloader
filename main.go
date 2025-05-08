@@ -354,6 +354,8 @@ Search:
 				if err != nil {
 					return err
 				}
+				defer c.Close()
+
 				_, err = io.Copy(c, bytes.NewReader(keywords.Bytes()))
 				if err != nil {
 					return err
