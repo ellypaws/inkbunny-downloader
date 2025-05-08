@@ -95,6 +95,7 @@ Login:
 		}, username
 	}
 
+Search:
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().Title("Logged in as").Description(user.Username),
@@ -238,7 +239,6 @@ Login:
 		),
 	)
 
-Search:
 	if err := form.Run(); err != nil {
 		log.Fatal(err)
 	}
