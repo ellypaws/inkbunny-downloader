@@ -301,7 +301,7 @@ Search:
 			folder := filepath.Join("inkbunny", details.Username)
 			filename := filepath.Join(folder, filepath.Base(file.FileName))
 			if fileExists(filename) {
-				return nil
+				continue
 			}
 			err := os.MkdirAll(folder, os.ModePerm)
 			if err != nil {
