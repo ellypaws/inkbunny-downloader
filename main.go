@@ -286,6 +286,11 @@ Search:
 	}
 
 	downloader := utils.NewWorkerPool(runtime.NumCPU(), func(details inkbunny.SubmissionDetails) error {
+		numOfFiles := len(details.Files)
+		if numOfFiles == 0 {
+			return nil
+		}
+
 		var keywords bytes.Buffer
 		for i, keyword := range details.Keywords {
 			if i > 0 {
@@ -293,10 +298,7 @@ Search:
 			}
 			keywords.WriteString(keyword.KeywordName)
 		}
-		numOfFiles := len(details.Files)
-		if numOfFiles == 0 {
-			return nil
-		}
+
 		submissionURL := fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID)
 		padding := (numOfFiles / 10) + 1
 		log.Debug("Downloading submission", "url", submissionURL, "files", numOfFiles)
