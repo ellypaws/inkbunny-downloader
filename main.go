@@ -384,9 +384,7 @@ Search:
 	),
 	).Run()
 
-	if exit {
-		os.Exit(0)
-	} else {
+	if !exit {
 		goto Search
 	}
 }
