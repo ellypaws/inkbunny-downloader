@@ -186,10 +186,14 @@ func main() {
 				).Value((*[]inkbunny.SubmissionType)(&request.Type)).
 				DescriptionFunc(func() string {
 					switch len(request.Type) {
-					case 0:
+					case 0, 15:
 						return "Any"
 					case 1:
 						if request.Type[0] == inkbunny.SubmissionTypeAny {
+							return "Any"
+						}
+					case 14:
+						if !slices.Contains(request.Type, inkbunny.SubmissionTypeAny) {
 							return "Any"
 						}
 					}
