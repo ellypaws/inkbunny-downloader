@@ -223,7 +223,7 @@ Login:
 
 			huh.NewInput().
 				Title("Max number of submissions to download").
-				Description("This is just a soft limit").
+				Description("This is just a soft limit. 0 or blank is unlimited.").
 				Placeholder("Unlimited").
 				Value(&maxDownloads).
 				Validate(func(s string) error {
@@ -286,7 +286,11 @@ Search:
 		log.Fatal("failed to search submissions", "err", err)
 	}
 	log.Infof("Total number of submissions: %d", search.ResultsCountAll)
-	log.Infof("To download: %d", toDownload)
+	if toDownload > 0 {
+		log.Infof("To download: %d", toDownload)
+	} else {
+		log.Info("To download: Unlimited")
+	}
 
 	client := &http.Client{
 		Timeout: 5 * time.Minute,
@@ -310,7 +314,7 @@ Search:
 		padding := (numOfFiles / 10) + 1
 		log.Debug("Downloading submission", "url", submissionURL, "files", numOfFiles)
 		for i, file := range details.Files {
-			if int(downloaded.Load()) >= toDownload {
+			if toDownload > 0 && int(downloaded.Load()) >= toDownload {
 				return nil
 			}
 			if !strings.HasPrefix(file.MimeType, "image") {
