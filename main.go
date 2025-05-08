@@ -334,7 +334,7 @@ Search:
 				return err
 			}
 
-			if downloadCaption && keywords.Len() > 0 {
+			if downloadCaption && len(details.Keywords) > 0 {
 				c, err := os.Create(strings.TrimSuffix(filename, filepath.Ext(filename)) + ".txt")
 				if err != nil {
 					return err
@@ -348,7 +348,7 @@ Search:
 			log.Debug(fmt.Sprintf("Downloaded file %0*d/%0*d", padding, i+1, padding, numOfFiles), "url", file.FileURLFull)
 			downloaded.Add(1)
 		}
-		if downloadCaption && keywords.Len() < 1 {
+		if downloadCaption && len(details.Keywords) <= 0 {
 			log.Warn("There are no keywords on the submission", "url", submissionURL)
 		}
 		log.Info("Downloaded submission", "url", submissionURL, "files", numOfFiles)
