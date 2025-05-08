@@ -46,8 +46,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
-github.com/ellypaws/inkbunny v0.0.0-20250508193326-135f3a2145ec h1:IaiNvDom+rvaYrwoRHOj1tI3QgCBcc9RP1uz1hCyol8=
-github.com/ellypaws/inkbunny v0.0.0-20250508193326-135f3a2145ec/go.mod h1:BGxbrFTtZSNLWqOsW/6A0d3CZj/iTg0hUntGhs9daqw=
+github.com/ellypaws/inkbunny v0.0.0-20250508194005-2a513966d01d h1:EDNl8V402n6Z0FO7qOz1RKsdd6xQIQa/bFsg9vLy2yE=
+github.com/ellypaws/inkbunny v0.0.0-20250508194005-2a513966d01d/go.mod h1:BGxbrFTtZSNLWqOsW/6A0d3CZj/iTg0hUntGhs9daqw=
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f h1:Y/CXytFA4m6baUTXGLOoWe4PQhGxaX0KpnayAqC48p4=
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f/go.mod h1:vw97MGsxSvLiUE2X8qFplwetxpGLQrlU1Q9AUEIzCaM=
 github.com/go-logfmt/logfmt v0.6.0 h1:wGYYu3uicYdqXVgoYbvnkrPVXkuLM1p1ifugDMEdRi4=
