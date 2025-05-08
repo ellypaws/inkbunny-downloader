@@ -243,21 +243,21 @@ Search:
 		log.Fatal(err)
 	}
 
-	request.Keywords = false
-	request.Title = false
-	request.Description = false
-	request.MD5 = false
+	request.Keywords = nil
+	request.Title = nil
+	request.Description = nil
+	request.MD5 = nil
 
 	for _, v := range searchIn {
 		switch v {
 		case Keywords:
-			request.Keywords = true
+			request.Keywords = &types.Yes
 		case Title:
-			request.Title = true
+			request.Title = &types.Yes
 		case Description:
-			request.Description = true
+			request.Description = &types.Yes
 		case MD5:
-			request.MD5 = true
+			request.MD5 = &types.Yes
 		}
 	}
 

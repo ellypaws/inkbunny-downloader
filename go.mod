@@ -2,11 +2,13 @@ module github.com/ellypaws/inkbunny/cmd/downloader
 
 go 1.24.2
 
+replace github.com/ellypaws/inkbunny => ../..
+
 require (
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/huh/spinner v0.0.0-20250505102704-9e8811d319bf
 	github.com/charmbracelet/log v0.4.1
-	github.com/ellypaws/inkbunny v0.0.0-20250508071534-59c51584b5fb
+	github.com/ellypaws/inkbunny v0.0.0-20250508185819-1527c9313767
 	github.com/muesli/termenv v0.16.0
 )
 
