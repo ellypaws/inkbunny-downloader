@@ -277,6 +277,8 @@ Search:
 		}
 	}
 
+	request.GetRID = types.Yes
+
 	spinner.New().
 		Title("Searching...").
 		Action(func() {
