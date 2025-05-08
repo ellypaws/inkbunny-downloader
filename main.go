@@ -48,9 +48,10 @@ func main() {
 		keywordBuilder       strings.Builder
 		keywordAutocompletes []inkbunny.KeywordAutocomplete
 
-		toDownload int
-		downloaded atomic.Int64
-		search     inkbunny.SubmissionSearchResponse
+		toDownload      int
+		downloadCaption bool = true
+		downloaded      atomic.Int64
+		search          inkbunny.SubmissionSearchResponse
 	)
 
 	user, err := login()
@@ -215,6 +216,8 @@ func main() {
 					_, err := strconv.Atoi(s)
 					return err
 				}),
+
+			huh.NewConfirm().Title("Download keywords as .txt").Value(&downloadCaption),
 		),
 	)
 
@@ -284,8 +287,9 @@ Search:
 		if numOfFiles == 0 {
 			return nil
 		}
+		submissionURL := fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID)
 		padding := (numOfFiles / 10) + 1
-		log.Debug("Downloading submission", "url", fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID), "files", numOfFiles)
+		log.Debug("Downloading submission", "url", submissionURL, "files", numOfFiles)
 		for i, file := range details.Files {
 			if int(downloaded.Load()) >= toDownload {
 				return nil
@@ -320,12 +324,11 @@ Search:
 				return err
 			}
 
-			if keywords.Len() > 0 {
+			if downloadCaption && keywords.Len() > 0 {
 				c, err := os.Create(strings.TrimSuffix(filename, filepath.Ext(filename)) + ".txt")
 				if err != nil {
 					return err
 				}
-
 				_, err = io.Copy(c, &keywords)
 				if err != nil {
 					return err
@@ -335,7 +338,8 @@ Search:
 			log.Debug(fmt.Sprintf("Downloaded file %0*d/%0*d", padding, i+1, padding, numOfFiles), "url", file.FileURLFull)
 			downloaded.Add(1)
 		}
-		log.Info("Downloaded submission", "url", fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID), "files", numOfFiles)
+		log.Warn("There are no keywords on the submission", "url", submissionURL)
+		log.Info("Downloaded submission", "url", submissionURL, "files", numOfFiles)
 		return nil
 	})
 
