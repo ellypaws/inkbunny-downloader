@@ -56,7 +56,13 @@ func main() {
 
 	user, err := login()
 	defer func() {
-		if err := user.Logout(); err != nil {
+		var err error
+		spinner.New().
+			Title(fmt.Sprintf("Logging out %q...", user.Username)).
+			Action(func() {
+				err = user.Logout()
+			}).Run()
+		if err != nil {
 			log.Fatal("failed to logout", "err", err)
 		}
 	}()
