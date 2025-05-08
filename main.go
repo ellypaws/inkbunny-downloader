@@ -320,17 +320,16 @@ Search:
 				return err
 			}
 
-			if keywords.Len() == 0 {
-				return nil
-			}
-			c, err := os.Create(strings.TrimSuffix(filename, filepath.Ext(filename)) + ".txt")
-			if err != nil {
-				return err
-			}
+			if keywords.Len() > 0 {
+				c, err := os.Create(strings.TrimSuffix(filename, filepath.Ext(filename)) + ".txt")
+				if err != nil {
+					return err
+				}
 
-			_, err = io.Copy(c, &keywords)
-			if err != nil {
-				return err
+				_, err = io.Copy(c, &keywords)
+				if err != nil {
+					return err
+				}
 			}
 
 			log.Debug(fmt.Sprintf("Downloaded file %0*d/%0*d", padding, i+1, padding, numOfFiles), "url", file.FileURLFull)
