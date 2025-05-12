@@ -22,9 +22,10 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/ellypaws/inkbunny"
+	"github.com/ellypaws/inkbunny/types"
+
 	"github.com/ellypaws/inkbunny/cmd/downloader/flight"
 	"github.com/ellypaws/inkbunny/cmd/downloader/utils"
-	"github.com/ellypaws/inkbunny/types"
 )
 
 const (
@@ -336,15 +337,16 @@ Search:
 			if err != nil {
 				return err
 			}
-			defer f.Close()
 
 			resp, err := client.Get(file.FileURLFull)
 			if err != nil {
+				f.Close()
 				return err
 			}
-			defer resp.Body.Close()
 
 			_, err = io.Copy(f, resp.Body)
+			f.Close()
+			resp.Body.Close()
 			if err != nil {
 				return err
 			}
@@ -354,9 +356,9 @@ Search:
 				if err != nil {
 					return err
 				}
-				defer c.Close()
 
 				_, err = io.Copy(c, bytes.NewReader(keywords.Bytes()))
+				c.Close()
 				if err != nil {
 					return err
 				}
