@@ -1,21 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/huh"
@@ -49,7 +44,6 @@ func main() {
 
 		toDownload      int
 		downloadCaption bool = true
-		downloaded      atomic.Int64
 		search          inkbunny.SubmissionSearchResponse
 	)
 
@@ -198,120 +192,69 @@ Search:
 		log.Info("To download: Unlimited")
 	}
 
-	client := &http.Client{
-		Timeout: 5 * time.Minute,
-	}
+	var items []*tui.DownloadItem
 
-	downloader := utils.NewWorkerPool(runtime.NumCPU(), func(details inkbunny.SubmissionDetails) error {
-		numOfFiles := len(details.Files)
-		if numOfFiles == 0 {
-			return nil
-		}
-
-		var keywords bytes.Buffer
-		for i, keyword := range details.Keywords {
-			if i > 0 {
-				keywords.WriteString(", ")
-			}
-			keywords.WriteString(keyword.KeywordName)
-		}
-
-		submissionURL := fmt.Sprintf("https://inkbunny.net/s/%d", details.SubmissionID)
-		padding := digitCount(numOfFiles)
-		log.Debug("Downloading submission", "url", submissionURL, "files", numOfFiles)
-		for i, file := range details.Files {
-			if toDownload > 0 && int(downloaded.Load()) >= toDownload {
-				return nil
-			}
-
-			folder := filepath.Join("inkbunny", details.Username)
-			filename := filepath.Join(folder, filepath.Base(file.FileName))
-			if fileExists(filename) {
-				continue
-			}
-			err := os.MkdirAll(folder, os.ModePerm)
-			if err != nil {
-				return err
-			}
-			f, err := os.Create(filename)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-
-			var resp *http.Response
-			for {
-				if !details.Public.Bool() {
-					resp, err = client.Get(file.FileURLFull.String() + "?sid=" + user.SID)
-				} else {
-					resp, err = client.Get(file.FileURLFull.String())
-				}
+	spinner.New().
+		Title("Gathering files to download...").
+		Action(func() {
+			for page, err := range search.AllPages() {
 				if err != nil {
-					return err
-				}
-
-				if resp.StatusCode == http.StatusOK {
+					log.Error("Failed to search pages", "err", err)
 					break
 				}
-
-				if resp.StatusCode == http.StatusTooManyRequests {
-					resp.Body.Close()
-					log.Warn("Rate limited, waiting 5 seconds before retrying...")
-					time.Sleep(5 * time.Second)
+				details, err := page.Details()
+				if err != nil {
+					log.Error("Failed to get submission details", "err", err)
 					continue
 				}
 
-				resp.Body.Close()
-				return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-			}
+				for _, d := range details.Submissions {
+					if toDownload > 0 && len(items) >= toDownload {
+						break
+					}
+					var keywords strings.Builder
+					for i, keyword := range d.Keywords {
+						if i > 0 {
+							keywords.WriteString(", ")
+						}
+						keywords.WriteString(keyword.KeywordName)
+					}
 
-			_, err = io.Copy(f, resp.Body)
-			if err != nil {
-				return err
-			}
+					for _, file := range d.Files {
+						if toDownload > 0 && len(items) >= toDownload {
+							break
+						}
 
-			if downloadCaption && len(details.Keywords) > 0 {
-				err := os.WriteFile(strings.TrimSuffix(filename, filepath.Ext(filename))+".txt", keywords.Bytes(), 0600)
-				if err != nil {
-					return err
+						fileURL := file.FileURLFull.String()
+
+						items = append(items, &tui.DownloadItem{
+							SubmissionID: d.SubmissionID.String(),
+							Title:        d.Title,
+							URL:          fileURL,
+							Username:     d.Username,
+							FileName:     filepath.Base(file.FileName),
+							FileMD5:      file.FullFileMD5,
+							IsPublic:     d.Public.Bool(),
+							Keywords:     keywords.String(),
+							Status:       tui.StatusQueued,
+						})
+					}
+				}
+				if toDownload > 0 && len(items) >= toDownload {
+					break
 				}
 			}
+		}).Run()
 
-			log.Debug(fmt.Sprintf("Downloaded file %0*d/%0*d", padding, i+1, padding, numOfFiles), "url", file.FileURLFull)
-			downloaded.Add(1)
-		}
-		if downloadCaption && len(details.Keywords) <= 0 {
-			log.Warn("There are no keywords on the submission", "url", submissionURL)
-		}
-		log.Info("Downloaded submission", "url", submissionURL, "files", numOfFiles)
-		return nil
-	})
-
-	go func() {
-		defer downloader.Close()
-		for page, err := range search.AllPages() {
-			if err != nil {
-				log.Error("Failed to search submissions", "err", err)
-			}
-			details, err := page.Details()
-			if err != nil {
-				log.Error("Failed to get submission details", "err", err)
-				continue
-			}
-			downloader.Add(details.Submissions...)
-			if toDownload > 0 && int(downloaded.Load()) >= toDownload {
-				return
-			}
-		}
-	}()
-
-	for err := range downloader.Work() {
-		if err != nil {
-			log.Error("Failed to download submissions", "err", err)
+	if len(items) == 0 {
+		log.Info("No files to download.")
+	} else {
+		downloadModel := tui.NewDownloadModel(user, items, min(max(1, runtime.NumCPU()/6), 6), toDownload, downloadCaption)
+		p := tea.NewProgram(downloadModel) // from bubbletea/v2
+		if _, err := p.Run(); err != nil {
+			log.Error("Failed to run downloader TUI", "err", err)
 		}
 	}
-
-	log.Infof("Downloaded %d files", downloaded.Load())
 
 	var exit bool
 	huh.NewForm(huh.NewGroup(huh.NewConfirm().
