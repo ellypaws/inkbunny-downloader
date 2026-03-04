@@ -54,8 +54,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "ctrl+c":
+			m.Aborted = true
 			return m, tea.Quit
 		case "esc":
+			m.Aborted = true
 			return m, tea.Quit
 		case "tab", "down":
 			m.ActiveField++

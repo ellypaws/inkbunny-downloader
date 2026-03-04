@@ -100,6 +100,11 @@ Search:
 		log.Fatal("Could not cast model")
 	}
 
+	if finalModel.Aborted {
+		log.Info("Search aborted by user")
+		return
+	}
+
 	request.Text = finalModel.SearchWords.Value()
 	request.Username = finalModel.ArtistName.Value()
 	favBy = finalModel.FavBy.Value()

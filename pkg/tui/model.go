@@ -95,6 +95,8 @@ type Model struct {
 	TypeWriting       bool
 	TypeCharSheet     bool
 	TypePhotography   bool
+
+	Aborted bool
 }
 
 func NewModel(
