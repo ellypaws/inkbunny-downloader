@@ -1,6 +1,8 @@
 module github.com/ellypaws/inkbunny/cmd/downloader
 
-go 1.25.0
+go 1.26.0
+
+replace github.com/ellypaws/inkbunny => ../..
 
 require (
 	github.com/charmbracelet/huh v0.8.0

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,7 +23,6 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/ellypaws/inkbunny"
-	"github.com/ellypaws/inkbunny/types"
 
 	"github.com/ellypaws/inkbunny/cmd/downloader/flight"
 	"github.com/ellypaws/inkbunny/cmd/downloader/utils"
@@ -62,26 +62,26 @@ Login:
 		if err != nil {
 			log.Error("Failed to login", "err", err)
 			goto Login
-		} else {
-			_ = saveSession(user)
-			log.Info("Logged in", "username", user.Username)
 		}
+
+		_ = saveSession(user)
+		log.Info("Logged in", "username", user.Username)
 	} else {
 		log.Info("Logged in as", "username", user.Username)
 	}
-	defer func() {
-		var err error
-		spinner.New().
-			Title(fmt.Sprintf("Logging out %q...", user.Username)).
-			Action(func() {
-				err = user.Logout()
-			}).Run()
-		if err != nil {
-			log.Fatal("failed to logout", "err", err)
-		}
-	}()
 
 	if strings.ToLower(user.Username) == "guest" {
+		defer func() {
+			var err error
+			spinner.New().
+				Title(fmt.Sprintf("Logging out %q...", user.Username)).
+				Action(func() {
+					err = user.Logout()
+				}).Run()
+			if err != nil {
+				log.Fatal("failed to logout", "err", err)
+			}
+		}()
 		if err := changeRatings(user); err != nil {
 			log.Fatal("failed to change ratings", "err", err)
 		}
@@ -144,12 +144,12 @@ Search:
 				return keywordBuilder.String()
 			}, &keywordAutocompletes),
 
-			huh.NewSelect[types.JoinType]().
+			huh.NewSelect[inkbunny.JoinType]().
 				Title("Find").
 				Options(
-					huh.NewOption("Find all keywords together", types.JoinTypeAnd),
-					huh.NewOption("Find any one of the words", types.JoinTypeOr),
-					huh.NewOption("Contains the exact phrase", types.JoinTypeExact),
+					huh.NewOption("Find all keywords together", inkbunny.JoinTypeAnd),
+					huh.NewOption("Find any one of the words", inkbunny.JoinTypeOr),
+					huh.NewOption("Contains the exact phrase", inkbunny.JoinTypeExact),
 				).Value(&request.StringJoinType),
 
 			huh.NewMultiSelect[int]().
@@ -172,18 +172,18 @@ Search:
 				Description("search only work favorited by this user (optional)").
 				Value(&favBy).SuggestionsFunc(getArtist(&favBy)),
 
-			huh.NewSelect[types.IntString]().
+			huh.NewSelect[inkbunny.IntString]().
 				Title("Time Range").
 				Options(
-					huh.NewOption("Any Time", types.IntString(0)).Selected(true),
-					huh.NewOption("24 Hrs", types.IntString(1)),
-					huh.NewOption("3 Days", types.IntString(3)),
-					huh.NewOption("1 Week", types.IntString(7)),
-					huh.NewOption("2 Weeks", types.IntString(14)),
-					huh.NewOption("1 Month", types.IntString(30)),
-					huh.NewOption("3 Months", types.IntString(90)),
-					huh.NewOption("6 Months", types.IntString(180)),
-					huh.NewOption("1 Year", types.IntString(365)),
+					huh.NewOption("Any Time", inkbunny.IntString(0)).Selected(true),
+					huh.NewOption("24 Hrs", inkbunny.IntString(1)),
+					huh.NewOption("3 Days", inkbunny.IntString(3)),
+					huh.NewOption("1 Week", inkbunny.IntString(7)),
+					huh.NewOption("2 Weeks", inkbunny.IntString(14)),
+					huh.NewOption("1 Month", inkbunny.IntString(30)),
+					huh.NewOption("3 Months", inkbunny.IntString(90)),
+					huh.NewOption("6 Months", inkbunny.IntString(180)),
+					huh.NewOption("1 Year", inkbunny.IntString(365)),
 				).Value(&request.DaysLimit),
 
 			huh.NewMultiSelect[inkbunny.SubmissionType]().
@@ -224,9 +224,9 @@ Search:
 			huh.NewSelect[string]().
 				Title("Order by").
 				Options(
-					huh.NewOption("Newest First", types.OrderByCreateDatetime).Selected(true),
-					huh.NewOption("Most Popular First (by Favs)", types.OrderByFavs),
-					huh.NewOption("Most Popular First (by Views)", types.OrderByViews),
+					huh.NewOption("Newest First", inkbunny.OrderByCreateDatetime).Selected(true),
+					huh.NewOption("Most Popular First (by Favs)", inkbunny.OrderByFavs),
+					huh.NewOption("Most Popular First (by Views)", inkbunny.OrderByViews),
 				).Value(&request.OrderBy),
 
 			huh.NewInput().
@@ -258,13 +258,13 @@ Search:
 	for _, v := range searchIn {
 		switch v {
 		case Keywords:
-			request.Keywords = &types.Yes
+			request.Keywords = &inkbunny.Yes
 		case Title:
-			request.Title = &types.Yes
+			request.Title = &inkbunny.Yes
 		case Description:
-			request.Description = &types.Yes
+			request.Description = &inkbunny.Yes
 		case MD5:
-			request.MD5 = &types.Yes
+			request.MD5 = &inkbunny.Yes
 		}
 	}
 
@@ -284,7 +284,7 @@ Search:
 		}
 	}
 
-	request.GetRID = types.Yes
+	request.GetRID = inkbunny.Yes
 
 	if request.Username != "" {
 		suggestions, _ := usernameCache.Get(request.Username)
@@ -302,6 +302,13 @@ Search:
 			search, err = user.SearchSubmissions(request)
 		}).Run()
 	if err != nil {
+		if err, ok := errors.AsType[inkbunny.ErrorResponse](err); ok && err.Code != nil && *err.Code == inkbunny.ErrInvalidSessionID {
+			if err := os.Remove(sidFile); err != nil {
+				log.Warn("failed to remove session file", "err", err)
+			}
+			log.Warn("Session expired, please login again")
+			goto Login
+		}
 		log.Fatal("failed to search submissions", "err", err)
 	}
 	log.Infof("Total number of submissions: %d", search.ResultsCountAll)
@@ -355,9 +362,9 @@ Search:
 			var resp *http.Response
 			for {
 				if !details.Public.Bool() {
-					resp, err = client.Get(file.FileURLFull + "?sid=" + user.SID)
+					resp, err = client.Get(file.FileURLFull.String() + "?sid=" + user.SID)
 				} else {
-					resp, err = client.Get(file.FileURLFull)
+					resp, err = client.Get(file.FileURLFull.String())
 				}
 				if err != nil {
 					return err
@@ -447,24 +454,26 @@ func loadSession() (*inkbunny.User, error) {
 		return nil, errors.New("no session file")
 	}
 
-	b, err := os.ReadFile(sidFile)
+	file, err := os.Open(sidFile)
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close()
 
-	parts := strings.SplitN(strings.TrimSpace(string(b)), "\n", 2)
-	if len(parts) < 2 {
-		return nil, errors.New("invalid session file")
+	var user inkbunny.User
+	if err := json.NewDecoder(file).Decode(&user); err != nil {
+		return nil, err
 	}
 
-	return &inkbunny.User{
-		SID:      strings.TrimSpace(parts[0]),
-		Username: strings.TrimSpace(parts[1]),
-	}, nil
+	return &user, nil
 }
 
 func saveSession(user *inkbunny.User) error {
-	return os.WriteFile(sidFile, []byte(fmt.Sprintf("%s\n%s", user.SID, user.Username)), 0600)
+	bin, err := json.MarshalIndent(user, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(sidFile, bin, 0600)
 }
 
 func digitCount(i int) int {
@@ -484,7 +493,7 @@ func fileExists(path string) bool {
 	return !errors.Is(err, fs.ErrNotExist)
 }
 
-func keywordCache(ratings types.Ratings) func(string) ([]inkbunny.KeywordAutocomplete, error) {
+func keywordCache(ratings inkbunny.Ratings) func(string) ([]inkbunny.KeywordAutocomplete, error) {
 	return func(keyword string) ([]inkbunny.KeywordAutocomplete, error) {
 		return inkbunny.KeywordSuggestion(keyword, ratings, strings.Contains(keyword, "_"))
 	}
@@ -586,13 +595,13 @@ func changeRatings(user *inkbunny.User) error {
 		return err
 	}
 
-	var ratings types.Ratings
-	ratings.General = &types.Yes
-	ratings.Nudity = (*types.BooleanYN)(pointer(slices.Contains(chosenRatings, Nudity)))
-	ratings.MildViolence = (*types.BooleanYN)(pointer(slices.Contains(chosenRatings, MildViolence)))
-	ratings.MildViolence = (*types.BooleanYN)(pointer(slices.Contains(chosenRatings, MildViolence)))
-	ratings.Sexual = (*types.BooleanYN)(pointer(slices.Contains(chosenRatings, Sexual)))
-	ratings.StrongViolence = (*types.BooleanYN)(pointer(slices.Contains(chosenRatings, StrongViolence)))
+	var ratings inkbunny.Ratings
+	ratings.General = &inkbunny.Yes
+	ratings.Nudity = (*inkbunny.BooleanYN)(new(slices.Contains(chosenRatings, Nudity)))
+	ratings.MildViolence = (*inkbunny.BooleanYN)(new(slices.Contains(chosenRatings, MildViolence)))
+	ratings.MildViolence = (*inkbunny.BooleanYN)(new(slices.Contains(chosenRatings, MildViolence)))
+	ratings.Sexual = (*inkbunny.BooleanYN)(new(slices.Contains(chosenRatings, Sexual)))
+	ratings.StrongViolence = (*inkbunny.BooleanYN)(new(slices.Contains(chosenRatings, StrongViolence)))
 
 	var err error
 	spinner.New().
