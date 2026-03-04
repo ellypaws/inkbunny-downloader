@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	Keywords = 1 << iota
+	Keywords int = 1 << iota
 	Title
 	Description
 	MD5
@@ -56,12 +56,18 @@ func main() {
 	)
 
 Login:
-	user, err := login()
+	user, err := loadSession()
 	if err != nil {
-		log.Error("Failed to login", "err", err)
-		goto Login
+		user, err = login()
+		if err != nil {
+			log.Error("Failed to login", "err", err)
+			goto Login
+		} else {
+			_ = saveSession(user)
+			log.Info("Logged in", "username", user.Username)
+		}
 	} else {
-		log.Info("Logged in", "username", user.Username)
+		log.Info("Logged in as", "username", user.Username)
 	}
 	defer func() {
 		var err error
@@ -280,6 +286,16 @@ Search:
 
 	request.GetRID = types.Yes
 
+	if request.Username != "" {
+		suggestions, _ := usernameCache.Get(request.Username)
+		for _, v := range suggestions {
+			if strings.EqualFold(v.Value, request.Username) {
+				request.UserID = v.ID
+				break
+			}
+		}
+	}
+
 	spinner.New().
 		Title("Searching...").
 		Action(func() {
@@ -320,10 +336,7 @@ Search:
 			if toDownload > 0 && int(downloaded.Load()) >= toDownload {
 				return nil
 			}
-			if !strings.HasPrefix(file.MimeType, "image") {
-				log.Warn("Skipping file", "url", file.FileURLFull, "mimetype", file.MimeType)
-				continue
-			}
+
 			folder := filepath.Join("inkbunny", details.Username)
 			filename := filepath.Join(folder, filepath.Base(file.FileName))
 			if fileExists(filename) {
@@ -337,28 +350,41 @@ Search:
 			if err != nil {
 				return err
 			}
+			defer f.Close()
 
-			resp, err := client.Get(file.FileURLFull)
-			if err != nil {
-				f.Close()
-				return err
+			var resp *http.Response
+			for {
+				if !details.Public.Bool() {
+					resp, err = client.Get(file.FileURLFull + "?sid=" + user.SID)
+				} else {
+					resp, err = client.Get(file.FileURLFull)
+				}
+				if err != nil {
+					return err
+				}
+
+				if resp.StatusCode == http.StatusOK {
+					break
+				}
+
+				if resp.StatusCode == http.StatusTooManyRequests {
+					resp.Body.Close()
+					log.Warn("Rate limited, waiting 5 seconds before retrying...")
+					time.Sleep(5 * time.Second)
+					continue
+				}
+
+				resp.Body.Close()
+				return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 			}
 
 			_, err = io.Copy(f, resp.Body)
-			f.Close()
-			resp.Body.Close()
 			if err != nil {
 				return err
 			}
 
 			if downloadCaption && len(details.Keywords) > 0 {
-				c, err := os.Create(strings.TrimSuffix(filename, filepath.Ext(filename)) + ".txt")
-				if err != nil {
-					return err
-				}
-
-				_, err = io.Copy(c, bytes.NewReader(keywords.Bytes()))
-				c.Close()
+				err := os.WriteFile(strings.TrimSuffix(filename, filepath.Ext(filename))+".txt", keywords.Bytes(), 0600)
 				if err != nil {
 					return err
 				}
@@ -412,6 +438,33 @@ Search:
 	if !exit {
 		goto Search
 	}
+}
+
+const sidFile = "sid.txt"
+
+func loadSession() (*inkbunny.User, error) {
+	if !fileExists(sidFile) {
+		return nil, errors.New("no session file")
+	}
+
+	b, err := os.ReadFile(sidFile)
+	if err != nil {
+		return nil, err
+	}
+
+	parts := strings.SplitN(strings.TrimSpace(string(b)), "\n", 2)
+	if len(parts) < 2 {
+		return nil, errors.New("invalid session file")
+	}
+
+	return &inkbunny.User{
+		SID:      strings.TrimSpace(parts[0]),
+		Username: strings.TrimSpace(parts[1]),
+	}, nil
+}
+
+func saveSession(user *inkbunny.User) error {
+	return os.WriteFile(sidFile, []byte(fmt.Sprintf("%s\n%s", user.SID, user.Username)), 0600)
 }
 
 func digitCount(i int) int {
@@ -480,7 +533,7 @@ func pointer[T any](i T) *T {
 
 func changeRatings(user *inkbunny.User) error {
 	const (
-		General = 1 << iota
+		General int = 1 << iota
 		Nudity
 		MildViolence
 		Sexual
