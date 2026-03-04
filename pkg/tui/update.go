@@ -11,11 +11,17 @@ import (
 	"github.com/ellypaws/inkbunny"
 )
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.Width = msg.Width
+		m.Height = msg.Height
+		m.clampScroll()
+		return m, nil
+
 	case tea.KeyPressMsg:
 		if len(m.Suggestions) > 0 {
 			switch msg.String() {
@@ -71,6 +77,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			return m, tea.Quit
+		case "pgdown":
+			m.ScrollOffset += m.Height / 2
+			m.clampScroll()
+			return m, nil
+		case "pgup":
+			m.ScrollOffset -= m.Height / 2
+			m.clampScroll()
+			return m, nil
 		}
 
 	case SuggestKeywordMsg:
@@ -87,6 +101,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.SuggestionField = msg.Field
 			m.SuggestionIndex = -1
 		}
+		return m, nil
+
+	case tea.MouseWheelMsg:
+		if msg.Mouse().Button == tea.MouseWheelUp {
+			m.ScrollOffset -= 3
+		} else if msg.Mouse().Button == tea.MouseWheelDown {
+			m.ScrollOffset += 3
+		}
+		m.clampScroll()
 		return m, nil
 
 	case tea.MouseMsg:
@@ -152,7 +175,7 @@ func (m *Model) applySuggestion(value string) {
 	}
 }
 
-func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	v1msg := teaV1.MouseMsg{X: msg.Mouse().X, Y: msg.Mouse().Y}
 
 	inBounds := func(id string) bool { return m.ZoneManager.Get(id).InBounds(v1msg) }

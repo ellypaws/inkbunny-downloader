@@ -49,7 +49,7 @@ var (
 	sugBoxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(inactiveColor).MarginLeft(23)
 )
 
-func (m Model) View() tea.View {
+func (m *Model) View() tea.View {
 	var sections []string
 
 	sections = append(sections, panelStyle.Render(m.renderTopSection()))
@@ -60,14 +60,59 @@ func (m Model) View() tea.View {
 	rendered := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
 	outer := lipgloss.NewStyle().Background(sectionBg).Padding(1, 2)
+	full := outer.Render(rendered)
 
-	v := tea.NewView(m.ZoneManager.Scan(outer.Render(rendered)))
+	lines := strings.Split(full, "\n")
+	m.contentLines = len(lines)
+	m.clampScroll()
+
+	height := m.Height
+	if height <= 0 {
+		height = len(lines)
+	}
+
+	start := m.ScrollOffset
+	if start > len(lines) {
+		start = len(lines)
+	}
+	end := start + height
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	visible := lines[start:end]
+
+	if m.contentLines > height && height > 0 {
+		trackHeight := height
+		thumbSize := max(1, trackHeight*height/m.contentLines)
+		maxOffset := m.contentLines - height
+		thumbPos := 0
+		if maxOffset > 0 {
+			thumbPos = m.ScrollOffset * (trackHeight - thumbSize) / maxOffset
+		}
+
+		thumbStyle := lipgloss.NewStyle().Foreground(activeColor)
+		trackStyle := lipgloss.NewStyle().Foreground(inactiveColor)
+
+		for i := range visible {
+			gutter := trackStyle.Render("│")
+			if i >= thumbPos && i < thumbPos+thumbSize {
+				gutter = thumbStyle.Render("┃")
+			}
+			visible[i] = visible[i] + " " + gutter
+		}
+	}
+
+	content := strings.Join(visible, "\n")
+	content = m.ZoneManager.Scan(content)
+
+	v := tea.NewView(content)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
-func (m Model) renderTopSection() string {
+func (m *Model) renderTopSection() string {
 	inputBox := m.renderInput("search_words", m.SearchWords, FieldSearchWords)
 	searchBtn := m.renderButton("btn_search_top", "Search")
 	row1 := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -109,7 +154,7 @@ func (m Model) renderTopSection() string {
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
-func (m Model) renderMiddleSection() string {
+func (m *Model) renderMiddleSection() string {
 	artistLabel := labelStyle.Render("Artist name:")
 	artistSub := subLabelStyle.Render("search only submissions by\nthis user (optional)")
 	artistInput := m.renderInput("artist_name", m.ArtistName, FieldArtistName)
@@ -153,7 +198,7 @@ func (m Model) renderMiddleSection() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, artistCol, "      ", favCol)
 }
 
-func (m Model) renderBottomSection() string {
+func (m *Model) renderBottomSection() string {
 	timeLabel := labelStyle.Render("Time Range:")
 	timeCycle := m.renderCycle("cycle_time", m.TimeRangeLabels[m.TimeRangeIndex])
 	timeBlock := lipgloss.JoinHorizontal(lipgloss.Top, timeLabel, timeCycle)
@@ -195,7 +240,7 @@ func (m Model) renderBottomSection() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "          ", rightCol)
 }
 
-func (m Model) renderFooterSection() string {
+func (m *Model) renderFooterSection() string {
 	orderLabel := labelStyle.Render("Order by:")
 	orderCycle := m.renderCycle("cycle_order", m.OrderByLabels[m.OrderByIndex])
 	orderBlock := lipgloss.JoinHorizontal(lipgloss.Top, orderLabel, orderCycle)
@@ -218,7 +263,7 @@ func (m Model) renderFooterSection() string {
 	)
 }
 
-func (m Model) renderSuggestions() string {
+func (m *Model) renderSuggestions() string {
 	if len(m.Suggestions) == 0 {
 		return ""
 	}
@@ -239,7 +284,7 @@ func (m Model) renderSuggestions() string {
 	return sugBoxStyle.Render(content)
 }
 
-func (m Model) renderInput(id string, in textinput.Model, field activeField) string {
+func (m *Model) renderInput(id string, in textinput.Model, field activeField) string {
 	style := inputInactiveStyle
 	if m.ActiveField == field {
 		style = inputActiveStyle
@@ -249,7 +294,7 @@ func (m Model) renderInput(id string, in textinput.Model, field activeField) str
 	return m.ZoneManager.Mark(id, style.Render(in.View()))
 }
 
-func (m Model) renderCheckbox(id string, checked bool, label string) string {
+func (m *Model) renderCheckbox(id string, checked bool, label string) string {
 	style := checkboxStyle
 	markStyle := checkboxStyle
 	if m.HoveredZone == id {
@@ -264,7 +309,7 @@ func (m Model) renderCheckbox(id string, checked bool, label string) string {
 	return m.ZoneManager.Mark(id, markStyle.Render(mark)+" "+style.Render(label))
 }
 
-func (m Model) renderRadio(id string, checked bool, label string) string {
+func (m *Model) renderRadio(id string, checked bool, label string) string {
 	style := checkboxStyle
 	markStyle := checkboxStyle
 	if m.HoveredZone == id {
@@ -279,7 +324,7 @@ func (m Model) renderRadio(id string, checked bool, label string) string {
 	return m.ZoneManager.Mark(id, markStyle.Render(mark)+" "+style.Render(label))
 }
 
-func (m Model) renderButton(id string, label string) string {
+func (m *Model) renderButton(id string, label string) string {
 	style := buttonStyle
 	if m.HoveredZone == id {
 		style = hoverButtonStyle
@@ -287,7 +332,7 @@ func (m Model) renderButton(id string, label string) string {
 	return m.ZoneManager.Mark(id, style.Render(label))
 }
 
-func (m Model) renderCycle(id string, label string) string {
+func (m *Model) renderCycle(id string, label string) string {
 	style := buttonStyle
 	if m.HoveredZone == id {
 		style = hoverButtonStyle
@@ -295,7 +340,7 @@ func (m Model) renderCycle(id string, label string) string {
 	return m.ZoneManager.Mark(id, style.Render(fmt.Sprintf("◀ %s ▶", label)))
 }
 
-func (m Model) renderLink(id string, text string, hint string) string {
+func (m *Model) renderLink(id string, text string, hint string) string {
 	style := linkStyle
 	if m.HoveredZone == id {
 		style = linkHoverStyle

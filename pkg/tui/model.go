@@ -33,6 +33,11 @@ type Model struct {
 	ZoneManager *zone.Manager
 	Username    string
 
+	Width        int
+	Height       int
+	ScrollOffset int
+	contentLines int
+
 	SearchWords  textinput.Model
 	ArtistName   textinput.Model
 	FavBy        textinput.Model
@@ -97,7 +102,7 @@ func NewModel(
 	username string,
 	keywordCache *flight.Cache[string, []inkbunny.KeywordAutocomplete],
 	usernameCache *flight.Cache[string, []inkbunny.Autocomplete],
-) Model {
+) *Model {
 	zm := zone.New()
 
 	searchWords := textinput.New()
@@ -117,7 +122,7 @@ func NewModel(
 	maxDownloads.Placeholder = "Unlimited"
 	maxDownloads.Prompt = ""
 
-	return Model{
+	return &Model{
 		ZoneManager:   zm,
 		Username:      username,
 		SearchWords:   searchWords,
@@ -152,7 +157,7 @@ func NewModel(
 	}
 }
 
-func (m Model) fetchKeywordSuggestions(query string) tea.Cmd {
+func (m *Model) fetchKeywordSuggestions(query string) tea.Cmd {
 	if m.KeywordCache == nil || strings.TrimSpace(query) == "" {
 		return nil
 	}
@@ -173,7 +178,7 @@ func (m Model) fetchKeywordSuggestions(query string) tea.Cmd {
 	}
 }
 
-func (m Model) fetchUsernameSuggestions(field activeField, query string) tea.Cmd {
+func (m *Model) fetchUsernameSuggestions(field activeField, query string) tea.Cmd {
 	if m.UsernameCache == nil || strings.TrimSpace(query) == "" {
 		return nil
 	}
@@ -195,15 +200,15 @@ func (m Model) fetchUsernameSuggestions(field activeField, query string) tea.Cmd
 }
 
 // Helpers for main.go
-func (m Model) TimeRange() inkbunny.IntString {
+func (m *Model) TimeRange() inkbunny.IntString {
 	return m.TimeRangeValues[m.TimeRangeIndex]
 }
 
-func (m Model) OrderBy() string {
+func (m *Model) OrderBy() string {
 	return m.OrderByValues[m.OrderByIndex]
 }
 
-func (m Model) SubmissionType() []inkbunny.SubmissionType {
+func (m *Model) SubmissionType() []inkbunny.SubmissionType {
 	if m.TypeAny {
 		return []inkbunny.SubmissionType{inkbunny.SubmissionTypeAny}
 	}
@@ -256,6 +261,22 @@ func (m Model) SubmissionType() []inkbunny.SubmissionType {
 	return res
 }
 
-func (m Model) Init() tea.Cmd {
-	return func() tea.Msg { return textinput.Blink() }
+func (m *Model) clampScroll() {
+	maxScroll := m.contentLines - m.Height
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.ScrollOffset > maxScroll {
+		m.ScrollOffset = maxScroll
+	}
+	if m.ScrollOffset < 0 {
+		m.ScrollOffset = 0
+	}
+}
+
+func (m *Model) Init() tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg { return textinput.Blink() },
+		func() tea.Msg { return tea.RequestWindowSize() },
+	)
 }

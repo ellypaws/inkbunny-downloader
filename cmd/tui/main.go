@@ -95,7 +95,7 @@ Search:
 		log.Fatal(err)
 	}
 
-	finalModel, ok := rawModel.(tui.Model)
+	finalModel, ok := rawModel.(*tui.Model)
 	if !ok {
 		log.Fatal("Could not cast model")
 	}
