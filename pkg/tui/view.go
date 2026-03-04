@@ -11,107 +11,169 @@ import (
 )
 
 var (
-	baseStyle = lipgloss.NewStyle().Padding(1, 2)
+	activeColor   = lipgloss.Color("#E04080")
+	hoverColor    = lipgloss.Color("#5F7FFF")
+	inactiveColor = lipgloss.Color("#6B6B6B")
+	textColor     = lipgloss.Color("#E0E0E0")
+	dimTextColor  = lipgloss.Color("#888888")
+	panelBg       = lipgloss.Color("#2A2A2A")
+	sectionBg     = lipgloss.Color("#1E1E1E")
 
-	activeColor   = lipgloss.Color("205") // Pink (Active)
-	hoverColor    = lipgloss.Color("63")  // Blue (Hover)
-	inactiveColor = lipgloss.Color("240") // Gray (Inactive)
-	textColor     = lipgloss.Color("252") // White
+	panelStyle = lipgloss.NewStyle().
+			Background(panelBg).
+			Padding(1, 2).
+			MarginBottom(1)
 
 	inputActiveStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(activeColor).Padding(0, 1)
 	inputInactiveStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(inactiveColor).Padding(0, 1)
 	inputHoverStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(hoverColor).Padding(0, 1)
 
-	labelStyle = lipgloss.NewStyle().Foreground(textColor).Width(20)
+	labelStyle    = lipgloss.NewStyle().Foreground(textColor).Width(22).Align(lipgloss.Right).MarginRight(1)
+	subLabelStyle = lipgloss.NewStyle().Foreground(dimTextColor).Width(22).Align(lipgloss.Right).MarginRight(1)
 
 	checkboxStyle       = lipgloss.NewStyle().Foreground(textColor)
 	activeCheckboxStyle = lipgloss.NewStyle().Foreground(activeColor).Bold(true)
 	hoverCheckboxStyle  = lipgloss.NewStyle().Foreground(hoverColor)
 
-	buttonStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("230")).Background(lipgloss.Color("240")).Padding(0, 2)
-	activeButtonStyle = buttonStyle.Copy().Background(activeColor)
-	hoverButtonStyle  = buttonStyle.Copy().Background(hoverColor)
+	buttonStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Padding(0, 3).Bold(true)
+	hoverButtonStyle = buttonStyle.Background(hoverColor)
 
-	dividerStyle = lipgloss.NewStyle().Foreground(inactiveColor).Margin(1, 0)
+	linkStyle      = lipgloss.NewStyle().Foreground(hoverColor).Underline(true)
+	linkHoverStyle = lipgloss.NewStyle().Foreground(activeColor).Underline(true)
+
+	helperTextStyle = lipgloss.NewStyle().Foreground(dimTextColor).MarginLeft(23)
+
+	sugStyle       = lipgloss.NewStyle().Foreground(textColor).PaddingLeft(1).PaddingRight(1)
+	sugHoverStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(hoverColor).PaddingLeft(1).PaddingRight(1)
+	sugActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(activeColor).PaddingLeft(1).PaddingRight(1)
+	sugBoxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(inactiveColor).MarginLeft(23)
 )
 
 func (m Model) View() tea.View {
 	var sections []string
 
-	sections = append(sections, m.renderTopSection())
-	sections = append(sections, dividerStyle.Render(strings.Repeat("─", 80)))
-	sections = append(sections, m.renderMiddleSection())
-	sections = append(sections, dividerStyle.Render(strings.Repeat("─", 80)))
-	sections = append(sections, m.renderBottomSection())
-	sections = append(sections, dividerStyle.Render(strings.Repeat("─", 80)))
-	sections = append(sections, m.renderFooterSection())
+	sections = append(sections, panelStyle.Render(m.renderTopSection()))
+	sections = append(sections, panelStyle.Render(m.renderMiddleSection()))
+	sections = append(sections, panelStyle.Render(m.renderBottomSection()))
+	sections = append(sections, panelStyle.Render(m.renderFooterSection()))
 
 	rendered := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
-	v := tea.NewView(baseStyle.Render(rendered))
+	outer := lipgloss.NewStyle().Background(sectionBg).Padding(1, 2)
+
+	v := tea.NewView(m.ZoneManager.Scan(outer.Render(rendered)))
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
 func (m Model) renderTopSection() string {
-
-	// Row 1: Search words input + Search button
 	inputBox := m.renderInput("search_words", m.SearchWords, FieldSearchWords)
 	searchBtn := m.renderButton("btn_search_top", "Search")
-	row1 := lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Search words:"), inputBox, "  ", searchBtn)
+	row1 := lipgloss.JoinHorizontal(lipgloss.Top,
+		labelStyle.Render("Search words:"),
+		inputBox,
+		"  ",
+		searchBtn,
+	)
 
-	// Row 2: Find radio buttons
+	helper := helperTextStyle.Render(
+		"Separate words with spaces.\n" +
+			"Use '-' to exclude a keyword, e.g. 'leopard -snow' excludes 'snow leopard'.\n" +
+			"Don't use other punctuation, or words such as 'and', 'or', 'not'.",
+	)
+
+	var sugBlock string
+	if len(m.Suggestions) > 0 && m.SuggestionField == FieldSearchWords && m.ActiveField == FieldSearchWords {
+		sugBlock = m.renderSuggestions()
+	}
+
 	findLabel := labelStyle.Render("Find:")
 	r1 := m.renderRadio("rad_and", m.StringJoinType == inkbunny.JoinTypeAnd, "Find all the words together")
 	r2 := m.renderRadio("rad_or", m.StringJoinType == inkbunny.JoinTypeOr, "Find any one of the words")
 	r3 := m.renderRadio("rad_exact", m.StringJoinType == inkbunny.JoinTypeExact, "Contains the exact phrase")
-	row2 := lipgloss.JoinHorizontal(lipgloss.Top, findLabel, r1, "  ", r2, "  ", r3)
+	row2 := lipgloss.JoinHorizontal(lipgloss.Top, findLabel, r1, "   ", r2, "   ", r3)
 
-	// Row 3: Search in checkboxes
 	searchInLabel := labelStyle.Render("Search in:")
 	c1 := m.renderCheckbox("chk_keywords", m.SearchInKeywords, "Keywords")
 	c2 := m.renderCheckbox("chk_title", m.SearchInTitle, "Title")
 	c3 := m.renderCheckbox("chk_desc", m.SearchInDesc, "Description or Story")
 	c4 := m.renderCheckbox("chk_md5", m.SearchInMD5, "MD5 Hash")
-	row3 := lipgloss.JoinHorizontal(lipgloss.Top, searchInLabel, c1, "  ", c2, "  ", c3, "  ", c4)
+	row3 := lipgloss.JoinHorizontal(lipgloss.Top, searchInLabel, c1, "   ", c2, "   ", c3, "   ", c4)
 
-	return lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", row3)
+	parts := []string{row1, helper}
+	if sugBlock != "" {
+		parts = append(parts, sugBlock)
+	}
+	parts = append(parts, "", row2, "", row3)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 func (m Model) renderMiddleSection() string {
-	artistLabel := labelStyle.Render("Artist name:\nsearch only submissions by\nthis user")
+	artistLabel := labelStyle.Render("Artist name:")
+	artistSub := subLabelStyle.Render("search only submissions by\nthis user (optional)")
 	artistInput := m.renderInput("artist_name", m.ArtistName, FieldArtistName)
-	artistCol := lipgloss.JoinVertical(lipgloss.Left, artistLabel, artistInput)
+	artistLink := m.renderLink("link_use_my_name_artist", "Use my name", "(Search my uploads only)")
 
-	favLabel := labelStyle.Render("Search favorites by:\nsearch only work favorited\nby this user")
+	var artistSugBlock string
+	if len(m.Suggestions) > 0 && m.SuggestionField == FieldArtistName && m.ActiveField == FieldArtistName {
+		artistSugBlock = m.renderSuggestions()
+	}
+
+	artistParts := []string{
+		lipgloss.JoinHorizontal(lipgloss.Top, artistLabel, artistInput),
+		lipgloss.JoinHorizontal(lipgloss.Top, subLabelStyle.Render(""), artistLink),
+	}
+	if artistSugBlock != "" {
+		artistParts = append(artistParts, artistSugBlock)
+	}
+	artistParts = append(artistParts, artistSub)
+	artistCol := lipgloss.JoinVertical(lipgloss.Left, artistParts...)
+
+	favLabel := labelStyle.Render("Search favorites by:")
+	favSub := subLabelStyle.Render("search only work favorited\nby this user (optional)")
 	favInput := m.renderInput("fav_by", m.FavBy, FieldFavBy)
-	favCol := lipgloss.JoinVertical(lipgloss.Left, favLabel, favInput)
+	favLink := m.renderLink("link_use_my_name_fav", "Use my name", "(Search my favorites only)")
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, artistCol, "    ", favCol)
+	var favSugBlock string
+	if len(m.Suggestions) > 0 && m.SuggestionField == FieldFavBy && m.ActiveField == FieldFavBy {
+		favSugBlock = m.renderSuggestions()
+	}
+
+	favParts := []string{
+		lipgloss.JoinHorizontal(lipgloss.Top, favLabel, favInput),
+		lipgloss.JoinHorizontal(lipgloss.Top, subLabelStyle.Render(""), favLink),
+	}
+	if favSugBlock != "" {
+		favParts = append(favParts, favSugBlock)
+	}
+	favParts = append(favParts, favSub)
+	favCol := lipgloss.JoinVertical(lipgloss.Left, favParts...)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, artistCol, "      ", favCol)
 }
 
 func (m Model) renderBottomSection() string {
-	// Left column: Time Range & Ratings
 	timeLabel := labelStyle.Render("Time Range:")
 	timeCycle := m.renderCycle("cycle_time", m.TimeRangeLabels[m.TimeRangeIndex])
 	timeBlock := lipgloss.JoinHorizontal(lipgloss.Top, timeLabel, timeCycle)
 
 	rateLabel := labelStyle.Render("Find Content Rated:")
+	rateSub := subLabelStyle.Render("select at least one")
 	r1 := m.renderCheckbox("chk_rate_gen", m.RatingGeneral, "General")
 	r2 := m.renderCheckbox("chk_rate_nudity", m.RatingNudity, "Mature - Nudity")
 	r3 := m.renderCheckbox("chk_rate_mildv", m.RatingMildViolence, "Mature - Violence")
 	r4 := m.renderCheckbox("chk_rate_sex", m.RatingSexual, "Adult - Sexual Themes")
 	r5 := m.renderCheckbox("chk_rate_strongv", m.RatingStrongViolence, "Adult - Strong Violence")
-	rateBlock := lipgloss.JoinVertical(lipgloss.Left, rateLabel, "", r1, r2, r3, r4, r5)
+	rateBlock := lipgloss.JoinVertical(lipgloss.Left, rateLabel, rateSub, "", r1, r2, r3, r4, r5)
 
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, timeBlock, "", rateBlock)
 
-	// Right column: Submission Type
 	typeLabel := labelStyle.Render("Submission type:")
 	radAny := m.renderRadio("rad_type_any", m.TypeAny, "Any")
+	orText := lipgloss.NewStyle().Foreground(dimTextColor).MarginLeft(24).Render("or")
 
-	col1 := lipgloss.JoinVertical(lipgloss.Left,
+	typeChecks := lipgloss.JoinVertical(lipgloss.Left,
 		m.renderCheckbox("chk_type_pic", m.TypePicture, "Picture/Pinup"),
 		m.renderCheckbox("chk_type_sketch", m.TypeSketch, "Sketch"),
 		m.renderCheckbox("chk_type_picseries", m.TypePictureSeries, "Picture Series"),
@@ -119,21 +181,18 @@ func (m Model) renderBottomSection() string {
 		m.renderCheckbox("chk_type_port", m.TypePortfolio, "Portfolio"),
 		m.renderCheckbox("chk_type_swfanim", m.TypeSWFAnimation, "Shockwave/Flash - Animation"),
 		m.renderCheckbox("chk_type_swfint", m.TypeSWFInteract, "Shockwave/Flash - Interactive"),
-	)
-	col2 := lipgloss.JoinVertical(lipgloss.Left,
-		m.renderCheckbox("chk_type_vidfeat", m.TypeVideoFeature, "Video - Feature Length"),
 		m.renderCheckbox("chk_type_vidanim", m.TypeVideoAnim, "Video - Animation/3D/CGI"),
 		m.renderCheckbox("chk_type_musicsing", m.TypeMusicSingle, "Music - Single Track"),
 		m.renderCheckbox("chk_type_musicalb", m.TypeMusicAlbum, "Music - Album"),
+		m.renderCheckbox("chk_type_vidfeat", m.TypeVideoFeature, "Video - Feature Length"),
 		m.renderCheckbox("chk_type_writing", m.TypeWriting, "Writing - Document"),
 		m.renderCheckbox("chk_type_char", m.TypeCharSheet, "Character Sheet"),
-		m.renderCheckbox("chk_type_photo", m.TypePhotography, "Photography"),
+		m.renderCheckbox("chk_type_photo", m.TypePhotography, "Photography - Fursuit/Sculpture/Jewelry/etc"),
 	)
-	typesBlock := lipgloss.JoinHorizontal(lipgloss.Top, col1, "  ", col2)
 
-	rightCol := lipgloss.JoinVertical(lipgloss.Left, typeLabel, radAny, "  or", typesBlock)
+	rightCol := lipgloss.JoinVertical(lipgloss.Left, typeLabel, radAny, orText, "", typeChecks)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "        ", rightCol)
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "          ", rightCol)
 }
 
 func (m Model) renderFooterSection() string {
@@ -159,7 +218,27 @@ func (m Model) renderFooterSection() string {
 	)
 }
 
-// GUI Primitives
+func (m Model) renderSuggestions() string {
+	if len(m.Suggestions) == 0 {
+		return ""
+	}
+
+	var items []string
+	for i, s := range m.Suggestions {
+		id := fmt.Sprintf("sug_%d", i)
+		style := sugStyle
+		if i == m.SuggestionIndex {
+			style = sugActiveStyle
+		} else if m.HoveredZone == id {
+			style = sugHoverStyle
+		}
+		items = append(items, m.ZoneManager.Mark(id, style.Render(s)))
+	}
+
+	content := strings.Join(items, "\n")
+	return sugBoxStyle.Render(content)
+}
+
 func (m Model) renderInput(id string, in textinput.Model, field activeField) string {
 	style := inputInactiveStyle
 	if m.ActiveField == field {
@@ -172,26 +251,32 @@ func (m Model) renderInput(id string, in textinput.Model, field activeField) str
 
 func (m Model) renderCheckbox(id string, checked bool, label string) string {
 	style := checkboxStyle
+	markStyle := checkboxStyle
 	if m.HoveredZone == id {
 		style = hoverCheckboxStyle
+		markStyle = hoverCheckboxStyle
 	}
-	mark := " "
+	mark := "☐"
 	if checked {
-		mark = "x"
+		mark = "✓"
+		markStyle = activeCheckboxStyle
 	}
-	return m.ZoneManager.Mark(id, style.Render(fmt.Sprintf("[%s] %s", mark, label)))
+	return m.ZoneManager.Mark(id, markStyle.Render(mark)+" "+style.Render(label))
 }
 
 func (m Model) renderRadio(id string, checked bool, label string) string {
 	style := checkboxStyle
+	markStyle := checkboxStyle
 	if m.HoveredZone == id {
 		style = hoverCheckboxStyle
+		markStyle = hoverCheckboxStyle
 	}
-	mark := " "
+	mark := "○"
 	if checked {
-		mark = "o"
+		mark = "●"
+		markStyle = activeCheckboxStyle
 	}
-	return m.ZoneManager.Mark(id, style.Render(fmt.Sprintf("(%s) %s", mark, label)))
+	return m.ZoneManager.Mark(id, markStyle.Render(mark)+" "+style.Render(label))
 }
 
 func (m Model) renderButton(id string, label string) string {
@@ -207,5 +292,13 @@ func (m Model) renderCycle(id string, label string) string {
 	if m.HoveredZone == id {
 		style = hoverButtonStyle
 	}
-	return m.ZoneManager.Mark(id, style.Render(fmt.Sprintf("< %s >", label)))
+	return m.ZoneManager.Mark(id, style.Render(fmt.Sprintf("◀ %s ▶", label)))
+}
+
+func (m Model) renderLink(id string, text string, hint string) string {
+	style := linkStyle
+	if m.HoveredZone == id {
+		style = linkHoverStyle
+	}
+	return m.ZoneManager.Mark(id, style.Render(text)) + " " + lipgloss.NewStyle().Foreground(dimTextColor).Render(hint)
 }

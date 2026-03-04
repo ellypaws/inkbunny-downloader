@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/textinput"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/ellypaws/inkbunny"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 )
 
 type activeField int
@@ -17,8 +20,18 @@ const (
 	FieldMaxDownloads
 )
 
+type SuggestKeywordMsg struct {
+	Suggestions []string
+}
+
+type SuggestUsernameMsg struct {
+	Field       activeField
+	Suggestions []string
+}
+
 type Model struct {
 	ZoneManager *zone.Manager
+	Username    string
 
 	SearchWords  textinput.Model
 	ArtistName   textinput.Model
@@ -28,8 +41,16 @@ type Model struct {
 	ActiveField activeField
 	HoveredZone string
 
+	KeywordCache  *flight.Cache[string, []inkbunny.KeywordAutocomplete]
+	UsernameCache *flight.Cache[string, []inkbunny.Autocomplete]
+
+	Suggestions     []string
+	SuggestionField activeField
+	SuggestionIndex int
+	lastQuery       string
+
 	// Options
-	StringJoinType inkbunny.JoinType // inkbunny.JoinTypeAnd, inkbunny.JoinTypeOr, inkbunny.JoinTypeExact
+	StringJoinType inkbunny.JoinType
 
 	SearchInKeywords bool
 	SearchInTitle    bool
@@ -71,7 +92,12 @@ type Model struct {
 	TypePhotography   bool
 }
 
-func NewModel(user *inkbunny.User) Model {
+func NewModel(
+	user *inkbunny.User,
+	username string,
+	keywordCache *flight.Cache[string, []inkbunny.KeywordAutocomplete],
+	usernameCache *flight.Cache[string, []inkbunny.Autocomplete],
+) Model {
 	zm := zone.New()
 
 	searchWords := textinput.New()
@@ -92,11 +118,16 @@ func NewModel(user *inkbunny.User) Model {
 	maxDownloads.Prompt = ""
 
 	return Model{
-		ZoneManager:  zm,
-		SearchWords:  searchWords,
-		ArtistName:   artistName,
-		FavBy:        favBy,
-		MaxDownloads: maxDownloads,
+		ZoneManager:   zm,
+		Username:      username,
+		SearchWords:   searchWords,
+		ArtistName:    artistName,
+		FavBy:         favBy,
+		MaxDownloads:  maxDownloads,
+		KeywordCache:  keywordCache,
+		UsernameCache: usernameCache,
+
+		SuggestionIndex: -1,
 
 		StringJoinType:   inkbunny.JoinTypeAnd,
 		SearchInKeywords: true,
@@ -118,6 +149,48 @@ func NewModel(user *inkbunny.User) Model {
 		RatingStrongViolence: true,
 
 		TypeAny: true,
+	}
+}
+
+func (m Model) fetchKeywordSuggestions(query string) tea.Cmd {
+	if m.KeywordCache == nil || strings.TrimSpace(query) == "" {
+		return nil
+	}
+	cache := m.KeywordCache
+	return func() tea.Msg {
+		results, err := cache.Get(query)
+		if err != nil || len(results) == 0 {
+			return SuggestKeywordMsg{}
+		}
+		suggestions := make([]string, 0, len(results))
+		for _, r := range results {
+			if len(suggestions) >= 10 {
+				break
+			}
+			suggestions = append(suggestions, r.Value)
+		}
+		return SuggestKeywordMsg{Suggestions: suggestions}
+	}
+}
+
+func (m Model) fetchUsernameSuggestions(field activeField, query string) tea.Cmd {
+	if m.UsernameCache == nil || strings.TrimSpace(query) == "" {
+		return nil
+	}
+	cache := m.UsernameCache
+	return func() tea.Msg {
+		results, err := cache.Get(query)
+		if err != nil || len(results) == 0 {
+			return SuggestUsernameMsg{Field: field}
+		}
+		suggestions := make([]string, 0, len(results))
+		for _, r := range results {
+			if len(suggestions) >= 10 {
+				break
+			}
+			suggestions = append(suggestions, r.Value)
+		}
+		return SuggestUsernameMsg{Field: field, Suggestions: suggestions}
 	}
 }
 

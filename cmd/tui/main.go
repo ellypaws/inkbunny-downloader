@@ -87,7 +87,7 @@ Login:
 	usernameCache := flight.NewCache(user.SearchMembers)
 
 Search:
-	model := tui.NewModel(user)
+	model := tui.NewModel(user, user.Username, new(flight.NewCache(keywordCache(user.Ratings))), &usernameCache)
 
 	p := tea.NewProgram(model)
 	rawModel, err := p.Run()
