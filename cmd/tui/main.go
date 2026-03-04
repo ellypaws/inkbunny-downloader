@@ -17,15 +17,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
 	"github.com/charmbracelet/log"
 	"github.com/muesli/termenv"
 
 	"github.com/ellypaws/inkbunny"
-
-	"github.com/ellypaws/inkbunny/cmd/downloader/flight"
-	"github.com/ellypaws/inkbunny/cmd/downloader/utils"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/tui"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 )
 
 const (
@@ -45,9 +46,6 @@ func main() {
 		searchIn     []int
 		favBy        string
 		maxDownloads string
-
-		keywordBuilder       strings.Builder
-		keywordAutocompletes []inkbunny.KeywordAutocomplete
 
 		toDownload      int
 		downloadCaption bool = true
@@ -86,168 +84,45 @@ Login:
 			log.Fatal("failed to change ratings", "err", err)
 		}
 	}
-	keywordCache := flight.NewCache(keywordCache(user.Ratings))
 	usernameCache := flight.NewCache(user.SearchMembers)
-	getArtist := func(username *string) (func() []string, *string) {
-		return func() []string {
-			usernames, err := usernameCache.Get(*username)
-			if err != nil {
-				return nil
-			}
-			suggestions := make([]string, len(usernames))
-			for i, v := range usernames {
-				suggestions[i] = v.Value
-			}
-			return suggestions
-		}, username
-	}
 
 Search:
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().Title("Logged in as").Description(user.Username),
-			huh.NewNote().Title("Ratings").Description(user.Ratings.String()),
+	model := tui.NewModel(user)
 
-			huh.NewInput().Title("Search words").
-				Description("Separate words with spaces.\nUse '-' to exclude a keyword, e.g. 'leopard -snow' excludes 'snow leopard'.\nDon't use other punctuation, or words such as 'and', 'or', 'not'.").
-				Value(&request.Text).SuggestionsFunc(func() []string {
-				keywordAutocompletes, err = keywordCache.Get(request.Text)
-				if err != nil {
-					return []string{"error" + err.Error()}
-				}
-				if len(keywordAutocompletes) == 0 {
-					return nil
-				}
-				suggestions := make([]string, len(keywordAutocompletes))
-				for i, s := range keywordAutocompletes {
-					suggestions[i] = s.Value
-				}
-				return suggestions
-			}, &request.Text).DescriptionFunc(func() string {
-				keywordBuilder.Reset()
-				keywordBuilder.WriteString("Separate words with spaces.\nUse '-' to exclude a keyword, e.g. 'leopard -snow' excludes 'snow leopard'.\nDon't use other punctuation, or words such as 'and', 'or', 'not'.")
-				if len(keywordAutocompletes) == 0 {
-					return keywordBuilder.String()
-				}
-				for i, s := range keywordAutocompletes {
-					switch i {
-					case 0:
-						keywordBuilder.WriteString("\nsuggestions: ")
-					case 10:
-						keywordBuilder.WriteString(", ...")
-						return keywordBuilder.String()
-					default:
-						keywordBuilder.WriteString(", ")
-					}
-					keywordBuilder.WriteString(s.Value)
-				}
-				return keywordBuilder.String()
-			}, &keywordAutocompletes),
-
-			huh.NewSelect[inkbunny.JoinType]().
-				Title("Find").
-				Options(
-					huh.NewOption("Find all keywords together", inkbunny.JoinTypeAnd),
-					huh.NewOption("Find any one of the words", inkbunny.JoinTypeOr),
-					huh.NewOption("Contains the exact phrase", inkbunny.JoinTypeExact),
-				).Value(&request.StringJoinType),
-
-			huh.NewMultiSelect[int]().
-				Title("Search in").
-				Options(
-					huh.NewOption("Keywords", Keywords).Selected(true),
-					huh.NewOption("Title", Title).Selected(true),
-					huh.NewOption("Description or Story", Description),
-					huh.NewOption("MD5 Hash", MD5),
-				).Value(&searchIn).
-				Validate(minimum[int](1)),
-
-			huh.NewInput().
-				Title("Artist name").
-				Description("search only submissions by this user (optional)").
-				Value(&request.Username).SuggestionsFunc(getArtist(&request.Username)),
-
-			huh.NewInput().
-				Title("Search Favorites by").
-				Description("search only work favorited by this user (optional)").
-				Value(&favBy).SuggestionsFunc(getArtist(&favBy)),
-
-			huh.NewSelect[inkbunny.IntString]().
-				Title("Time Range").
-				Options(
-					huh.NewOption("Any Time", inkbunny.IntString(0)).Selected(true),
-					huh.NewOption("24 Hrs", inkbunny.IntString(1)),
-					huh.NewOption("3 Days", inkbunny.IntString(3)),
-					huh.NewOption("1 Week", inkbunny.IntString(7)),
-					huh.NewOption("2 Weeks", inkbunny.IntString(14)),
-					huh.NewOption("1 Month", inkbunny.IntString(30)),
-					huh.NewOption("3 Months", inkbunny.IntString(90)),
-					huh.NewOption("6 Months", inkbunny.IntString(180)),
-					huh.NewOption("1 Year", inkbunny.IntString(365)),
-				).Value(&request.DaysLimit),
-
-			huh.NewMultiSelect[inkbunny.SubmissionType]().
-				Title("Submission type").
-				Options(
-					huh.NewOption("Any", inkbunny.SubmissionTypeAny).Selected(true),
-					huh.NewOption("Picture/Pinup", inkbunny.SubmissionTypePicturePinup),
-					huh.NewOption("Sketch", inkbunny.SubmissionTypeSketch),
-					huh.NewOption("Picture Series", inkbunny.SubmissionTypePictureSeries),
-					huh.NewOption("Comic", inkbunny.SubmissionTypeComic),
-					huh.NewOption("Portfolio", inkbunny.SubmissionTypePortfolio),
-					huh.NewOption("Shockwave/Flash - Animation", inkbunny.SubmissionTypeShockwaveFlashAnimation),
-					huh.NewOption("Shockwave/Flash - Interactive", inkbunny.SubmissionTypeShockwaveFlashInteractive),
-					huh.NewOption("Video - Feature Length", inkbunny.SubmissionTypeVideoFeatureLength),
-					huh.NewOption("Video - Animation/3D/CGI", inkbunny.SubmissionTypeVideoAnimation3DCGI),
-					huh.NewOption("Music - Single Track", inkbunny.SubmissionTypeMusicSingleTrack),
-					huh.NewOption("Music - Album", inkbunny.SubmissionTypeMusicAlbum),
-					huh.NewOption("Writing - Document", inkbunny.SubmissionTypeWritingDocument),
-					huh.NewOption("Character Sheet", inkbunny.SubmissionTypeCharacterSheet),
-					huh.NewOption("Photography - Fursuit/Sculpture/Jewelry/etc", inkbunny.SubmissionTypePhotography),
-				).Value((*[]inkbunny.SubmissionType)(&request.Type)).
-				DescriptionFunc(func() string {
-					switch len(request.Type) {
-					case 0, 15:
-						return "Any"
-					case 1:
-						if request.Type[0] == inkbunny.SubmissionTypeAny {
-							return "Any"
-						}
-					case 14:
-						if !slices.Contains(request.Type, inkbunny.SubmissionTypeAny) {
-							return "Any"
-						}
-					}
-					return ""
-				}, &request.Type),
-
-			huh.NewSelect[string]().
-				Title("Order by").
-				Options(
-					huh.NewOption("Newest First", inkbunny.OrderByCreateDatetime).Selected(true),
-					huh.NewOption("Most Popular First (by Favs)", inkbunny.OrderByFavs),
-					huh.NewOption("Most Popular First (by Views)", inkbunny.OrderByViews),
-				).Value(&request.OrderBy),
-
-			huh.NewInput().
-				Title("Max number of submissions to download").
-				Description("This is just a soft limit. 0 or blank is unlimited.").
-				Placeholder("Unlimited").
-				Value(&maxDownloads).
-				Validate(func(s string) error {
-					if s == "" {
-						return nil
-					}
-					_, err := strconv.Atoi(s)
-					return err
-				}),
-
-			huh.NewConfirm().Title("Download keywords as .txt").Value(&downloadCaption),
-		),
-	)
-
-	if err := form.Run(); err != nil {
+	p := tea.NewProgram(model)
+	rawModel, err := p.Run()
+	if err != nil {
 		log.Fatal(err)
+	}
+
+	finalModel, ok := rawModel.(tui.Model)
+	if !ok {
+		log.Fatal("Could not cast model")
+	}
+
+	request.Text = finalModel.SearchWords.Value()
+	request.Username = finalModel.ArtistName.Value()
+	favBy = finalModel.FavBy.Value()
+
+	request.StringJoinType = finalModel.StringJoinType
+	request.DaysLimit = finalModel.TimeRange()
+	request.Type = finalModel.SubmissionType()
+	request.OrderBy = finalModel.OrderBy()
+	maxDownloads = finalModel.MaxDownloads.Value()
+	downloadCaption = finalModel.DownloadCaption
+
+	searchIn = nil
+	if finalModel.SearchInKeywords {
+		searchIn = append(searchIn, Keywords)
+	}
+	if finalModel.SearchInTitle {
+		searchIn = append(searchIn, Title)
+	}
+	if finalModel.SearchInDesc {
+		searchIn = append(searchIn, Description)
+	}
+	if finalModel.SearchInMD5 {
+		searchIn = append(searchIn, MD5)
 	}
 
 	request.Keywords = nil
