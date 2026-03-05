@@ -13,8 +13,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/progress"
+	teaV1 "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/ellypaws/inkbunny"
 )
@@ -87,6 +89,8 @@ type DownloadModel struct {
 	spinnerFrame  int
 	spinnerTicker tea.Cmd
 	spinnerStyle  lipgloss.Style
+
+	ZoneManager *zone.Manager
 }
 
 func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int, toDownload int, caption bool) DownloadModel {
@@ -97,6 +101,7 @@ func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int,
 		MaxActive:       maxActive,
 		ToDownload:      toDownload,
 		DownloadCaption: caption,
+		ZoneManager:     zone.New(),
 	}
 	if m.MaxActive <= 0 {
 		m.MaxActive = 4
@@ -195,8 +200,41 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.Item.Status = StatusActive
 		cmds = append(cmds, startDownloadCmd(msg.Item, m.User, m.Client, m.DownloadCaption))
 
+	case tea.MouseWheelMsg:
+		if msg.Mouse().Button == tea.MouseWheelUp {
+			if !m.Confirmed && m.ScrollOffset > 0 {
+				m.ScrollOffset--
+			}
+		} else if msg.Mouse().Button == tea.MouseWheelDown {
+			if !m.Confirmed && m.ScrollOffset < len(m.Items)-1 {
+				m.ScrollOffset++
+			}
+		}
+
 	case tea.MouseMsg:
-		// ignore
+		v1msg := teaV1.MouseMsg{X: msg.Mouse().X, Y: msg.Mouse().Y}
+		if mRelease, ok := msg.(tea.MouseReleaseMsg); ok && mRelease.Button == tea.MouseLeft {
+			if !m.Confirmed {
+				if m.ZoneManager.Get("btn_confirm").InBounds(v1msg) {
+					m.Confirmed = true
+					var initCmds []tea.Cmd
+					activeCount := 0
+					for _, item := range m.Items {
+						if activeCount >= m.MaxActive {
+							break
+						}
+						item.Status = StatusActive
+						initCmds = append(initCmds, startDownloadCmd(item, m.User, m.Client, m.DownloadCaption))
+						activeCount++
+					}
+					cmds = append(cmds, initCmds...)
+				}
+				if m.ZoneManager.Get("btn_cancel").InBounds(v1msg) {
+					m.Aborted = true
+					return m, tea.Quit
+				}
+			}
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -239,17 +277,30 @@ func (m DownloadModel) isDone() bool {
 }
 
 func (m DownloadModel) View() tea.View {
+	borderStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#5F7FFF")).
+		Padding(0, 1)
+
 	if m.Aborted {
-		return tea.NewView("Aborted.")
+		return tea.NewView(m.ZoneManager.Scan(borderStyle.Render("Aborted.")))
 	}
 
 	if !m.Confirmed {
 		var out []string
-		out = append(out, fmt.Sprintf("Ready to download %d files. Press ENTER to confirm, ESC to cancel.", len(m.Items)))
+
+		btnConfirm := lipgloss.NewStyle().Foreground(lipgloss.Color("#5F7FFF")).Render("ENTER to confirm")
+		btnCancel := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B6B6B")).Render("ESC to cancel")
+
+		btnConfirm = m.ZoneManager.Mark("btn_confirm", btnConfirm)
+		btnCancel = m.ZoneManager.Mark("btn_cancel", btnCancel)
+
+		out = append(out, fmt.Sprintf("Ready to download %d files. Press %s, %s.", len(m.Items), btnConfirm, btnCancel))
 		out = append(out, "---")
 
 		start := m.ScrollOffset
-		end := start + (m.Height - 3)
+		end := start + (m.Height - 5) // -5 to account for border and header
+
 		if m.Height == 0 { // fallback
 			end = start + 10
 		}
@@ -270,7 +321,7 @@ func (m DownloadModel) View() tea.View {
 			out = append(out, fmt.Sprintf("... %d more", len(m.Items)-end))
 		}
 
-		return tea.NewView(strings.Join(out, "\n"))
+		return tea.NewView(m.ZoneManager.Scan(borderStyle.Render(strings.Join(out, "\n"))))
 	}
 
 	var active []string
@@ -299,7 +350,8 @@ func (m DownloadModel) View() tea.View {
 		}
 	}
 
-	availableLines := m.Height - 2
+	availableLines := m.Height - 4 // border lines top & bottom plus empty lines
+
 	if availableLines < 5 {
 		availableLines = 10 // fallback
 	}
@@ -329,7 +381,7 @@ func (m DownloadModel) View() tea.View {
 		}
 	}
 
-	return tea.NewView(strings.Join(out, "\n"))
+	return tea.NewView(m.ZoneManager.Scan(borderStyle.Render(strings.Join(out, "\n"))))
 }
 
 func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Client, saveCaption bool) tea.Cmd {
