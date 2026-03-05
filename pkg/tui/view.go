@@ -31,6 +31,7 @@ var (
 	subLabelStyle = lipgloss.NewStyle().Foreground(dimTextColor).Width(22).Align(lipgloss.Right).MarginRight(1)
 
 	checkboxStyle       = lipgloss.NewStyle().Foreground(textColor)
+	inactiveStyle       = lipgloss.NewStyle().Foreground(inactiveColor)
 	activeCheckboxStyle = lipgloss.NewStyle().Foreground(activeColor).Bold(true)
 	hoverCheckboxStyle  = lipgloss.NewStyle().Foreground(hoverColor)
 
@@ -349,7 +350,7 @@ func (m *Model) renderCheckbox(id string, checked bool, label string) string {
 		style = hoverCheckboxStyle
 		markStyle = hoverCheckboxStyle
 	}
-	mark := "☐"
+	mark := inactiveStyle.Render("■")
 	if checked {
 		mark = "✓"
 		markStyle = activeCheckboxStyle
