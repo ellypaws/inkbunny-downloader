@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	spinnerModel "github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
 	"github.com/charmbracelet/log"
@@ -241,6 +242,7 @@ Search:
 							FileMD5:      file.FullFileMD5,
 							IsPublic:     d.Public.Bool(),
 							Keywords:     keywords.String(),
+							Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
 							Status:       tui.StatusQueued,
 						})
 					}

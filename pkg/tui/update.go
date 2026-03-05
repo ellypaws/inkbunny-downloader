@@ -458,6 +458,12 @@ func toV1Msg(msg tea.Msg) teaV1.Msg {
 	return nil
 }
 
+func toV2Cmd(cmd teaV1.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		return cmd()
+	}
+}
+
 func toV1KeyMsg(msg tea.KeyPressMsg) teaV1.Msg {
 	v1 := teaV1.KeyMsg{
 		Alt: msg.Mod.Contains(tea.ModAlt),

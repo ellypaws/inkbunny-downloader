@@ -13,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	teaV1 "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
@@ -47,6 +48,7 @@ type DownloadItem struct {
 	Written   atomic.Int64
 	TotalSize atomic.Int64
 	Progress  progress.Model
+	Spinner   spinner.Model
 
 	Status     DownloadStatus
 	Error      error
@@ -61,12 +63,6 @@ const (
 	StatusCompleted
 	StatusFailed
 )
-
-type spinnerTickMsg struct {
-	time time.Time
-}
-
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 type DownloadModel struct {
 	Items     []*DownloadItem
@@ -85,9 +81,6 @@ type DownloadModel struct {
 	Confirmed bool
 
 	ScrollOffset int
-
-	spinnerFrame int
-	spinnerStyle lipgloss.Style
 
 	ZoneManager *zone.Manager
 }
@@ -111,15 +104,11 @@ func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int,
 		item.Progress = prog
 	}
 
-	m.spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
 	return m
 }
 
 func (m DownloadModel) Init() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
-		return spinnerTickMsg{time: t}
-	})
+	return nil
 }
 
 func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -138,17 +127,16 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if !m.Confirmed {
 				m.Confirmed = true
-				var initCmds []tea.Cmd
 				activeCount := 0
+				cmds = []tea.Cmd{func() tea.Msg { return spinner.TickMsg{Time: time.Now()} }}
 				for _, item := range m.Items {
 					if activeCount >= m.MaxActive {
 						break
 					}
 					item.Status = StatusActive
-					initCmds = append(initCmds, startDownloadCmd(item, m.User, m.Client, m.DownloadCaption))
+					cmds = append(cmds, startDownloadCmd(item, m.User, m.Client, m.DownloadCaption))
 					activeCount++
 				}
-				cmds = append(cmds, initCmds...)
 			}
 		case "up", "k":
 			if !m.Confirmed && m.ScrollOffset > 0 {
@@ -174,10 +162,21 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case spinnerTickMsg:
-		m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
+	case spinner.TickMsg:
+		var willTick bool
 		return m, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
-			return spinnerTickMsg{time: t}
+			for i, item := range m.Items {
+				if item.Status == StatusActive {
+					model, _ := m.Items[i].Spinner.Update(msg)
+					m.Items[i].Spinner = model
+					willTick = true
+				}
+			}
+			if !willTick {
+				return nil
+			}
+
+			return spinner.TickMsg{Time: t}
 		})
 
 	case DownloadCompleteMsg:
@@ -328,8 +327,6 @@ func (m DownloadModel) View() tea.View {
 	var queued []string
 	var completed []string
 
-	spin := m.spinnerStyle.Render(spinnerFrames[m.spinnerFrame])
-
 	for _, item := range m.Items {
 		switch item.Status {
 		case StatusActive:
@@ -339,7 +336,7 @@ func (m DownloadModel) View() tea.View {
 				pct = float64(item.Written.Load()) / float64(total)
 			}
 			prog := item.Progress.ViewAs(pct)
-			line := fmt.Sprintf("%s Downloading %s... %s", spin, item.FileName, prog)
+			line := fmt.Sprintf("%s Downloading %s... %s", item.Spinner.View(), item.FileName, prog)
 			active = append(active, line)
 		case StatusQueued:
 			queued = append(queued, fmt.Sprintf("  Queued: %s", item.FileName))
