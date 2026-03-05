@@ -243,15 +243,15 @@ func (m *Model) renderBottomSection() string {
 func (m *Model) renderFooterSection() string {
 	orderLabel := labelStyle.Render("Order by:")
 	orderCycle := m.renderCycle("cycle_order", m.OrderByLabels[m.OrderByIndex])
-	orderBlock := lipgloss.JoinHorizontal(lipgloss.Top, orderLabel, orderCycle)
+	orderBlock := lipgloss.JoinHorizontal(lipgloss.Center, orderLabel, orderCycle)
 
 	dlMaxLabel := labelStyle.Render("Max downloads:")
 	dlMaxInput := m.renderInput("max_dl", m.MaxDownloads, FieldMaxDownloads)
-	dlMaxBlock := lipgloss.JoinHorizontal(lipgloss.Top, dlMaxLabel, dlMaxInput)
+	dlMaxBlock := lipgloss.JoinHorizontal(lipgloss.Center, dlMaxLabel, dlMaxInput)
 
-	activeMaxLabel := labelStyle.Render("Concurrent dl:")
+	activeMaxLabel := labelStyle.Render("Simultaneous downloads:")
 	activeMaxInput := m.renderInput("max_active", m.MaxActive, FieldMaxActive)
-	activeMaxBlock := lipgloss.JoinHorizontal(lipgloss.Top, activeMaxLabel, activeMaxInput)
+	activeMaxBlock := lipgloss.JoinHorizontal(lipgloss.Center, activeMaxLabel, activeMaxInput)
 
 	dlCaptionLabel := labelStyle.Render("Download keywords:")
 	dlCaptionCheckbox := m.renderCheckbox("chk_dl_caption", m.DownloadCaption, "Save as .txt")

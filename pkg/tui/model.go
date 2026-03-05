@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"runtime"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -147,7 +149,14 @@ func NewModel(
 	maxDownloads.Prompt = ""
 
 	maxActive := textinput.New()
-	maxActive.Placeholder = "Auto"
+	maxActive.Placeholder = strconv.Itoa(min(max(1, runtime.NumCPU()/6), 6))
+	maxActive.Validate = func(s string) error {
+		if s == "" {
+			return nil
+		}
+		_, err := strconv.Atoi(s)
+		return err
+	}
 	maxActive.Prompt = ""
 
 	return &Model{
@@ -174,7 +183,7 @@ func NewModel(
 		OrderByLabels: []string{"Newest First", "Most Popular First (by Favs)", "Most Popular First (by Views)"},
 		OrderByValues: []string{inkbunny.OrderByCreateDatetime, inkbunny.OrderByFavs, inkbunny.OrderByViews},
 
-		DownloadCaption: true,
+		DownloadCaption: false,
 		ActiveField:     FieldSearchWords,
 		FocusIndex:      0,
 
