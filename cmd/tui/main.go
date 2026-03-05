@@ -200,58 +200,70 @@ Search:
 
 	var items []*tui.DownloadItem
 
-	spinner.New().
-		Title("Gathering files to download...").
-		Action(func() {
-			for page, err := range search.AllPages() {
-				if err != nil {
-					log.Error("Failed to search pages", "err", err)
-					break
-				}
-				details, err := page.Details()
-				if err != nil {
-					log.Error("Failed to get submission details", "err", err)
-					continue
-				}
+	gather := spinner.New().
+		Title("Gathering files to download...")
 
-				for _, d := range details.Submissions {
-					if toDownload > 0 && len(items) >= toDownload {
-						break
-					}
-					var keywords strings.Builder
-					for i, keyword := range d.Keywords {
-						if i > 0 {
-							keywords.WriteString(", ")
-						}
-						keywords.WriteString(keyword.KeywordName)
-					}
+	var (
+		pageCount       int
+		submissionCount int
+		fileCount       int
+	)
+	gather.Action(func() {
+		for page, err := range search.AllPages() {
+			if err != nil {
+				log.Error("Failed to search pages", "err", err)
+				break
+			}
+			details, err := page.Details()
+			if err != nil {
+				log.Error("Failed to get submission details", "err", err)
+				continue
+			}
 
-					for _, file := range d.Files {
-						if toDownload > 0 && len(items) >= toDownload {
-							break
-						}
-
-						fileURL := file.FileURLFull.String()
-
-						items = append(items, &tui.DownloadItem{
-							SubmissionID: d.SubmissionID.String(),
-							Title:        d.Title,
-							URL:          fileURL,
-							Username:     d.Username,
-							FileName:     filepath.Base(file.FileName),
-							FileMD5:      file.FullFileMD5,
-							IsPublic:     d.Public.Bool(),
-							Keywords:     keywords.String(),
-							Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
-							Status:       tui.StatusQueued,
-						})
-					}
-				}
+			for _, d := range details.Submissions {
 				if toDownload > 0 && len(items) >= toDownload {
 					break
 				}
+				submissionCount++
+				gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions]\n [%d files]", pageCount, submissionCount, fileCount))
+				var keywords strings.Builder
+				for i, keyword := range d.Keywords {
+					if i > 0 {
+						keywords.WriteString(", ")
+					}
+					keywords.WriteString(keyword.KeywordName)
+				}
+
+				for _, file := range d.Files {
+					if toDownload > 0 && len(items) >= toDownload {
+						break
+					}
+					fileCount++
+					gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions] [%d files]", pageCount, submissionCount, fileCount))
+
+					fileURL := file.FileURLFull.String()
+
+					items = append(items, &tui.DownloadItem{
+						SubmissionID: d.SubmissionID.String(),
+						Title:        d.Title,
+						URL:          fileURL,
+						Username:     d.Username,
+						FileName:     filepath.Base(file.FileName),
+						FileMD5:      file.FullFileMD5,
+						IsPublic:     d.Public.Bool(),
+						Keywords:     keywords.String(),
+						Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
+						Status:       tui.StatusQueued,
+					})
+				}
 			}
-		}).Run()
+			if toDownload > 0 && len(items) >= toDownload {
+				break
+			}
+			pageCount++
+			gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions] [%d files]", pageCount, submissionCount, fileCount))
+		}
+	}).Run()
 
 	if len(items) == 0 {
 		log.Info("No files to download.")
