@@ -225,7 +225,7 @@ Search:
 					break
 				}
 				submissionCount++
-				gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions]\n [%d files]", pageCount, submissionCount, fileCount))
+				gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions]\n[%d files]", pageCount, submissionCount, fileCount))
 				var keywords strings.Builder
 				for i, keyword := range d.Keywords {
 					if i > 0 {
@@ -239,7 +239,7 @@ Search:
 						break
 					}
 					fileCount++
-					gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions] [%d files]", pageCount, submissionCount, fileCount))
+					gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions]\n[%d files]", pageCount, submissionCount, fileCount))
 
 					fileURL := file.FileURLFull.String()
 
@@ -261,7 +261,7 @@ Search:
 				break
 			}
 			pageCount++
-			gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions] [%d files]", pageCount, submissionCount, fileCount))
+			gather.Title(fmt.Sprintf("Gathering files to download...\n[%d pages]\n[%d submissions]\n[%d files]", pageCount, submissionCount, fileCount))
 		}
 	}).Run()
 
