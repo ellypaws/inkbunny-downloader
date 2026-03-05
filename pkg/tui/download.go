@@ -178,7 +178,7 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case spinnerTickMsg:
 		m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
-		cmds = append(cmds, m.spinnerTicker)
+		return m, m.spinnerTicker
 
 	case DownloadCompleteMsg:
 		msg.Item.Status = StatusCompleted

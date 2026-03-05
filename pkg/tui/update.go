@@ -2,11 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/textinput"
 	teaV1 "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/log"
 
 	"github.com/ellypaws/inkbunny"
 )
@@ -112,7 +114,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ScrollOffset += 3
 		}
 		m.clampScroll()
-		return m, nil
+		res, c := m.handleMouse(msg)
+		return res, c
 
 	case tea.MouseMsg:
 		res, c := m.handleMouse(msg)
@@ -241,6 +244,10 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.User = nil
 			m.Username = ""
 			m.NeedsLogin = true
+			if err := os.Remove("sid.txt"); err != nil {
+				log.Warn("failed to remove session file", "err", err)
+			}
+
 			return m, tea.Quit
 		}
 
@@ -372,25 +379,23 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if _, ok := msg.(tea.MouseMotionMsg); ok {
-		m.HoveredZone = ""
+	m.HoveredZone = ""
 
-		for i := range m.Suggestions {
-			if hoverCheck(fmt.Sprintf("sug_%d", i)) {
-				break
-			}
+	for i := range m.Suggestions {
+		if hoverCheck(fmt.Sprintf("sug_%d", i)) {
+			break
 		}
+	}
 
-		if m.HoveredZone == "" {
-			_ = hoverCheck("btn_logout") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") ||
-				hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
-				hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_name_fav") ||
-				hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
-				hoverCheck("chk_keywords") || hoverCheck("chk_title") || hoverCheck("chk_desc") || hoverCheck("chk_md5") ||
-				hoverCheck("chk_rate_gen") || hoverCheck("chk_rate_nudity") || hoverCheck("chk_rate_mildv") || hoverCheck("chk_rate_sex") || hoverCheck("chk_rate_strongv") ||
-				hoverCheck("rad_type_any") || hoverCheck("chk_type_pic") || hoverCheck("chk_type_sketch") || hoverCheck("chk_type_picseries") || hoverCheck("chk_type_comic") || hoverCheck("chk_type_port") || hoverCheck("chk_type_swfanim") || hoverCheck("chk_type_swfint") || hoverCheck("chk_type_vidfeat") || hoverCheck("chk_type_vidanim") || hoverCheck("chk_type_musicsing") || hoverCheck("chk_type_musicalb") || hoverCheck("chk_type_writing") || hoverCheck("chk_type_char") || hoverCheck("chk_type_photo") ||
-				hoverCheck("cycle_time") || hoverCheck("cycle_order") || hoverCheck("chk_dl_caption")
-		}
+	if m.HoveredZone == "" {
+		_ = hoverCheck("btn_logout") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") ||
+			hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
+			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_name_fav") ||
+			hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
+			hoverCheck("chk_keywords") || hoverCheck("chk_title") || hoverCheck("chk_desc") || hoverCheck("chk_md5") ||
+			hoverCheck("chk_rate_gen") || hoverCheck("chk_rate_nudity") || hoverCheck("chk_rate_mildv") || hoverCheck("chk_rate_sex") || hoverCheck("chk_rate_strongv") ||
+			hoverCheck("rad_type_any") || hoverCheck("chk_type_pic") || hoverCheck("chk_type_sketch") || hoverCheck("chk_type_picseries") || hoverCheck("chk_type_comic") || hoverCheck("chk_type_port") || hoverCheck("chk_type_swfanim") || hoverCheck("chk_type_swfint") || hoverCheck("chk_type_vidfeat") || hoverCheck("chk_type_vidanim") || hoverCheck("chk_type_musicsing") || hoverCheck("chk_type_musicalb") || hoverCheck("chk_type_writing") || hoverCheck("chk_type_char") || hoverCheck("chk_type_photo") ||
+			hoverCheck("cycle_time") || hoverCheck("cycle_order") || hoverCheck("chk_dl_caption")
 	}
 
 	return m, nil
