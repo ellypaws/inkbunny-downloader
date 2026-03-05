@@ -45,7 +45,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.SuggestionIndex = -1
 					return m, nil
 				}
-				return m, tea.Quit
+				// If no suggestion selected, fall through to default enter behavior
 			case "esc":
 				m.Suggestions = nil
 				m.SuggestionIndex = -1
@@ -54,32 +54,67 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "ctrl+c":
-			m.Aborted = true
-			return m, tea.Quit
-		case "esc":
+		case "ctrl+c", "esc":
 			m.Aborted = true
 			return m, tea.Quit
 		case "tab", "down":
-			m.ActiveField++
-			if m.ActiveField > FieldMaxDownloads {
-				m.ActiveField = FieldSearchWords
+			m.FocusIndex++
+			if m.FocusIndex >= len(FocusableZones) {
+				m.FocusIndex = 0
 			}
+			m.updateActiveField()
 			m.focusActiveField()
 			m.Suggestions = nil
 			m.SuggestionIndex = -1
 			return m, nil
 		case "shift+tab", "up":
-			m.ActiveField--
-			if m.ActiveField < FieldSearchWords {
-				m.ActiveField = FieldMaxDownloads
+			m.FocusIndex--
+			if m.FocusIndex < 0 {
+				m.FocusIndex = len(FocusableZones) - 1
 			}
+			m.updateActiveField()
 			m.focusActiveField()
 			m.Suggestions = nil
 			m.SuggestionIndex = -1
 			return m, nil
+		case "right":
+			if m.ActiveField == FieldNone {
+				m.FocusIndex++
+				if m.FocusIndex >= len(FocusableZones) {
+					m.FocusIndex = 0
+				}
+				m.updateActiveField()
+				m.focusActiveField()
+				return m, nil
+			}
+		case "left":
+			if m.ActiveField == FieldNone {
+				m.FocusIndex--
+				if m.FocusIndex < 0 {
+					m.FocusIndex = len(FocusableZones) - 1
+				}
+				m.updateActiveField()
+				m.focusActiveField()
+				return m, nil
+			}
+		case " ", "space":
+			if m.ActiveField == FieldNone {
+				return m.triggerZone(FocusableZones[m.FocusIndex])
+			}
 		case "enter":
-			return m, tea.Quit
+			zone := FocusableZones[m.FocusIndex]
+			if zone == "btn_search_top" || zone == "btn_search_bottom" || zone == "btn_logout" {
+				return m.triggerZone(zone)
+			}
+			m.FocusIndex++
+			if m.FocusIndex >= len(FocusableZones) {
+				m.FocusIndex = 0
+			}
+			m.updateActiveField()
+			m.focusActiveField()
+			m.Suggestions = nil
+			m.SuggestionIndex = -1
+			return m, nil
 		case "pgdown":
 			m.ScrollOffset += m.Height / 2
 			m.clampScroll()
@@ -210,164 +245,12 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if inBounds("search_words") {
-			m.ActiveField = FieldSearchWords
-			m.focusActiveField()
-			return m, nil
-		}
-		if inBounds("artist_name") {
-			m.ActiveField = FieldArtistName
-			m.focusActiveField()
-			return m, nil
-		}
-		if inBounds("fav_by") {
-			m.ActiveField = FieldFavBy
-			m.focusActiveField()
-			return m, nil
-		}
-		if inBounds("max_dl") {
-			m.ActiveField = FieldMaxDownloads
-			m.focusActiveField()
-			return m, nil
-		}
-
-		if inBounds("btn_logout") {
-			if m.User != nil {
-				_ = m.User.Logout()
+		for _, id := range FocusableZones {
+			if inBounds(id) {
+				m.FocusIndex = findFocusIndex(id)
+				m.updateActiveField()
+				return m.triggerZone(id)
 			}
-			m.User = nil
-			m.Username = ""
-			m.NeedsLogin = true
-			if err := os.Remove("sid.txt"); err != nil {
-				log.Warn("failed to remove session file", "err", err)
-			}
-
-			return m, tea.Quit
-		}
-
-		if inBounds("btn_search_top") || inBounds("btn_search_bottom") {
-			return m, tea.Quit
-		}
-
-		if inBounds("link_use_my_name_artist") {
-			m.ArtistName.SetValue(m.Username)
-			return m, nil
-		}
-		if inBounds("link_use_my_name_fav") {
-			m.FavBy.SetValue(m.Username)
-			return m, nil
-		}
-
-		if inBounds("rad_and") {
-			m.StringJoinType = inkbunny.JoinTypeAnd
-		}
-		if inBounds("rad_or") {
-			m.StringJoinType = inkbunny.JoinTypeOr
-		}
-		if inBounds("rad_exact") {
-			m.StringJoinType = inkbunny.JoinTypeExact
-		}
-
-		if inBounds("chk_keywords") {
-			m.SearchInKeywords = !m.SearchInKeywords
-		}
-		if inBounds("chk_title") {
-			m.SearchInTitle = !m.SearchInTitle
-		}
-		if inBounds("chk_desc") {
-			m.SearchInDesc = !m.SearchInDesc
-		}
-		if inBounds("chk_md5") {
-			m.SearchInMD5 = !m.SearchInMD5
-		}
-
-		if inBounds("chk_rate_gen") {
-			m.RatingGeneral = !m.RatingGeneral
-		}
-		if inBounds("chk_rate_nudity") {
-			m.RatingNudity = !m.RatingNudity
-		}
-		if inBounds("chk_rate_mildv") {
-			m.RatingMildViolence = !m.RatingMildViolence
-		}
-		if inBounds("chk_rate_sex") {
-			m.RatingSexual = !m.RatingSexual
-		}
-		if inBounds("chk_rate_strongv") {
-			m.RatingStrongViolence = !m.RatingStrongViolence
-		}
-
-		if inBounds("rad_type_any") {
-			m.TypeAny = true
-			m.clearTypes()
-		} else {
-			if inBounds("chk_type_pic") {
-				m.TypePicture = !m.TypePicture
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_sketch") {
-				m.TypeSketch = !m.TypeSketch
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_picseries") {
-				m.TypePictureSeries = !m.TypePictureSeries
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_comic") {
-				m.TypeComic = !m.TypeComic
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_port") {
-				m.TypePortfolio = !m.TypePortfolio
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_swfanim") {
-				m.TypeSWFAnimation = !m.TypeSWFAnimation
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_swfint") {
-				m.TypeSWFInteract = !m.TypeSWFInteract
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_vidfeat") {
-				m.TypeVideoFeature = !m.TypeVideoFeature
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_vidanim") {
-				m.TypeVideoAnim = !m.TypeVideoAnim
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_musicsing") {
-				m.TypeMusicSingle = !m.TypeMusicSingle
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_musicalb") {
-				m.TypeMusicAlbum = !m.TypeMusicAlbum
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_writing") {
-				m.TypeWriting = !m.TypeWriting
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_char") {
-				m.TypeCharSheet = !m.TypeCharSheet
-				m.TypeAny = false
-			}
-			if inBounds("chk_type_photo") {
-				m.TypePhotography = !m.TypePhotography
-				m.TypeAny = false
-			}
-		}
-
-		if inBounds("cycle_time") {
-			m.TimeRangeIndex = (m.TimeRangeIndex + 1) % len(m.TimeRangeLabels)
-		}
-		if inBounds("cycle_order") {
-			m.OrderByIndex = (m.OrderByIndex + 1) % len(m.OrderByLabels)
-		}
-
-		if inBounds("chk_dl_caption") {
-			m.DownloadCaption = !m.DownloadCaption
 		}
 
 		return m, nil
@@ -393,6 +276,141 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
+	switch id {
+	case "search_words":
+		m.ActiveField = FieldSearchWords
+		m.focusActiveField()
+	case "artist_name":
+		m.ActiveField = FieldArtistName
+		m.focusActiveField()
+	case "fav_by":
+		m.ActiveField = FieldFavBy
+		m.focusActiveField()
+	case "max_dl":
+		m.ActiveField = FieldMaxDownloads
+		m.focusActiveField()
+	case "btn_logout":
+		if m.User != nil {
+			_ = m.User.Logout()
+		}
+		m.User = nil
+		m.Username = ""
+		m.NeedsLogin = true
+		if err := os.Remove("sid.txt"); err != nil {
+			log.Warn("failed to remove session file", "err", err)
+		}
+		return m, tea.Quit
+	case "btn_search_top", "btn_search_bottom":
+		return m, tea.Quit
+	case "link_use_my_name_artist":
+		m.ArtistName.SetValue(m.Username)
+	case "link_use_my_name_fav":
+		m.FavBy.SetValue(m.Username)
+	case "rad_and":
+		m.StringJoinType = inkbunny.JoinTypeAnd
+	case "rad_or":
+		m.StringJoinType = inkbunny.JoinTypeOr
+	case "rad_exact":
+		m.StringJoinType = inkbunny.JoinTypeExact
+	case "chk_keywords":
+		m.SearchInKeywords = !m.SearchInKeywords
+	case "chk_title":
+		m.SearchInTitle = !m.SearchInTitle
+	case "chk_desc":
+		m.SearchInDesc = !m.SearchInDesc
+	case "chk_md5":
+		m.SearchInMD5 = !m.SearchInMD5
+	case "chk_rate_gen":
+		m.RatingGeneral = !m.RatingGeneral
+	case "chk_rate_nudity":
+		m.RatingNudity = !m.RatingNudity
+	case "chk_rate_mildv":
+		m.RatingMildViolence = !m.RatingMildViolence
+	case "chk_rate_sex":
+		m.RatingSexual = !m.RatingSexual
+	case "chk_rate_strongv":
+		m.RatingStrongViolence = !m.RatingStrongViolence
+	case "rad_type_any":
+		m.TypeAny = true
+		m.clearTypes()
+	case "chk_type_pic":
+		m.TypePicture = !m.TypePicture
+		m.TypeAny = false
+	case "chk_type_sketch":
+		m.TypeSketch = !m.TypeSketch
+		m.TypeAny = false
+	case "chk_type_picseries":
+		m.TypePictureSeries = !m.TypePictureSeries
+		m.TypeAny = false
+	case "chk_type_comic":
+		m.TypeComic = !m.TypeComic
+		m.TypeAny = false
+	case "chk_type_port":
+		m.TypePortfolio = !m.TypePortfolio
+		m.TypeAny = false
+	case "chk_type_swfanim":
+		m.TypeSWFAnimation = !m.TypeSWFAnimation
+		m.TypeAny = false
+	case "chk_type_swfint":
+		m.TypeSWFInteract = !m.TypeSWFInteract
+		m.TypeAny = false
+	case "chk_type_vidfeat":
+		m.TypeVideoFeature = !m.TypeVideoFeature
+		m.TypeAny = false
+	case "chk_type_vidanim":
+		m.TypeVideoAnim = !m.TypeVideoAnim
+		m.TypeAny = false
+	case "chk_type_musicsing":
+		m.TypeMusicSingle = !m.TypeMusicSingle
+		m.TypeAny = false
+	case "chk_type_musicalb":
+		m.TypeMusicAlbum = !m.TypeMusicAlbum
+		m.TypeAny = false
+	case "chk_type_writing":
+		m.TypeWriting = !m.TypeWriting
+		m.TypeAny = false
+	case "chk_type_char":
+		m.TypeCharSheet = !m.TypeCharSheet
+		m.TypeAny = false
+	case "chk_type_photo":
+		m.TypePhotography = !m.TypePhotography
+		m.TypeAny = false
+	case "cycle_time":
+		m.TimeRangeIndex = (m.TimeRangeIndex + 1) % len(m.TimeRangeLabels)
+	case "cycle_order":
+		m.OrderByIndex = (m.OrderByIndex + 1) % len(m.OrderByLabels)
+	case "chk_dl_caption":
+		m.DownloadCaption = !m.DownloadCaption
+	}
+	return m, nil
+}
+
+func findFocusIndex(id string) int {
+	for i, zone := range FocusableZones {
+		if zone == id {
+			return i
+		}
+	}
+	return 0
+}
+
+func (m *Model) updateActiveField() {
+	id := FocusableZones[m.FocusIndex]
+	switch id {
+	case "search_words":
+		m.ActiveField = FieldSearchWords
+	case "artist_name":
+		m.ActiveField = FieldArtistName
+	case "fav_by":
+		m.ActiveField = FieldFavBy
+	case "max_dl":
+		m.ActiveField = FieldMaxDownloads
+	default:
+		m.ActiveField = FieldNone
+	}
 }
 
 func (m *Model) clearTypes() {

@@ -18,7 +18,23 @@ const (
 	FieldArtistName
 	FieldFavBy
 	FieldMaxDownloads
+	FieldNone
 )
+
+var FocusableZones = []string{
+	"search_words", "btn_search_top",
+	"rad_and", "rad_or", "rad_exact",
+	"chk_keywords", "chk_title", "chk_desc", "chk_md5",
+	"artist_name", "link_use_my_name_artist",
+	"fav_by", "link_use_my_name_fav",
+	"cycle_time",
+	"chk_rate_gen", "chk_rate_nudity", "chk_rate_mildv", "chk_rate_sex", "chk_rate_strongv",
+	"rad_type_any", "chk_type_pic", "chk_type_sketch", "chk_type_picseries", "chk_type_comic",
+	"chk_type_port", "chk_type_swfanim", "chk_type_swfint", "chk_type_vidfeat", "chk_type_vidanim",
+	"chk_type_musicsing", "chk_type_musicalb", "chk_type_writing", "chk_type_char", "chk_type_photo",
+	"cycle_order", "max_dl", "chk_dl_caption",
+	"btn_search_bottom", "btn_logout",
+}
 
 type SuggestKeywordMsg struct {
 	Suggestions []string
@@ -48,6 +64,7 @@ type Model struct {
 
 	ActiveField activeField
 	HoveredZone string
+	FocusIndex  int
 
 	KeywordCache  *flight.Cache[string, []inkbunny.KeywordAutocomplete]
 	UsernameCache *flight.Cache[string, []inkbunny.Autocomplete]
@@ -152,6 +169,7 @@ func NewModel(
 
 		DownloadCaption: true,
 		ActiveField:     FieldSearchWords,
+		FocusIndex:      0,
 
 		RatingGeneral:        true,
 		RatingNudity:         true,
