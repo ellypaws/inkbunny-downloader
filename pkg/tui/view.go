@@ -251,6 +251,10 @@ func (m *Model) renderFooterSection() string {
 	dlMaxInput := m.renderInput("max_dl", m.MaxDownloads, FieldMaxDownloads)
 	dlMaxBlock := lipgloss.JoinHorizontal(lipgloss.Top, dlMaxLabel, dlMaxInput)
 
+	activeMaxLabel := labelStyle.Render("Concurrent dl:")
+	activeMaxInput := m.renderInput("max_active", m.MaxActive, FieldMaxActive)
+	activeMaxBlock := lipgloss.JoinHorizontal(lipgloss.Top, activeMaxLabel, activeMaxInput)
+
 	dlCaptionLabel := labelStyle.Render("Download keywords:")
 	dlCaptionCheckbox := m.renderCheckbox("chk_dl_caption", m.DownloadCaption, "Save as .txt")
 	dlCaptionBlock := lipgloss.JoinHorizontal(lipgloss.Top, dlCaptionLabel, dlCaptionCheckbox)
@@ -260,6 +264,7 @@ func (m *Model) renderFooterSection() string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		orderBlock, "",
 		dlMaxBlock, "",
+		activeMaxBlock, "",
 		dlCaptionBlock, "",
 		searchBtn,
 	)

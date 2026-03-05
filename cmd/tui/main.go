@@ -42,6 +42,7 @@ func main() {
 		searchIn     []int
 		favBy        string
 		maxDownloads string
+		maxActiveStr string
 
 		toDownload      int
 		downloadCaption bool = true
@@ -114,6 +115,7 @@ Search:
 	request.Type = finalModel.SubmissionType()
 	request.OrderBy = finalModel.OrderBy()
 	maxDownloads = finalModel.MaxDownloads.Value()
+	maxActiveStr = finalModel.MaxActive.Value()
 	downloadCaption = finalModel.DownloadCaption
 
 	searchIn = nil
@@ -268,7 +270,13 @@ Search:
 	if len(items) == 0 {
 		log.Info("No files to download.")
 	} else {
-		downloadModel := tui.NewDownloadModel(user, items, min(max(1, runtime.NumCPU()/6), 6), toDownload, downloadCaption)
+		maxActive := min(max(1, runtime.NumCPU()/6), 6)
+		if maxActiveStr != "" {
+			if parsed, err := strconv.Atoi(maxActiveStr); err == nil && parsed > 0 {
+				maxActive = parsed
+			}
+		}
+		downloadModel := tui.NewDownloadModel(user, items, maxActive, toDownload, downloadCaption)
 		p := tea.NewProgram(downloadModel) // from bubbletea/v2
 		if _, err := p.Run(); err != nil {
 			log.Error("Failed to run downloader TUI", "err", err)

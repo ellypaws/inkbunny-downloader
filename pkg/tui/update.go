@@ -165,6 +165,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.FavBy, cmd = updateInput(m.FavBy, msg)
 		} else if m.ActiveField == FieldMaxDownloads {
 			m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
+		} else if m.ActiveField == FieldMaxActive {
+			m.MaxActive, cmd = updateInput(m.MaxActive, msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -180,6 +182,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.FavBy, cmd = updateInput(m.FavBy, msg)
 	cmds = append(cmds, cmd)
 	m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
+	cmds = append(cmds, cmd)
+	m.MaxActive, cmd = updateInput(m.MaxActive, msg)
 	cmds = append(cmds, cmd)
 
 	if q := m.SearchWords.Value(); q != prevSearch && q != m.lastQuery {
@@ -291,6 +295,9 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 		m.focusActiveField()
 	case "max_dl":
 		m.ActiveField = FieldMaxDownloads
+		m.focusActiveField()
+	case "max_active":
+		m.ActiveField = FieldMaxActive
 		m.focusActiveField()
 	case "btn_logout":
 		if m.User != nil {
@@ -408,6 +415,8 @@ func (m *Model) updateActiveField() {
 		m.ActiveField = FieldFavBy
 	case "max_dl":
 		m.ActiveField = FieldMaxDownloads
+	case "max_active":
+		m.ActiveField = FieldMaxActive
 	default:
 		m.ActiveField = FieldNone
 	}
@@ -539,6 +548,7 @@ func (m *Model) focusActiveField() {
 	m.ArtistName.Blur()
 	m.FavBy.Blur()
 	m.MaxDownloads.Blur()
+	m.MaxActive.Blur()
 
 	switch m.ActiveField {
 	case FieldSearchWords:
@@ -549,5 +559,7 @@ func (m *Model) focusActiveField() {
 		m.FavBy.Focus()
 	case FieldMaxDownloads:
 		m.MaxDownloads.Focus()
+	case FieldMaxActive:
+		m.MaxActive.Focus()
 	}
 }

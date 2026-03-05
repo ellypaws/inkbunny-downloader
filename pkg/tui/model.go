@@ -18,6 +18,7 @@ const (
 	FieldArtistName
 	FieldFavBy
 	FieldMaxDownloads
+	FieldMaxActive
 	FieldNone
 )
 
@@ -32,7 +33,7 @@ var FocusableZones = []string{
 	"rad_type_any", "chk_type_pic", "chk_type_sketch", "chk_type_picseries", "chk_type_comic",
 	"chk_type_port", "chk_type_swfanim", "chk_type_swfint", "chk_type_vidfeat", "chk_type_vidanim",
 	"chk_type_musicsing", "chk_type_musicalb", "chk_type_writing", "chk_type_char", "chk_type_photo",
-	"cycle_order", "max_dl", "chk_dl_caption",
+	"cycle_order", "max_dl", "max_active", "chk_dl_caption",
 	"btn_search_bottom", "btn_logout",
 }
 
@@ -61,6 +62,7 @@ type Model struct {
 	ArtistName   textinput.Model
 	FavBy        textinput.Model
 	MaxDownloads textinput.Model
+	MaxActive    textinput.Model
 
 	ActiveField activeField
 	HoveredZone string
@@ -144,6 +146,10 @@ func NewModel(
 	maxDownloads.Placeholder = "Unlimited"
 	maxDownloads.Prompt = ""
 
+	maxActive := textinput.New()
+	maxActive.Placeholder = "Auto"
+	maxActive.Prompt = ""
+
 	return &Model{
 		ZoneManager:   zm,
 		User:          user,
@@ -152,6 +158,7 @@ func NewModel(
 		ArtistName:    artistName,
 		FavBy:         favBy,
 		MaxDownloads:  maxDownloads,
+		MaxActive:     maxActive,
 		KeywordCache:  keywordCache,
 		UsernameCache: usernameCache,
 
