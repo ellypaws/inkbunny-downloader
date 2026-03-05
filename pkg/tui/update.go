@@ -117,6 +117,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		res, c := m.handleMouse(msg)
 		return res, c
+
+	case tea.PasteMsg:
+		var cmd tea.Cmd
+		if m.ActiveField == FieldSearchWords {
+			m.SearchWords, cmd = updateInput(m.SearchWords, msg)
+		} else if m.ActiveField == FieldArtistName {
+			m.ArtistName, cmd = updateInput(m.ArtistName, msg)
+		} else if m.ActiveField == FieldFavBy {
+			m.FavBy, cmd = updateInput(m.FavBy, msg)
+		} else if m.ActiveField == FieldMaxDownloads {
+			m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
+		}
+		cmds = append(cmds, cmd)
 	}
 
 	prevSearch := m.SearchWords.Value()
@@ -219,6 +232,16 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.ActiveField = FieldMaxDownloads
 			m.focusActiveField()
 			return m, nil
+		}
+
+		if inBounds("btn_logout") {
+			if m.User != nil {
+				_ = m.User.Logout()
+			}
+			m.User = nil
+			m.Username = ""
+			m.NeedsLogin = true
+			return m, tea.Quit
 		}
 
 		if inBounds("btn_search_top") || inBounds("btn_search_bottom") {
@@ -359,7 +382,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.HoveredZone == "" {
-			_ = hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") ||
+			_ = hoverCheck("btn_logout") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") ||
 				hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
 				hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_name_fav") ||
 				hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
@@ -409,6 +432,11 @@ func toV1Msg(msg tea.Msg) teaV1.Msg {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return toV1KeyMsg(msg)
+	case tea.PasteMsg:
+		return teaV1.KeyMsg{
+			Type:  teaV1.KeyRunes,
+			Runes: []rune(msg.Content),
+		}
 	}
 	return nil
 }

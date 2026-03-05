@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/ellypaws/inkbunny"
 )
 
@@ -52,6 +53,7 @@ var (
 func (m *Model) View() tea.View {
 	var sections []string
 
+	sections = append(sections, m.renderUserBar())
 	sections = append(sections, panelStyle.Render(m.renderTopSection()))
 	sections = append(sections, panelStyle.Render(m.renderMiddleSection()))
 	sections = append(sections, panelStyle.Render(m.renderBottomSection()))
@@ -261,6 +263,44 @@ func (m *Model) renderFooterSection() string {
 		dlCaptionBlock, "",
 		searchBtn,
 	)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (m *Model) renderUserBar() string {
+	name := m.Username
+	if name == "" {
+		name = "Guest"
+	}
+
+	userBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(inactiveColor).
+		Padding(0, 1).
+		Foreground(activeColor).
+		Bold(true).
+		Render(name)
+
+	logoutStyle := lipgloss.NewStyle().
+		// Border(lipgloss.RoundedBorder()).
+		BorderForeground(inactiveColor).
+		Padding(0, 1).
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#444444")).
+		Bold(true)
+	if m.HoveredZone == "btn_logout" {
+		logoutStyle = logoutStyle.Background(hoverColor).BorderForeground(hoverColor)
+	}
+	logoutBtn := m.ZoneManager.Mark("btn_logout", logoutStyle.Render("Logout"))
+
+	bar := lipgloss.JoinHorizontal(lipgloss.Center, userBox, " ", logoutBtn)
+
+	return lipgloss.JoinVertical(lipgloss.Left, bar)
 }
 
 func (m *Model) renderSuggestions() string {

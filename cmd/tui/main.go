@@ -94,6 +94,11 @@ Search:
 		log.Fatal("Could not cast model")
 	}
 
+	if finalModel.NeedsLogin {
+		_ = os.Remove(sidFile)
+		goto Login
+	}
+
 	if finalModel.Aborted {
 		log.Info("Search aborted by user")
 		return

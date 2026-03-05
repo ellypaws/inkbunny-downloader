@@ -31,7 +31,10 @@ type SuggestUsernameMsg struct {
 
 type Model struct {
 	ZoneManager *zone.Manager
+	User        *inkbunny.User
 	Username    string
+
+	NeedsLogin bool
 
 	Width        int
 	Height       int
@@ -126,6 +129,7 @@ func NewModel(
 
 	return &Model{
 		ZoneManager:   zm,
+		User:          user,
 		Username:      username,
 		SearchWords:   searchWords,
 		ArtistName:    artistName,
