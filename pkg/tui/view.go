@@ -17,11 +17,9 @@ var (
 	inactiveColor = lipgloss.Color("#6B6B6B")
 	textColor     = lipgloss.Color("#E0E0E0")
 	dimTextColor  = lipgloss.Color("#888888")
-	panelBg       = lipgloss.Color("#2A2A2A")
-	sectionBg     = lipgloss.Color("#1E1E1E")
-
-	panelStyle = lipgloss.NewStyle().
-			Background(panelBg).
+	panelStyle    = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(inactiveColor).
 			Padding(1, 2).
 			MarginBottom(1)
 
@@ -45,8 +43,8 @@ var (
 	helperTextStyle = lipgloss.NewStyle().Foreground(dimTextColor).MarginLeft(23)
 
 	sugStyle       = lipgloss.NewStyle().Foreground(textColor).PaddingLeft(1).PaddingRight(1)
-	sugHoverStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(hoverColor).PaddingLeft(1).PaddingRight(1)
-	sugActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(activeColor).PaddingLeft(1).PaddingRight(1)
+	sugHoverStyle  = lipgloss.NewStyle().Foreground(hoverColor).PaddingLeft(1).PaddingRight(1)
+	sugActiveStyle = lipgloss.NewStyle().Foreground(activeColor).PaddingLeft(1).PaddingRight(1)
 	sugBoxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(inactiveColor).MarginLeft(23)
 )
 
@@ -61,7 +59,7 @@ func (m *Model) View() tea.View {
 
 	rendered := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
-	outer := lipgloss.NewStyle().Background(sectionBg).Padding(1, 2)
+	outer := lipgloss.NewStyle().Padding(1, 2)
 	full := outer.Render(rendered)
 
 	lines := strings.Split(full, "\n")
