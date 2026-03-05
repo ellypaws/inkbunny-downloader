@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -177,19 +176,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) applySuggestion(value string) {
 	switch m.SuggestionField {
 	case FieldSearchWords:
-		text := m.SearchWords.Value()
-		parts := strings.Fields(text)
-		if len(parts) > 0 {
-			parts[len(parts)-1] = value
-		} else {
-			parts = []string{value}
-		}
-		m.SearchWords.SetValue(strings.Join(parts, " ") + " ")
+		m.SearchWords.SetValue(value + " ")
 		m.SearchWords.CursorEnd()
 	case FieldArtistName:
 		m.ArtistName.SetValue(value)
+		m.ArtistName.CursorEnd()
 	case FieldFavBy:
 		m.FavBy.SetValue(value)
+		m.FavBy.CursorEnd()
 	}
 }
 
