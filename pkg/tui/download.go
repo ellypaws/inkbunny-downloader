@@ -86,9 +86,8 @@ type DownloadModel struct {
 
 	ScrollOffset int
 
-	spinnerFrame  int
-	spinnerTicker tea.Cmd
-	spinnerStyle  lipgloss.Style
+	spinnerFrame int
+	spinnerStyle lipgloss.Style
 
 	ZoneManager *zone.Manager
 }
@@ -113,15 +112,14 @@ func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int,
 	}
 
 	m.spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	m.spinnerTicker = tea.Tick(time.Second/10, func(t time.Time) tea.Msg {
-		return spinnerTickMsg{time: t}
-	})
 
 	return m
 }
 
 func (m DownloadModel) Init() tea.Cmd {
-	return m.spinnerTicker
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return spinnerTickMsg{time: t}
+	})
 }
 
 func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -178,7 +176,9 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case spinnerTickMsg:
 		m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
-		return m, m.spinnerTicker
+		return m, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+			return spinnerTickMsg{time: t}
+		})
 
 	case DownloadCompleteMsg:
 		msg.Item.Status = StatusCompleted
