@@ -18,6 +18,7 @@ vendor
 *.zip
 
 # wails
+node_modules
 /build
 /app/node_modules/
 /app/dist/

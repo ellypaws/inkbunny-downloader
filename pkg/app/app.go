@@ -148,9 +148,19 @@ func (a *App) UpdateRatings(mask string) (SessionInfo, error) {
 	}
 	ratings := inkbunny.ParseMask(strings.TrimSpace(mask))
 
+	_, err = executeWithRateLimitRetry(a.ctx, a.rateLimiter, "ratings", func() (struct{}, error) {
+		return struct{}{}, user.ChangeRatings(ratings)
+	})
+	if err != nil {
+		if a.handleSessionError(err) {
+			return SessionInfo{}, err
+		}
+		return SessionInfo{}, err
+	}
+
 	a.mu.Lock()
 	if a.user != nil && a.user.SID == user.SID {
-		a.user.Ratings = ratings
+		a.user.Ratings = user.Ratings
 	}
 	a.mu.Unlock()
 	a.resetCaches(user)
