@@ -17,14 +17,17 @@ type ResultsShowcaseProps = {
   results: SubmissionCard[];
   activeSubmissionId: string;
   selectedSubmissionIds: string[];
+  allSelected: boolean;
   loading: boolean;
   onSelectActive: (submissionId: string) => void;
+  onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
   onQueueDownloads: () => void;
   onLoadMore: () => void;
 };
 
 export function ResultsShowcase(props: ResultsShowcaseProps) {
+  const panelAnimationRef = useRef<number | null>(null);
   const selectedCount = props.selectedSubmissionIds.length;
   const activeSubmission =
     props.results.find(
@@ -36,13 +39,67 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const canLoadMore =
     !!props.searchResponse &&
     props.searchResponse.page < props.searchResponse.pagesCount;
+  const [panelStart, setPanelStart] = useState(0);
+  const [panelVisible, setPanelVisible] = useState(true);
 
   const panelItems = useMemo(
-    () => getPanelItems(props.results, activeIndex),
-    [props.results, activeIndex],
+    () => getPanelItems(props.results, panelStart),
+    [props.results, panelStart],
   );
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (panelAnimationRef.current !== null) {
+        window.cancelAnimationFrame(panelAnimationRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (props.results.length <= PANEL_WINDOW_SIZE) {
+      if (panelStart !== 0) {
+        setPanelStart(0);
+      }
+      setPanelVisible(true);
+      return;
+    }
+
+    const maxStart = Math.max(0, props.results.length - PANEL_WINDOW_SIZE);
+    if (panelStart > maxStart) {
+      setPanelStart(maxStart);
+    }
+  }, [panelStart, props.results.length]);
+
+  useEffect(() => {
+    if (activeIndex < 0 || props.results.length <= PANEL_WINDOW_SIZE) {
+      return;
+    }
+
+    const windowEnd = panelStart + PANEL_WINDOW_SIZE - 1;
+    if (activeIndex >= panelStart && activeIndex <= windowEnd) {
+      return;
+    }
+
+    const nextStart = getPanelWindowStart(props.results.length, activeIndex);
+    if (nextStart === panelStart) {
+      return;
+    }
+
+    setPanelVisible(false);
+    setPanelStart(nextStart);
+
+    if (panelAnimationRef.current !== null) {
+      window.cancelAnimationFrame(panelAnimationRef.current);
+    }
+
+    panelAnimationRef.current = window.requestAnimationFrame(() => {
+      panelAnimationRef.current = window.requestAnimationFrame(() => {
+        setPanelVisible(true);
+      });
+    });
+  }, [activeIndex, panelStart, props.results.length]);
 
   return (
     <section className="relative mt-4">
@@ -68,17 +125,25 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             {selectedCount} selected
           </div>
           <button
+            type="button"
+            onClick={props.onToggleSelectAll}
+            disabled={props.results.length === 0}
+            className="px-5 py-3 rounded-2xl border border-[#2D2D44]/15 bg-white/80 text-sm font-black text-[#2D2D44] shadow-sm transition-all hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white"
+          >
+            {props.allSelected ? "Deselect All" : "Select All"}
+          </button>
+          <button
             onClick={props.onQueueDownloads}
             disabled={!props.searchResponse || selectedCount === 0}
             className="px-6 py-3 bg-[#73D216] hover:bg-[#4E9A06] disabled:opacity-60 text-white font-black rounded-2xl shadow-xl transition-all flex items-center gap-2 border-b-8 border-[#2f6d05]"
           >
             <Download size={18} />
-            Add to Queue
+            Download
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row h-[1020px] md:h-[600px] w-full rounded-toy-lg overflow-hidden shadow-pop bg-white/80 dark:bg-gray-800/90 border-4 border-white/70 dark:border-gray-700/70">
+      <div className="flex flex-col md:flex-row h-[1020px] md:h-[600px] w-full rounded-toy-lg overflow-hidden shadow-pop bg-white/80 dark:bg-gray-800/90 border-2 border-white/70 dark:border-gray-700/70">
         {props.results.length === 0 ? (
           <div className="w-full h-full flex flex-col items-center justify-center bg-white/35 dark:bg-[#1A1733]/55 text-center px-6">
             <SearchIcon className="text-[#89CFF0]" size={42} />
@@ -99,9 +164,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   props.activeSubmissionId === item.submissionId
                     ? "flex-[3]"
                     : "flex-1"
-                } hover:flex-[3] ${
+                } hover:flex-[3] transition-opacity duration-250 ${
+                  panelVisible ? "opacity-100" : "opacity-0"
+                } ${
                   index < panelItems.length - 1
-                    ? "border-b-4 md:border-b-0 md:border-r-4 border-white/70 dark:border-gray-700/70"
+                    ? "border-b-2 md:border-b-0 md:border-r-2 border-white/70 dark:border-gray-700/70"
                     : ""
                 }`}
               >
@@ -165,12 +232,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       </div>
 
       {props.results.length > 0 ? (
-        <div className="mt-6 rounded-toy-lg border-4 border-[#89CFF0]/30 bg-white/50 p-5 shadow-pop backdrop-blur-2xl dark:bg-gray-800/50">
+        <div className="mt-6 rounded-toy-lg border-2 border-[#89CFF0]/30 bg-white/50 p-5 shadow-pop backdrop-blur-2xl dark:bg-gray-800/50">
           <div
             ref={scrollRef}
-            className="mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border border-white/40 bg-white/55 p-3 dark:border-white/8 dark:bg-[#151129]/55"
+            className="mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border border-white/40 bg-white/55 p-2.5 dark:border-white/8 dark:bg-[#151129]/55"
           >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {props.results.map((item) => {
                 const isActive =
                   item.submissionId === activeSubmission?.submissionId;
@@ -182,20 +249,20 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   <article
                     key={item.submissionId}
                     onClick={() => props.onSelectActive(item.submissionId)}
-                    className={`cursor-pointer overflow-hidden rounded-[1.6rem] border transition-colors ${
+                    className={`cursor-pointer overflow-hidden rounded-[1.35rem] border transition-colors ${
                       isActive
                         ? "border-[#73D216]/80 bg-[#73D216]/10"
                         : "border-[#2D2D44]/10 bg-white/72 hover:bg-[#89CFF0]/10 dark:border-white/10 dark:bg-[#1A1733]/72 dark:hover:bg-white/8"
                     }`}
                   >
-                    <div className="relative aspect-[4/3] overflow-hidden bg-[#2D2D44]/10 dark:bg-white/10">
+                    <div className="relative aspect-[5/4] overflow-hidden bg-[#2D2D44]/10 dark:bg-white/10">
                       <SubmissionPreviewImage
                         submission={item}
                         alt={item.title}
                         variant="grid"
                         className="h-full w-full object-cover"
                       />
-                      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[#14112C]/75 via-[#14112C]/20 to-transparent p-4">
+                      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[#14112C]/75 via-[#14112C]/20 to-transparent p-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-[#2D2D44]">
                             {item.typeName || "Submission"}
@@ -207,18 +274,18 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       </div>
                     </div>
 
-                    <div className="space-y-3 p-4">
+                    <div className="space-y-2.5 p-3">
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-black text-[#2D2D44] dark:text-white">
+                        <div className="truncate text-[13px] font-black text-[#2D2D44] dark:text-white">
                           {item.title}
                         </div>
-                        <div className="mt-1 truncate text-xs font-bold text-[#2D2D44]/70 dark:text-white/70">
+                        <div className="mt-1 truncate text-[11px] font-bold text-[#2D2D44]/70 dark:text-white/70">
                           @{item.username} · {item.ratingName || "Unrated"}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2D2D44]/55 dark:text-white/55">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2D2D44]/55 dark:text-white/55">
                           {item.submissionId}
                         </div>
                         <button
@@ -232,13 +299,13 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                               ? `Remove ${item.title} from selection`
                               : `Select ${item.title}`
                           }
-                          className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                          className={`flex h-8 w-8 items-center justify-center rounded-full ${
                             selected
                               ? "bg-[#73D216] text-white"
                               : "bg-[#14112C] text-white"
                           }`}
                         >
-                          {selected ? <Check size={16} /> : <Plus size={16} />}
+                          {selected ? <Check size={14} /> : <Plus size={14} />}
                         </button>
                       </div>
                     </div>
@@ -264,26 +331,6 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             )}
             Load More Results
           </button>
-        </div>
-      ) : null}
-
-      {activeSubmission ? (
-        <div className="mt-6 bg-white/50 dark:bg-gray-800/50 backdrop-blur-2xl rounded-toy-lg p-6 shadow-pop relative border-4 border-[#89CFF0]/30">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="font-display text-3xl font-black text-[#2D2D44] dark:text-white">
-                {activeSubmission.title}
-              </div>
-              <div className="mt-2 text-sm font-bold text-[#2D2D44]/70 dark:text-white/70">
-                @{activeSubmission.username} ·{" "}
-                {activeSubmission.typeName || "Unknown type"} ·{" "}
-                {activeSubmission.ratingName || "No rating label"}
-              </div>
-            </div>
-            <div className="rounded-full bg-[#FFFACD] dark:bg-[#1A1733]/80 px-4 py-2 text-sm font-black text-[#CC5E00] dark:text-[#73D216]">
-              {activeSubmission.isPublic ? "Public file path" : "SID required"}
-            </div>
-          </div>
         </div>
       ) : null}
     </section>
@@ -391,12 +438,21 @@ function formatFileCount(pageCount: number) {
   return `${count} file${count === 1 ? "" : "s"}`;
 }
 
-function getPanelItems(results: SubmissionCard[], activeIndex: number) {
-  if (results.length <= 5) {
+function getPanelItems(results: SubmissionCard[], startIndex: number) {
+  if (results.length <= PANEL_WINDOW_SIZE) {
     return results;
   }
 
+  const safeStart = Math.max(0, Math.min(startIndex, results.length - PANEL_WINDOW_SIZE))
+  return results.slice(safeStart, safeStart + PANEL_WINDOW_SIZE)
+}
+
+const PANEL_WINDOW_SIZE = 5;
+
+function getPanelWindowStart(resultCount: number, activeIndex: number) {
   const safeIndex = activeIndex >= 0 ? activeIndex : 0;
-  const start = Math.max(0, Math.min(safeIndex - 2, results.length - 5));
-  return results.slice(start, start + 5);
+  return Math.max(
+    0,
+    Math.min(safeIndex - 2, resultCount - PANEL_WINDOW_SIZE),
+  );
 }

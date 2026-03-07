@@ -294,6 +294,25 @@ export default function App() {
     }
   }
 
+  function handleToggleSelectAll() {
+    if (results.length === 0) {
+      return;
+    }
+
+    const resultIds = results.map((item) => item.submissionId);
+    const allSelected =
+      resultIds.length > 0 &&
+      resultIds.every((submissionId) =>
+        selectedSubmissionIds.includes(submissionId),
+      );
+
+    setSelectedSubmissionIds(allSelected ? [] : resultIds);
+  }
+
+  const allResultsSelected =
+    results.length > 0 &&
+    results.every((item) => selectedSubmissionIds.includes(item.submissionId));
+
   return (
     <div
       className={`min-h-screen transition-colors duration-300 mobile-zoom ${settings.darkMode ? "dark" : ""} ${
@@ -393,8 +412,10 @@ export default function App() {
             results={results}
             activeSubmissionId={activeSubmissionId}
             selectedSubmissionIds={selectedSubmissionIds}
+            allSelected={allResultsSelected}
             loading={searchLoading}
             onSelectActive={setActiveSubmissionId}
+            onToggleSelectAll={handleToggleSelectAll}
             onToggleSelection={(submissionId) =>
               setSelectedSubmissionIds((previous) =>
                 previous.includes(submissionId)
@@ -411,6 +432,11 @@ export default function App() {
           <DownloadQueuePanel
             queue={queue}
             message={queueMessage}
+            selectedCount={selectedSubmissionIds.length}
+            canQueueDownloads={Boolean(searchResponse) && selectedSubmissionIds.length > 0}
+            allSelected={allResultsSelected}
+            onQueueDownloads={() => void handleQueueDownloads()}
+            onToggleSelectAll={handleToggleSelectAll}
             onCancel={(jobId) => {
               backend
                 .cancelDownload(jobId)

@@ -47,9 +47,9 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
   );
 
   return (
-    <section className="relative overflow-hidden rounded-toy-lg border-4 border-[#89CFF0]/20 bg-gray-50/50 p-4 backdrop-blur-xl dark:bg-[#2D2D44]/50 sm:p-6 lg:p-7">
+    <section className="relative overflow-hidden rounded-toy-lg bg-gray-50/40 backdrop-blur-xl dark:bg-[#2D2D44]/40">
       <div className="pointer-events-none absolute inset-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay bg-[radial-gradient(circle_at_top_right,rgba(115,210,22,0.8),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(255,183,178,0.8),transparent_22%)]" />
-      <div className="relative z-10 overflow-hidden rounded-toy border-2 border-white/45 bg-white/48 dark:border-white/8 dark:bg-[#18142E]/52">
+      <div className="relative z-10 overflow-hidden rounded-toy-lg border border-white/40 bg-white/48 dark:border-white/8 dark:bg-[#18142E]/52">
         <div className="border-b border-[#2D2D44]/10 px-5 py-4 dark:border-white/10 sm:px-6">
           <h2 className="font-display text-3xl font-black text-[#2D2D44] dark:text-white sm:text-[2.1rem]">
             Search
@@ -437,7 +437,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
       </div>
 
       {props.error ? (
-        <div className="relative z-10 mt-5 rounded-toy border-2 border-[#FFB7B2]/70 bg-[#FFB7B2]/20 px-5 py-4 text-sm font-bold text-[#CC5E00]">
+        <div className="relative z-10 mt-5 rounded-toy border border-[#FFB7B2]/70 bg-[#FFB7B2]/20 px-5 py-4 text-sm font-bold text-[#CC5E00]">
           {props.error}
         </div>
       ) : null}
@@ -483,7 +483,7 @@ function ChoiceCard(props: {
       <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-3">
         <span
           aria-hidden="true"
-          className={`mt-0.5 h-4 w-4 shrink-0 border-2 ${
+          className={`mt-0.5 h-4 w-4 shrink-0 border ${
             props.type === "radio" ? "rounded-full" : "rounded-[0.25rem]"
           } ${props.checked ? "border-[#FF34A5] bg-[#FF34A5]" : "border-[#2D2D44]/30 bg-transparent dark:border-white/35"}`}
         />

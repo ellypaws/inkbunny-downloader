@@ -1,15 +1,22 @@
+import { Download } from 'lucide-react'
+
 import type { QueueSnapshot } from '../lib/types'
 import { formatBytes } from '../lib/format'
 
 type DownloadQueuePanelProps = {
   queue: QueueSnapshot
   message: string
+  selectedCount: number
+  canQueueDownloads: boolean
+  allSelected: boolean
+  onQueueDownloads: () => void
+  onToggleSelectAll: () => void
   onCancel: (jobId: string) => void
 }
 
 export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   return (
-    <section className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-2xl rounded-toy-lg p-8 md:p-10 shadow-pop relative border-4 border-[#89CFF0]/30">
+    <section className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-2xl rounded-toy-lg p-8 md:p-10 shadow-pop relative border-2 border-[#89CFF0]/30">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="font-display text-4xl font-black text-[#2D2D44] dark:text-white">
@@ -27,6 +34,31 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
         </div>
       </div>
 
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-4 dark:bg-[#1A1733]/55">
+        <div className="text-sm font-bold text-[#2D2D44]/80 dark:text-white/75">
+          {props.selectedCount} selected for download
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={props.onToggleSelectAll}
+            disabled={props.selectedCount === 0 && props.allSelected}
+            className="rounded-2xl border border-[#2D2D44]/15 bg-white/85 px-4 py-2.5 text-sm font-black text-[#2D2D44] transition-all hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#14112C] dark:text-white"
+          >
+            {props.allSelected ? 'Deselect All' : 'Select All'}
+          </button>
+          <button
+            type="button"
+            onClick={props.onQueueDownloads}
+            disabled={!props.canQueueDownloads}
+            className="flex items-center gap-2 rounded-2xl border-b-8 border-[#2f6d05] bg-[#73D216] px-5 py-3 text-sm font-black text-white shadow-xl transition-all hover:bg-[#4E9A06] disabled:opacity-60"
+          >
+            <Download size={16} />
+            Download
+          </button>
+        </div>
+      </div>
+
       {props.message ? (
         <div className="mt-5 rounded-2xl bg-white/65 dark:bg-[#1A1733]/70 px-4 py-3 text-sm font-bold text-[#2D2D44] dark:text-white/75">
           {props.message}
@@ -35,14 +67,14 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
 
       <div className="mt-6 grid gap-4">
         {props.queue.jobs.length === 0 ? (
-          <div className="rounded-toy bg-white/65 dark:bg-[#1A1733]/55 border-2 border-white/40 dark:border-white/8 px-6 py-10 text-center font-bold text-[#2D2D44]/70 dark:text-white/70">
+          <div className="rounded-toy bg-white/65 dark:bg-[#1A1733]/55 border border-white/40 dark:border-white/8 px-6 py-10 text-center font-bold text-[#2D2D44]/70 dark:text-white/70">
             No queued downloads yet.
           </div>
         ) : (
           props.queue.jobs.map((job) => (
             <div
               key={job.id}
-              className="rounded-toy bg-white/65 dark:bg-[#1A1733]/55 border-2 border-white/40 dark:border-white/8 px-5 py-4"
+              className="rounded-toy bg-white/65 dark:bg-[#1A1733]/55 border border-white/40 dark:border-white/8 px-5 py-4"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
