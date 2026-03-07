@@ -3,9 +3,9 @@
   "name": "inkbunny-downloader",
   "outputfilename": "inkbunny-downloader",
   "frontend:dir": "app",
-  "frontend:install": "npm ci",
-  "frontend:build": "npm run build",
-  "frontend:dev:watcher": "npm run dev -- --host",
+  "frontend:install": "bun install --frozen-lockfile",
+  "frontend:build": "bun run build",
+  "frontend:dev:watcher": "bun run dev -- --host",
   "frontend:dev:serverUrl": "auto",
   "author": {
     "name": "Elly",
