@@ -42,6 +42,7 @@ type DownloadManager struct {
 	ctx       context.Context
 	client    *http.Client
 	emit      func(string, any)
+	limiter   *apiRateLimiter
 	mu        sync.Mutex
 	nextID    atomic.Uint64
 	maxActive int
@@ -50,7 +51,7 @@ type DownloadManager struct {
 	pending   []string
 }
 
-func NewDownloadManager(ctx context.Context, maxActive int, emit func(string, any)) *DownloadManager {
+func NewDownloadManager(ctx context.Context, maxActive int, limiter *apiRateLimiter, emit func(string, any)) *DownloadManager {
 	if maxActive <= 0 {
 		maxActive = defaultMaxActive()
 	}
@@ -58,6 +59,7 @@ func NewDownloadManager(ctx context.Context, maxActive int, emit func(string, an
 		ctx:       ctx,
 		client:    &http.Client{Timeout: 5 * time.Minute},
 		emit:      emit,
+		limiter:   limiter,
 		maxActive: maxActive,
 		jobs:      make(map[string]*downloadJob),
 	}
@@ -232,9 +234,10 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 	}
 
 	const maxAttempts = 5
+	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		m.setAttempt(jobID, attempt)
-		err := m.downloadAttempt(ctx, jobID, task, filename, url)
+		err := m.downloadAttempt(ctx, jobID, attempt, task, filename, url)
 		if err == nil {
 			if task.SaveKeywords && task.Keywords != "" {
 				sidecar := stringsTrimExt(filename) + ".txt"
@@ -247,13 +250,17 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 		if !errors.Is(err, errRetry) {
 			return err
 		}
+		lastErr = err
+	}
+	if m.limiter != nil {
+		return m.limiter.Exhausted("downloads", lastErr)
 	}
 	return fmt.Errorf("download failed after %d attempts", maxAttempts)
 }
 
 var errRetry = errors.New("retry")
 
-func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, task downloadTask, filename string, url string) error {
+func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, attempt int, task downloadTask, filename string, url string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -265,14 +272,13 @@ func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, tas
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusTooManyRequests {
-		timer := time.NewTimer(5 * time.Second)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			return errRetry
+		if m.limiter != nil {
+			m.limiter.Register("downloads", attempt)
+			if err := m.limiter.Wait(ctx); err != nil {
+				return err
+			}
 		}
+		return errRetry
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)

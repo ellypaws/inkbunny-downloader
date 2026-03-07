@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/ellypaws/inkbunny"
@@ -105,11 +106,38 @@ func defaultMaxActive() int {
 }
 
 func defaultDownloadDirectory() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	base, err := resolveDownloadsDirectory()
+	if err != nil || strings.TrimSpace(base) == "" {
 		return "inkbunny"
 	}
-	return filepath.Join(home, "Downloads", "inkbunny")
+	return filepath.Join(base, "inkbunny")
+}
+
+func resolveDownloadPickerDirectory(current string) string {
+	candidate := strings.TrimSpace(current)
+	if candidate == "" {
+		candidate = defaultDownloadDirectory()
+	}
+	candidate = filepath.Clean(candidate)
+
+	for candidate != "" {
+		info, err := os.Stat(candidate)
+		if err == nil && info.IsDir() {
+			return candidate
+		}
+
+		parent := filepath.Dir(candidate)
+		if parent == candidate || parent == "." || parent == "" {
+			break
+		}
+		candidate = parent
+	}
+
+	base, err := resolveDownloadsDirectory()
+	if err == nil && strings.TrimSpace(base) != "" {
+		return filepath.Clean(base)
+	}
+	return ""
 }
 
 func restoreUser(stored sessionUser) *inkbunny.User {

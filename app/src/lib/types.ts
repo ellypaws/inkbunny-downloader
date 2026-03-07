@@ -49,15 +49,20 @@ export type SubmissionCard = {
   title: string
   username: string
   typeName: string
+  submissionTypeId: number
   ratingName: string
   isPublic: boolean
   pageCount: number
   updated: boolean
   fileName?: string
+  mimeType?: string
+  latestMimeType?: string
   previewUrl?: string
+  latestPreviewUrl?: string
   screenUrl?: string
   fullUrl?: string
   thumbnailUrl?: string
+  latestThumbnailUrl?: string
   badgeText?: string
   accent?: string
   fileIds?: string[]
@@ -118,4 +123,13 @@ export type QueueSnapshot = {
 export type DownloadProgressEvent = {
   job: DownloadJobSnapshot
   queue: QueueSnapshot
+}
+
+export type AppNotification = {
+  id: string
+  level: 'info' | 'success' | 'warning' | 'error'
+  message: string
+  scope: string
+  dedupeKey?: string
+  retryAfterMs?: number
 }

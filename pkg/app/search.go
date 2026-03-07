@@ -14,14 +14,19 @@ import (
 )
 
 type searchState struct {
-	ID         string
-	RID        string
-	SID        string
-	ExpiresAt  time.Time
-	PagesCount int
-	LastPage   int
-	Request    inkbunny.SubmissionSearchRequest
-	CacheKey   searchCacheKey
+	ID              string
+	RID             string
+	SID             string
+	ExpiresAt       time.Time
+	PagesCount      int
+	ClientPage      int
+	NextServerPage  int
+	DeliveredCount  int
+	MaxDownloads    int
+	PerPage         int
+	RawResultsCount int
+	Request         inkbunny.SubmissionSearchRequest
+	CacheKey        searchCacheKey
 }
 
 func (a *App) Search(params SearchParams) (SearchResponse, error) {
@@ -57,34 +62,44 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 		}
 	}
 	response := entry.Response
+	perPage := int(normalizedReq.SubmissionsPerPage)
+	if perPage <= 0 {
+		perPage = 24
+	}
 
 	searchID := a.newSearchID()
-	page := int(response.Page)
-	if page <= 0 {
-		page = 1
+	state := &searchState{
+		ID:              searchID,
+		RID:             response.RID,
+		SID:             response.SID,
+		ExpiresAt:       response.RIDExpiry,
+		PagesCount:      int(response.PagesCount),
+		ClientPage:      1,
+		MaxDownloads:    max(params.MaxDownloads, 0),
+		PerPage:         perPage,
+		RawResultsCount: int(response.ResultsCountAll),
+		Request:         normalizedReq,
+		CacheKey:        key,
 	}
+	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(user, state, &response)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+	state.DeliveredCount = len(visible)
+	state.NextServerPage = nextServerPage
 
 	a.mu.Lock()
-	a.searches[searchID] = &searchState{
-		ID:         searchID,
-		RID:        response.RID,
-		SID:        response.SID,
-		ExpiresAt:  response.RIDExpiry,
-		PagesCount: int(response.PagesCount),
-		LastPage:   page,
-		Request:    normalizedReq,
-		CacheKey:   key,
-	}
+	a.searches[searchID] = state
 	a.lastSearchID = searchID
 	a.mu.Unlock()
 	_ = a.persist()
 
 	return SearchResponse{
 		SearchID:     searchID,
-		Page:         page,
-		PagesCount:   int(response.PagesCount),
-		ResultsCount: int(response.ResultsCountAll),
-		Results:      mapSubmissionCards(filterSubmissionsByRatings(response.Submissions, ratingsMask), user.SID),
+		Page:         state.ClientPage,
+		PagesCount:   searchPageCount(state.ClientPage, hasMore),
+		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
+		Results:      mapSubmissionCards(visible, user.SID),
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -97,7 +112,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 		return SearchResponse{}, fmt.Errorf("unknown search ID: %s", searchID)
 	}
 	if page <= 0 {
-		page = state.LastPage + 1
+		page = state.ClientPage + 1
 	}
 	user, err := a.ensureSearchSession()
 	if err != nil {
@@ -109,7 +124,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 		}
 	}
 
-	response, err := a.cachedLoadMore(state, page)
+	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(user, state, nil)
 	if err != nil {
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
@@ -119,24 +134,25 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 			if err := a.refreshSearchState(user, state); err != nil {
 				return SearchResponse{}, err
 			}
-			response, err = a.cachedLoadMore(state, page)
+			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(user, state, nil)
 		}
 	}
 	if err != nil {
 		return SearchResponse{}, err
 	}
-	ratingsMask := effectiveRatingsMask(user.Ratings.String())
 
 	a.mu.Lock()
-	state.LastPage = page
+	state.ClientPage = page
+	state.NextServerPage = nextServerPage
+	state.DeliveredCount += len(visible)
 	a.mu.Unlock()
 
 	return SearchResponse{
 		SearchID:     searchID,
 		Page:         page,
-		PagesCount:   int(response.PagesCount),
-		ResultsCount: int(response.ResultsCountAll),
-		Results:      mapSubmissionCards(filterSubmissionsByRatings(response.Submissions, ratingsMask), user.SID),
+		PagesCount:   searchPageCount(page, hasMore),
+		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
+		Results:      mapSubmissionCards(visible, user.SID),
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -224,9 +240,6 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	if params.PoolID > 0 {
 		req.PoolID = inkbunny.IntString(params.PoolID)
 	}
-	if params.MaxDownloads > 0 {
-		req.CountLimit = inkbunny.IntString(params.MaxDownloads)
-	}
 	if req.StringJoinType == "" {
 		req.StringJoinType = inkbunny.JoinTypeAnd
 	}
@@ -305,13 +318,22 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string) []S
 	accents := []string{"rose", "mint", "lavender", "sky"}
 
 	for index, submission := range submissions {
-		thumbnail := submission.ThumbnailURLHuge
-		if thumbnail == "" {
-			thumbnail = submission.ThumbnailURLLarge
-		}
-		if thumbnail == "" {
-			thumbnail = submission.ThumbnailURLMedium
-		}
+		thumbnail := firstNonEmpty(
+			submission.ThumbnailURLHuge,
+			submission.ThumbnailURLLarge,
+			submission.ThumbnailURLMedium,
+			submission.ThumbnailURLHugeNonCustom,
+			submission.ThumbnailURLLargeNonCustom,
+			submission.ThumbnailURLMediumNonCustom,
+		)
+		latestThumbnail := firstNonEmpty(
+			submission.LatestThumbnailURLHuge,
+			submission.LatestThumbnailURLLarge,
+			submission.LatestThumbnailURLMedium,
+			submission.LatestThumbnailURLHugeNonCustom,
+			submission.LatestThumbnailURLLargeNonCustom,
+			submission.LatestThumbnailURLMediumNonCustom,
+		)
 
 		badge := submission.TypeName
 		if badge == "" {
@@ -319,24 +341,133 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string) []S
 		}
 
 		cards = append(cards, SubmissionCard{
-			SubmissionID: submission.SubmissionID.String(),
-			Title:        submission.Title,
-			Username:     submission.Username,
-			TypeName:     submission.TypeName,
-			RatingName:   submission.RatingName,
-			IsPublic:     submission.Public.Bool(),
-			PageCount:    int(submission.PageCount),
-			Updated:      submission.Updated.Bool(),
-			FileName:     submission.FileName.String(),
-			PreviewURL:   submissionPreviewURL(submission.FileURLPreview.String(), submission.Public.Bool(), sid),
-			ScreenURL:    submissionPreviewURL(submission.FileURLScreen.String(), submission.Public.Bool(), sid),
-			FullURL:      submissionPreviewURL(submission.FileURLFull.String(), submission.Public.Bool(), sid),
-			ThumbnailURL: submissionPreviewURL(thumbnail, submission.Public.Bool(), sid),
-			BadgeText:    badge,
-			Accent:       accents[index%len(accents)],
+			SubmissionID:     submission.SubmissionID.String(),
+			Title:            submission.Title,
+			Username:         submission.Username,
+			TypeName:         submission.TypeName,
+			SubmissionTypeID: int(submission.SubmissionTypeID),
+			RatingName:       submission.RatingName,
+			IsPublic:         submission.Public.Bool(),
+			PageCount:        int(submission.PageCount),
+			Updated:          submission.Updated.Bool(),
+			FileName:         submission.FileName.String(),
+			MimeType:         submission.MimeType,
+			LatestMimeType:   submission.LatestMimeType,
+			PreviewURL:       submissionPreviewURL(submission.FileURLPreview.String(), submission.Public.Bool(), sid),
+			ScreenURL:        submissionPreviewURL(submission.FileURLScreen.String(), submission.Public.Bool(), sid),
+			FullURL:          submissionPreviewURL(submission.FileURLFull.String(), submission.Public.Bool(), sid),
+			ThumbnailURL:     submissionPreviewURL(thumbnail, submission.Public.Bool(), sid),
+			LatestThumbnailURL: submissionPreviewURL(
+				latestThumbnail,
+				submission.Public.Bool(),
+				sid,
+			),
+			BadgeText: badge,
+			Accent:    accents[index%len(accents)],
 		})
 	}
 	return cards
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, initial *inkbunny.SubmissionSearchResponse) ([]inkbunny.SubmissionSearch, int, bool, error) {
+	if state == nil {
+		return nil, 0, false, errors.New("search state is missing")
+	}
+
+	remainingLimit := remainingVisibleLimit(state)
+	if remainingLimit == 0 {
+		return nil, state.NextServerPage, false, nil
+	}
+
+	target := state.PerPage
+	if remainingLimit > 0 && remainingLimit < target {
+		target = remainingLimit
+	}
+	if target <= 0 {
+		target = state.PerPage
+	}
+
+	ratingsMask := effectiveRatingsMask(user.Ratings.String())
+	visible := make([]inkbunny.SubmissionSearch, 0, target)
+	nextServerPage := state.NextServerPage
+	pagesCount := state.PagesCount
+	rawResultsCount := state.RawResultsCount
+
+	appendVisible := func(response inkbunny.SubmissionSearchResponse) {
+		if rawResultsCount == 0 {
+			rawResultsCount = int(response.ResultsCountAll)
+		}
+		pagesCount = int(response.PagesCount)
+		filtered := filterSubmissionsByRatings(response.Submissions, ratingsMask)
+		remaining := target - len(visible)
+		if remaining > 0 && len(filtered) > remaining {
+			filtered = filtered[:remaining]
+		}
+		visible = append(visible, filtered...)
+		pageNumber := int(response.Page)
+		if pageNumber <= 0 {
+			pageNumber = 1
+		}
+		nextServerPage = pageNumber + 1
+	}
+
+	if initial != nil {
+		appendVisible(*initial)
+	}
+
+	for len(visible) < target && nextServerPage > 0 && nextServerPage <= pagesCount {
+		response, err := a.cachedLoadMore(state, nextServerPage)
+		if err != nil {
+			return nil, 0, false, err
+		}
+		appendVisible(response)
+	}
+
+	state.PagesCount = pagesCount
+	state.RawResultsCount = rawResultsCount
+	hasMore := nextServerPage > 0 && nextServerPage <= pagesCount
+	if remainingLimit > 0 && len(visible) >= remainingLimit {
+		hasMore = false
+	}
+
+	return visible, nextServerPage, hasMore, nil
+}
+
+func remainingVisibleLimit(state *searchState) int {
+	if state == nil || state.MaxDownloads <= 0 {
+		return -1
+	}
+	remaining := state.MaxDownloads - state.DeliveredCount
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+func limitedResultsCount(raw, limit int) int {
+	if raw == 0 {
+		return 0
+	}
+	if limit > 0 && limit < raw {
+		return limit
+	}
+	return raw
+}
+
+func searchPageCount(currentPage int, hasMore bool) int {
+	if !hasMore {
+		return currentPage
+	}
+	return currentPage + 1
 }
 
 func effectiveRatingsMask(mask string) string {
@@ -438,13 +569,121 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 
 	if a.keywordCache == nil {
 		cache := flight.NewCache(func(key keywordCacheKey) ([]inkbunny.KeywordAutocomplete, error) {
-			ratings := inkbunny.ParseMask(key.RatingsMask)
-			return inkbunny.KeywordSuggestion(key.Query, ratings, key.Underscore)
+			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "keyword suggestions", func() ([]inkbunny.KeywordAutocomplete, error) {
+				ratings := inkbunny.ParseMask(key.RatingsMask)
+				return inkbunny.KeywordSuggestion(key.Query, ratings, key.Underscore)
+			})
 		})
 		a.keywordCache = &cache
 	}
 	if a.usernameCache == nil {
 		cache := flight.NewCache(func(key usernameCacheKey) ([]UsernameSuggestion, error) {
+			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "username suggestions", func() ([]UsernameSuggestion, error) {
+				current, err := a.ensureSearchSession()
+				if err != nil {
+					return nil, err
+				}
+				items, err := current.SearchMembers(key.Query)
+				if err != nil {
+					return nil, err
+				}
+				suggestions := mapUsernameSuggestions(items)
+				avatar := defaultAvatarURL
+				a.mu.RLock()
+				if a.sessionAvatar != "" {
+					avatar = a.sessionAvatar
+				}
+				a.mu.RUnlock()
+				return prependCurrentUserSuggestion(suggestions, current, avatar, key.Query), nil
+			})
+		})
+		a.usernameCache = &cache
+	}
+	if a.avatarCache == nil {
+		cache := flight.NewCache(func(key avatarCacheKey) (string, error) {
+			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "avatar lookups", func() (string, error) {
+				current, err := a.ensureSearchSession()
+				if err != nil {
+					return "", err
+				}
+				member, ok, err := a.lookupUsernameSuggestion(current, key.Username)
+				if err != nil {
+					return "", err
+				}
+				if ok && member.AvatarURL != "" {
+					return member.AvatarURL, nil
+				}
+				return defaultAvatarURL, nil
+			})
+		})
+		a.avatarCache = &cache
+	}
+	if a.searchCache == nil {
+		cache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
+			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
+				var req inkbunny.SubmissionSearchRequest
+				if err := json.Unmarshal([]byte(key.RequestJSON), &req); err != nil {
+					return cachedSearchResult{}, err
+				}
+				current, err := a.ensureSearchSession()
+				if err != nil {
+					return cachedSearchResult{}, err
+				}
+				req.SID = current.SID
+				response, err := current.SearchSubmissions(req)
+				if err != nil {
+					return cachedSearchResult{}, err
+				}
+				return cachedSearchResult{
+					Request:  req,
+					Response: response,
+				}, nil
+			})
+		})
+		a.searchCache = &cache
+	}
+	if a.loadMoreCache == nil {
+		cache := flight.NewCache(func(key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
+			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
+				return inkbunny.SearchSubmissions(inkbunny.SubmissionSearchRequest{
+					SID:  key.SID,
+					RID:  key.RID,
+					Page: inkbunny.IntString(key.Page),
+				})
+			})
+		})
+		a.loadMoreCache = &cache
+	}
+	if a.detailsCache == nil {
+		cache := flight.NewCache(func(key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
+			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
+				current, err := a.ensureSearchSession()
+				if err != nil {
+					return inkbunny.SubmissionDetailsResponse{}, err
+				}
+				ids := strings.Split(key.SubmissionIDs, ",")
+				return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
+					SID:               key.SID,
+					SubmissionIDSlice: ids,
+				})
+			})
+		})
+		a.detailsCache = &cache
+	}
+}
+
+func (a *App) resetCaches(user *inkbunny.User) {
+	a.cacheMu.Lock()
+	defer a.cacheMu.Unlock()
+
+	keywordCache := flight.NewCache(func(key keywordCacheKey) ([]inkbunny.KeywordAutocomplete, error) {
+		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "keyword suggestions", func() ([]inkbunny.KeywordAutocomplete, error) {
+			ratings := inkbunny.ParseMask(key.RatingsMask)
+			return inkbunny.KeywordSuggestion(key.Query, ratings, key.Underscore)
+		})
+	})
+	usernameCache := flight.NewCache(func(key usernameCacheKey) ([]UsernameSuggestion, error) {
+		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "username suggestions", func() ([]UsernameSuggestion, error) {
 			current, err := a.ensureSearchSession()
 			if err != nil {
 				return nil, err
@@ -462,10 +701,9 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 			a.mu.RUnlock()
 			return prependCurrentUserSuggestion(suggestions, current, avatar, key.Query), nil
 		})
-		a.usernameCache = &cache
-	}
-	if a.avatarCache == nil {
-		cache := flight.NewCache(func(key avatarCacheKey) (string, error) {
+	})
+	avatarCache := flight.NewCache(func(key avatarCacheKey) (string, error) {
+		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "avatar lookups", func() (string, error) {
 			current, err := a.ensureSearchSession()
 			if err != nil {
 				return "", err
@@ -479,10 +717,9 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 			}
 			return defaultAvatarURL, nil
 		})
-		a.avatarCache = &cache
-	}
-	if a.searchCache == nil {
-		cache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
+	})
+	searchCache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
+		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
 			var req inkbunny.SubmissionSearchRequest
 			if err := json.Unmarshal([]byte(key.RequestJSON), &req); err != nil {
 				return cachedSearchResult{}, err
@@ -501,20 +738,18 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 				Response: response,
 			}, nil
 		})
-		a.searchCache = &cache
-	}
-	if a.loadMoreCache == nil {
-		cache := flight.NewCache(func(key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
+	})
+	loadMoreCache := flight.NewCache(func(key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
+		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
 			return inkbunny.SearchSubmissions(inkbunny.SubmissionSearchRequest{
 				SID:  key.SID,
 				RID:  key.RID,
 				Page: inkbunny.IntString(key.Page),
 			})
 		})
-		a.loadMoreCache = &cache
-	}
-	if a.detailsCache == nil {
-		cache := flight.NewCache(func(key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
+	})
+	detailsCache := flight.NewCache(func(key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
+		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
 			current, err := a.ensureSearchSession()
 			if err != nil {
 				return inkbunny.SubmissionDetailsResponse{}, err
@@ -524,86 +759,6 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 				SID:               key.SID,
 				SubmissionIDSlice: ids,
 			})
-		})
-		a.detailsCache = &cache
-	}
-}
-
-func (a *App) resetCaches(user *inkbunny.User) {
-	a.cacheMu.Lock()
-	defer a.cacheMu.Unlock()
-
-	keywordCache := flight.NewCache(func(key keywordCacheKey) ([]inkbunny.KeywordAutocomplete, error) {
-		ratings := inkbunny.ParseMask(key.RatingsMask)
-		return inkbunny.KeywordSuggestion(key.Query, ratings, key.Underscore)
-	})
-	usernameCache := flight.NewCache(func(key usernameCacheKey) ([]UsernameSuggestion, error) {
-		current, err := a.ensureSearchSession()
-		if err != nil {
-			return nil, err
-		}
-		items, err := current.SearchMembers(key.Query)
-		if err != nil {
-			return nil, err
-		}
-		suggestions := mapUsernameSuggestions(items)
-		avatar := defaultAvatarURL
-		a.mu.RLock()
-		if a.sessionAvatar != "" {
-			avatar = a.sessionAvatar
-		}
-		a.mu.RUnlock()
-		return prependCurrentUserSuggestion(suggestions, current, avatar, key.Query), nil
-	})
-	avatarCache := flight.NewCache(func(key avatarCacheKey) (string, error) {
-		current, err := a.ensureSearchSession()
-		if err != nil {
-			return "", err
-		}
-		member, ok, err := a.lookupUsernameSuggestion(current, key.Username)
-		if err != nil {
-			return "", err
-		}
-		if ok && member.AvatarURL != "" {
-			return member.AvatarURL, nil
-		}
-		return defaultAvatarURL, nil
-	})
-	searchCache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
-		var req inkbunny.SubmissionSearchRequest
-		if err := json.Unmarshal([]byte(key.RequestJSON), &req); err != nil {
-			return cachedSearchResult{}, err
-		}
-		current, err := a.ensureSearchSession()
-		if err != nil {
-			return cachedSearchResult{}, err
-		}
-		req.SID = current.SID
-		response, err := current.SearchSubmissions(req)
-		if err != nil {
-			return cachedSearchResult{}, err
-		}
-		return cachedSearchResult{
-			Request:  req,
-			Response: response,
-		}, nil
-	})
-	loadMoreCache := flight.NewCache(func(key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
-		return inkbunny.SearchSubmissions(inkbunny.SubmissionSearchRequest{
-			SID:  key.SID,
-			RID:  key.RID,
-			Page: inkbunny.IntString(key.Page),
-		})
-	})
-	detailsCache := flight.NewCache(func(key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
-		current, err := a.ensureSearchSession()
-		if err != nil {
-			return inkbunny.SubmissionDetailsResponse{}, err
-		}
-		ids := strings.Split(key.SubmissionIDs, ",")
-		return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
-			SID:               key.SID,
-			SubmissionIDSlice: ids,
 		})
 	})
 	a.keywordCache = &keywordCache
@@ -683,7 +838,7 @@ func (a *App) refreshSearchState(user *inkbunny.User, state *searchState) error 
 	state.SID = entry.Response.SID
 	state.ExpiresAt = entry.Response.RIDExpiry
 	state.PagesCount = int(entry.Response.PagesCount)
-	state.LastPage = 1
+	state.RawResultsCount = int(entry.Response.ResultsCountAll)
 	state.Request = normalizedReq
 	state.CacheKey = key
 	return nil

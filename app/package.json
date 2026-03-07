@@ -9,6 +9,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "motion": "^12.35.1",
     "@tanstack/react-virtual": "^3.13.12",
     "@tailwindcss/vite": "^4.2.1",
     "lucide-react": "^0.554.0",

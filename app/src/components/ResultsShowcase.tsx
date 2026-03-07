@@ -2,12 +2,16 @@ import {
   Check,
   ChevronDown,
   Download,
+  File,
+  FileImage,
+  FileText,
   LoaderCircle,
   Plus,
   Search as SearchIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import ElasticSlider from "./ElasticSlider";
 import { accentClass } from "../lib/format";
 import type {
   QueueSnapshot,
@@ -198,7 +202,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     : ""
                 }`}
               >
-                <SubmissionPreviewImage
+                <SubmissionPreview
                   submission={item}
                   alt={item.title}
                   variant="full"
@@ -312,16 +316,17 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
               </button>
               <label className="flex items-center gap-3 rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75">
                 Grid Size
-                <input
-                  type="range"
-                  min={180}
-                  max={320}
-                  step={10}
+                <ElasticSlider
                   value={gridCardWidth}
-                  onChange={(event) =>
-                    setGridCardWidth(Number(event.target.value))
-                  }
-                  className="h-1.5 w-32 cursor-pointer accent-[#2A7FA6]"
+                  onChange={setGridCardWidth}
+                  startingValue={180}
+                  maxValue={320}
+                  isStepped
+                  stepSize={10}
+                  valueFormatter={(value) => `${value}px`}
+                  leftIcon={<span className="text-[11px]">S</span>}
+                  rightIcon={<span className="text-[11px]">L</span>}
+                  className="w-32"
                 />
               </label>
             </div>
@@ -362,10 +367,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     }`}
                   >
                     <div className="relative aspect-[5/4] overflow-hidden bg-[#2D2D44]/10 dark:bg-white/10">
-                      <SubmissionPreviewImage
+                      <SubmissionPreview
                         submission={item}
                         alt={item.title}
-                        variant="grid"
+                        variant="card"
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[#14112C]/75 via-[#14112C]/20 to-transparent p-3">
@@ -472,16 +477,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   );
 }
 
-function SubmissionPreviewImage(props: {
+function SubmissionPreview(props: {
   submission: SubmissionCard;
   alt: string;
   className: string;
-  variant?: "full" | "grid";
+  variant?: "full" | "card";
 }) {
-  const preferredSource = getPrimaryPreviewSource(
-    props.submission,
-    props.variant,
-  );
   const sources = getPreviewSources(props.submission, props.variant);
   const [sourceIndex, setSourceIndex] = useState(0);
 
@@ -493,17 +494,24 @@ function SubmissionPreviewImage(props: {
     props.submission.previewUrl,
     props.submission.screenUrl,
     props.submission.fullUrl,
+    props.submission.latestPreviewUrl,
+    props.submission.latestThumbnailUrl,
   ]);
 
   const source = sources[sourceIndex];
+
   if (!source) {
-    return null;
+    return (
+      <PreviewFallback
+        submission={props.submission}
+        className={props.className}
+      />
+    );
   }
 
   return (
     <img
-      src={source ?? preferredSource}
-      srcSet={buildSrcSet(props.submission)}
+      src={source}
       sizes={
         props.variant === "full"
           ? "(min-width: 768px) 60vw, 100vw"
@@ -513,9 +521,7 @@ function SubmissionPreviewImage(props: {
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => {
-        setSourceIndex((current) =>
-          current < sources.length - 1 ? current + 1 : current,
-        );
+        setSourceIndex((current) => current + 1);
       }}
       className={props.className}
     />
@@ -524,48 +530,78 @@ function SubmissionPreviewImage(props: {
 
 function getPreviewSources(
   submission: SubmissionCard,
-  variant: "full" | "grid" = "grid",
+  variant: "full" | "card" = "card",
 ) {
-  const ordered =
-    variant === "full"
-      ? [
-          submission.fullUrl,
-          submission.screenUrl,
-          submission.previewUrl,
-          submission.thumbnailUrl,
-        ]
-      : [
-          submission.previewUrl,
-          submission.screenUrl,
-          submission.thumbnailUrl,
-          submission.fullUrl,
-        ];
+  const ordered = variant === "full"
+    ? [
+        submission.fullUrl,
+        submission.screenUrl,
+        submission.previewUrl,
+        submission.latestPreviewUrl,
+        submission.thumbnailUrl,
+        submission.latestThumbnailUrl,
+      ]
+    : [
+        submission.previewUrl,
+        submission.latestPreviewUrl,
+        submission.screenUrl,
+        submission.thumbnailUrl,
+        submission.latestThumbnailUrl,
+        submission.fullUrl,
+      ];
 
-  return ordered.filter((value): value is string => Boolean(value));
+  return [...new Set(ordered.filter((value): value is string => Boolean(value)))];
 }
 
-function getPrimaryPreviewSource(
-  submission: SubmissionCard,
-  variant: "full" | "grid" = "grid",
-) {
-  return getPreviewSources(submission, variant)[0] ?? "";
-}
+function PreviewFallback(props: {
+  submission: SubmissionCard;
+  className: string;
+}) {
+  const { icon, label } = getPreviewFallbackContent(props.submission);
 
-function buildSrcSet(submission: SubmissionCard) {
-  const entries: Array<[string | undefined, string]> = [
-    [submission.thumbnailUrl, "320w"],
-    [submission.previewUrl, "640w"],
-    [submission.screenUrl, "1024w"],
-    [submission.fullUrl, "1600w"],
-  ];
-
-  const uniqueEntries = entries.filter(
-    (entry, index, array) =>
-      entry[0] &&
-      array.findIndex((candidate) => candidate[0] === entry[0]) === index,
+  return (
+    <div
+      className={`${props.className} flex items-center justify-center bg-linear-to-br from-[#eef1ff] via-[#f7f8ff] to-[#e8ffef] text-[#2D2D44] dark:from-[#17142a] dark:via-[#1d1737] dark:to-[#11251d] dark:text-white`}
+    >
+      <div className="flex flex-col items-center gap-2 text-center">
+        <div className="rounded-full border border-current/15 bg-white/70 p-4 dark:bg-white/8">
+          {icon}
+        </div>
+        <div className="text-xs font-black tracking-[0.16em] uppercase opacity-70">
+          {label}
+        </div>
+      </div>
+    </div>
   );
+}
 
-  return uniqueEntries.map(([url, width]) => `${url} ${width}`).join(", ");
+function getPreviewFallbackContent(submission: SubmissionCard) {
+  const typeName = submission.typeName.toLowerCase();
+  const primaryMime = (submission.mimeType || submission.latestMimeType || "").toLowerCase();
+
+  if (
+    submission.submissionTypeId === 12 ||
+    primaryMime.startsWith("text/") ||
+    typeName.includes("writing") ||
+    typeName.includes("document")
+  ) {
+    return {
+      icon: <FileText size={30} />,
+      label: "Writing",
+    };
+  }
+
+  if (primaryMime.startsWith("image/")) {
+    return {
+      icon: <FileImage size={30} />,
+      label: "Image",
+    };
+  }
+
+  return {
+    icon: <File size={30} />,
+    label: "File",
+  };
 }
 
 function formatFileCount(pageCount: number) {

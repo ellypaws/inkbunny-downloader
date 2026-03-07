@@ -1,15 +1,17 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountSidebar } from "./components/AccountSidebar";
+import { DownloadQueuePanel } from "./components/DownloadQueuePanel";
 import { LoginModal } from "./components/LoginModal";
 import { NavigationPill } from "./components/NavigationPill";
 import { ResultsShowcase } from "./components/ResultsShowcase";
 import { SearchWorkspace } from "./components/SearchWorkspace";
 import { StarBackground } from "./components/StarBackground";
-import { DownloadQueuePanel } from "./components/DownloadQueuePanel";
+import { ToastHost, type ToastItem } from "./components/ToastHost";
 import { DEFAULT_SEARCH, EMPTY_QUEUE, EMPTY_SESSION } from "./lib/constants";
 import { backend, onRuntimeEvent } from "./lib/wails";
 import type {
+  AppNotification,
   AppSettings,
   DownloadProgressEvent,
   QueueSnapshot,
@@ -21,6 +23,8 @@ import type {
 } from "./lib/types";
 import { GLOBAL_STYLES } from "./styles/globalStyles";
 
+const GUEST_DEFAULT_MAX_DOWNLOADS = 256;
+
 export default function App() {
   const [session, setSession] = useState<SessionInfo>(EMPTY_SESSION);
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SESSION.settings);
@@ -29,31 +33,23 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [searchParams, setSearchParams] =
-    useState<SearchParams>(DEFAULT_SEARCH);
-  const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(
-    null,
-  );
+  const [searchParams, setSearchParams] = useState<SearchParams>(DEFAULT_SEARCH);
+  const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
   const [results, setResults] = useState<SubmissionCard[]>([]);
   const [activeSubmissionId, setActiveSubmissionId] = useState("");
-  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>(
-    [],
-  );
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [ratingUpdating, setRatingUpdating] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [keywordSuggestions, setKeywordSuggestions] = useState<string[]>([]);
-  const [artistSuggestions, setArtistSuggestions] = useState<
-    UsernameSuggestion[]
-  >([]);
-  const [favoriteSuggestions, setFavoriteSuggestions] = useState<
-    UsernameSuggestion[]
-  >([]);
+  const [artistSuggestions, setArtistSuggestions] = useState<UsernameSuggestion[]>([]);
+  const [favoriteSuggestions, setFavoriteSuggestions] = useState<UsernameSuggestion[]>([]);
   const [queue, setQueue] = useState<QueueSnapshot>(EMPTY_QUEUE);
-  const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] =
-    useState<string[]>([]);
+  const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] = useState<string[]>([]);
   const [queueMessage, setQueueMessage] = useState("");
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [apiCooldownUntil, setApiCooldownUntil] = useState(0);
 
   const lagTextRef = useRef<HTMLHeadingElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
@@ -62,14 +58,88 @@ export default function App() {
   const ratingDebounceRef = useRef<number | null>(null);
   const pendingRatingsMaskRef = useRef("");
   const currentY = useRef(0);
-  const downloadedSubmissionIds = useMemo(
-    () => getDownloadedSubmissionIds(queue),
-    [queue],
-  );
+  const toastTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const toastsRef = useRef<ToastItem[]>([]);
+  const keywordRequestRef = useRef(0);
+  const artistRequestRef = useRef(0);
+  const favoritesRequestRef = useRef(0);
+  const downloadedSubmissionIds = useMemo(() => getDownloadedSubmissionIds(queue), [queue]);
   const unavailableSubmissionIds = useMemo(
     () => getUnavailableSubmissionIds(queue, pendingDownloadSubmissionIds),
     [pendingDownloadSubmissionIds, queue],
   );
+
+  function dismissToast(id: string) {
+    const timeoutId = toastTimeoutsRef.current.get(id);
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      toastTimeoutsRef.current.delete(id);
+    }
+    setToasts((previous) => previous.filter((toast) => toast.id !== id));
+  }
+
+  function pushToast(toast: Omit<ToastItem, "id"> & { id?: string }) {
+    const existing = toast.dedupeKey
+      ? toastsRef.current.find((item) => item.dedupeKey === toast.dedupeKey)
+      : undefined;
+    const id = existing?.id ?? toast.id ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const duration = getToastDuration(toast.level, toast.retryAfterMs);
+
+    setToasts((previous) => {
+      if (existing) {
+        return previous.map((item) =>
+          item.id === existing.id
+            ? { ...item, ...toast, id: existing.id }
+            : item,
+        );
+      }
+      return [...previous, { ...toast, id }];
+    });
+
+    const currentTimeout = toastTimeoutsRef.current.get(id);
+    if (currentTimeout !== undefined) {
+      window.clearTimeout(currentTimeout);
+    }
+    toastTimeoutsRef.current.set(
+      id,
+      window.setTimeout(() => dismissToast(id), duration),
+    );
+  }
+
+  function pushErrorToast(message: string, dedupeKey?: string) {
+    if (isRateLimitMessage(message)) {
+      return;
+    }
+    pushToast({ level: "error", message, dedupeKey });
+  }
+
+  function updateQueueMessage(message: string, level?: ToastItem["level"], dedupeKey?: string) {
+    setQueueMessage(message);
+    if (level) {
+      pushToast({ level, message, dedupeKey });
+    }
+  }
+
+  useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
+
+  useEffect(() => {
+    return () => {
+      for (const timeoutId of toastTimeoutsRef.current.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      toastTimeoutsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (apiCooldownUntil <= Date.now()) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setApiCooldownUntil(0), apiCooldownUntil - Date.now());
+    return () => window.clearTimeout(timeout);
+  }, [apiCooldownUntil]);
 
   useEffect(() => {
     let mounted = true;
@@ -77,29 +147,39 @@ export default function App() {
     backend
       .getSession()
       .then((nextSession) => {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         setSession(nextSession);
         setSettings(nextSession.settings);
         setSearchParams((previous) => ({
           ...previous,
           maxActive: nextSession.settings.maxActive || previous.maxActive,
+          maxDownloads:
+            nextSession.isGuest && previous.maxDownloads <= 0
+              ? GUEST_DEFAULT_MAX_DOWNLOADS
+              : previous.maxDownloads,
         }));
         setLoginOpen(!nextSession.hasSession);
       })
       .catch((error: unknown) => {
-        if (mounted) {
-          setAuthError(
-            error instanceof Error
-              ? error.message
-              : "Unable to reach the Wails backend.",
-          );
+        if (!mounted) {
+          return;
         }
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to reach the Wails backend.";
+        setAuthError(message);
+        pushErrorToast(message, "backend-unavailable");
       });
 
     backend
       .getQueueSnapshot()
       .then((snapshot) => {
-        if (mounted) setQueue(snapshot);
+        if (mounted) {
+          setQueue(snapshot);
+        }
       })
       .catch(() => undefined);
 
@@ -109,7 +189,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onRuntimeEvent<DownloadProgressEvent>(
+    const unsubscribeProgress = onRuntimeEvent<DownloadProgressEvent>(
       "download-progress",
       (event) => {
         if (event.queue) {
@@ -117,7 +197,26 @@ export default function App() {
         }
       },
     );
-    return unsubscribe;
+    const unsubscribeNotifications = onRuntimeEvent<AppNotification>(
+      "app-notification",
+      (event) => {
+        if (event.retryAfterMs && event.retryAfterMs > 0) {
+          setApiCooldownUntil(Date.now() + event.retryAfterMs);
+        }
+        pushToast({
+          id: event.id,
+          level: event.level,
+          message: event.message,
+          dedupeKey: event.dedupeKey,
+          retryAfterMs: event.retryAfterMs,
+        });
+      },
+    );
+
+    return () => {
+      unsubscribeProgress();
+      unsubscribeNotifications();
+    };
   }, []);
 
   useEffect(() => {
@@ -146,6 +245,17 @@ export default function App() {
   useEffect(() => {
     pendingRatingsMaskRef.current = session.ratingsMask;
   }, [session.ratingsMask]);
+
+  useEffect(() => {
+    if (!session.hasSession || !session.isGuest || searchParams.maxDownloads > 0) {
+      return;
+    }
+    setSearchParams((previous) =>
+      previous.maxDownloads > 0
+        ? previous
+        : { ...previous, maxDownloads: GUEST_DEFAULT_MAX_DOWNLOADS },
+    );
+  }, [searchParams.maxDownloads, session.hasSession, session.isGuest]);
 
   useEffect(() => {
     return () => {
@@ -177,47 +287,92 @@ export default function App() {
   }, [downloadedSubmissionIds]);
 
   useEffect(() => {
+    const requestId = ++keywordRequestRef.current;
     const timeout = window.setTimeout(() => {
+      if (apiCooldownUntil > Date.now()) {
+        setKeywordSuggestions([]);
+        return;
+      }
+
       const suggestionQuery = getSuggestionQuery(searchParams.query);
       if (!suggestionQuery) {
         setKeywordSuggestions([]);
         return;
       }
+
       backend
         .getKeywordSuggestions(suggestionQuery)
-        .then(setKeywordSuggestions)
-        .catch(() => setKeywordSuggestions([]));
+        .then((suggestions) => {
+          if (requestId === keywordRequestRef.current) {
+            setKeywordSuggestions(suggestions);
+          }
+        })
+        .catch(() => {
+          if (requestId === keywordRequestRef.current) {
+            setKeywordSuggestions([]);
+          }
+        });
     }, 200);
     return () => window.clearTimeout(timeout);
-  }, [searchParams.query]);
+  }, [apiCooldownUntil, searchParams.query]);
 
   useEffect(() => {
+    const requestId = ++artistRequestRef.current;
     const timeout = window.setTimeout(() => {
+      if (apiCooldownUntil > Date.now()) {
+        setArtistSuggestions([]);
+        return;
+      }
+
       if (!searchParams.artistName.trim()) {
         setArtistSuggestions([]);
         return;
       }
+
       backend
         .getUsernameSuggestions(searchParams.artistName)
-        .then(setArtistSuggestions)
-        .catch(() => setArtistSuggestions([]));
+        .then((suggestions) => {
+          if (requestId === artistRequestRef.current) {
+            setArtistSuggestions(suggestions);
+          }
+        })
+        .catch(() => {
+          if (requestId === artistRequestRef.current) {
+            setArtistSuggestions([]);
+          }
+        });
     }, 200);
     return () => window.clearTimeout(timeout);
-  }, [searchParams.artistName]);
+  }, [apiCooldownUntil, searchParams.artistName]);
 
   useEffect(() => {
+    const requestId = ++favoritesRequestRef.current;
     const timeout = window.setTimeout(() => {
+      if (apiCooldownUntil > Date.now()) {
+        setFavoriteSuggestions([]);
+        return;
+      }
+
       if (!searchParams.favoritesBy.trim()) {
         setFavoriteSuggestions([]);
         return;
       }
+
       backend
         .getUsernameSuggestions(searchParams.favoritesBy)
-        .then(setFavoriteSuggestions)
-        .catch(() => setFavoriteSuggestions([]));
+        .then((suggestions) => {
+          if (requestId === favoritesRequestRef.current) {
+            setFavoriteSuggestions(suggestions);
+          }
+        })
+        .catch(() => {
+          if (requestId === favoritesRequestRef.current) {
+            setFavoriteSuggestions([]);
+          }
+        });
     }, 200);
     return () => window.clearTimeout(timeout);
-  }, [searchParams.favoritesBy]);
+  }, [apiCooldownUntil, searchParams.favoritesBy]);
 
   async function persistSettings(partial: Partial<AppSettings>) {
     const next = { ...settings, ...partial };
@@ -231,9 +386,8 @@ export default function App() {
         effectiveTheme: saved.darkMode ? "dark" : "light",
       }));
     } catch (error) {
-      setQueueMessage(
-        error instanceof Error ? error.message : "Unable to save settings.",
-      );
+      const message = getErrorMessage(error, "Unable to save settings.");
+      updateQueueMessage(message, "error", "save-settings-error");
     }
   }
 
@@ -247,11 +401,18 @@ export default function App() {
       setSearchParams((previous) => ({
         ...previous,
         maxActive: nextSession.settings.maxActive || previous.maxActive,
+        maxDownloads:
+          nextSession.isGuest && previous.maxDownloads <= 0
+            ? GUEST_DEFAULT_MAX_DOWNLOADS
+            : previous.maxDownloads,
       }));
       setLoginOpen(false);
       setLoginPassword("");
+      pushToast({ level: "success", message: `Signed in as ${nextSession.username}.`, dedupeKey: "login-success" });
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Login failed.");
+      const message = getErrorMessage(error, "Login failed.");
+      setAuthError(message);
+      pushErrorToast(message, "login-error");
     } finally {
       setAuthLoading(false);
     }
@@ -263,19 +424,22 @@ export default function App() {
       setSession(nextSession);
       setSettings(nextSession.settings);
       setLoginOpen(true);
+      pushToast({ level: "success", message: "Signed out.", dedupeKey: "logout-success" });
     } catch (error) {
-      setQueueMessage(
-        error instanceof Error ? error.message : "Logout failed.",
-      );
+      const message = getErrorMessage(error, "Logout failed.");
+      updateQueueMessage(message, "error", "logout-error");
     }
   }
 
   async function handleSearch(page = 1) {
     if (!session.hasSession) {
-      setSearchError("Sign in to search.");
+      const message = "Sign in to search.";
+      setSearchError(message);
       setLoginOpen(true);
+      pushToast({ level: "warning", message, dedupeKey: "search-sign-in" });
       return;
     }
+
     setSearchLoading(true);
     setSearchError("");
     try {
@@ -317,7 +481,9 @@ export default function App() {
         }
       });
     } catch (error) {
-      setSearchError(error instanceof Error ? error.message : "Search failed.");
+      const message = getErrorMessage(error, "Search failed.");
+      setSearchError(message);
+      pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
     } finally {
       setSearchLoading(false);
     }
@@ -331,19 +497,24 @@ export default function App() {
     if (!searchResponse || submissionIds.length === 0) {
       return;
     }
+
     const eligibleSubmissionIds = submissionIds.filter(
       (submissionId) => !unavailableSubmissionIds.has(submissionId),
     );
     if (eligibleSubmissionIds.length === 0) {
-      setQueueMessage(
+      updateQueueMessage(
         "Those submissions are already downloading or downloaded.",
+        "warning",
+        "queue-no-eligible-results",
       );
       return;
     }
+
     setQueueMessage("");
     setPendingDownloadSubmissionIds((previous) =>
       mergeSubmissionIds(previous, eligibleSubmissionIds),
     );
+
     try {
       const snapshot = await backend.enqueueDownloads(
         searchResponse.searchId,
@@ -358,19 +529,16 @@ export default function App() {
           downloadDirectory: settings.downloadDirectory,
         },
       );
+      const message = `Queued ${eligibleSubmissionIds.length} submission${eligibleSubmissionIds.length === 1 ? "" : "s"}.`;
       setQueue(snapshot);
-      setQueueMessage(
-        `Queued ${eligibleSubmissionIds.length} submission${eligibleSubmissionIds.length === 1 ? "" : "s"}.`,
-      );
+      updateQueueMessage(message, "success", "queue-downloads-success");
     } catch (error) {
-      setQueueMessage(
-        error instanceof Error ? error.message : "Failed to queue downloads.",
-      );
+      const message = getErrorMessage(error, "Failed to queue downloads.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "queue-downloads-error");
     } finally {
       setPendingDownloadSubmissionIds((previous) =>
-        previous.filter(
-          (submissionId) => !eligibleSubmissionIds.includes(submissionId),
-        ),
+        previous.filter((submissionId) => !eligibleSubmissionIds.includes(submissionId)),
       );
     }
   }
@@ -407,11 +575,9 @@ export default function App() {
           pendingRatingsMaskRef.current = nextSession.ratingsMask;
         })
         .catch((error: unknown) => {
-          setSearchError(
-            error instanceof Error
-              ? error.message
-              : "Unable to update ratings.",
-          );
+          const message = getErrorMessage(error, "Unable to update ratings.");
+          setSearchError(message);
+          pushErrorToast(message, "ratings-error");
           backend
             .getSession()
             .then((currentSession) => {
@@ -459,6 +625,7 @@ export default function App() {
       }`}
     >
       <style>{GLOBAL_STYLES}</style>
+      <ToastHost toasts={toasts} onDismiss={dismissToast} />
       <StarBackground
         darkMode={settings.darkMode}
         motionEnabled={settings.motionEnabled}
@@ -479,12 +646,8 @@ export default function App() {
           darkMode={settings.darkMode}
           motionEnabled={settings.motionEnabled}
           session={session}
-          onToggleDarkMode={() =>
-            void persistSettings({ darkMode: !settings.darkMode })
-          }
-          onToggleMotion={() =>
-            void persistSettings({ motionEnabled: !settings.motionEnabled })
-          }
+          onToggleDarkMode={() => void persistSettings({ darkMode: !settings.darkMode })}
+          onToggleMotion={() => void persistSettings({ motionEnabled: !settings.motionEnabled })}
           onOpenLogin={() => setLoginOpen(true)}
           onLogout={() => void handleLogout()}
         />
@@ -514,13 +677,9 @@ export default function App() {
               ratingUpdating={ratingUpdating}
               collapsed={searchCollapsed}
               error={searchError}
-              onChange={(updater) =>
-                setSearchParams((previous) => updater(previous))
-              }
+              onChange={(updater) => setSearchParams((previous) => updater(previous))}
               onSearch={() => void handleSearch(1)}
-              onToggleCollapse={() =>
-                setSearchCollapsed((current) => !current)
-              }
+              onToggleCollapse={() => setSearchCollapsed((current) => !current)}
               onToggleRating={(index) => void handleToggleRating(index)}
             />
             <div
@@ -540,16 +699,33 @@ export default function App() {
                     void backend
                       .pickDownloadDirectory()
                       .then((directory) => {
-                        if (directory) {
-                          void persistSettings({ downloadDirectory: directory });
+                        if (!directory) {
+                          return;
                         }
+                        setSettings((previous) => ({
+                          ...previous,
+                          downloadDirectory: directory,
+                        }));
+                        setSession((previous) => ({
+                          ...previous,
+                          settings: {
+                            ...previous.settings,
+                            downloadDirectory: directory,
+                          },
+                        }));
+                        pushToast({
+                          level: "success",
+                          message: `Download folder set to ${directory}.`,
+                          dedupeKey: "download-folder-success",
+                        });
                       })
                       .catch((error: unknown) => {
-                        setQueueMessage(
-                          error instanceof Error
-                            ? error.message
-                            : "Could not open folder picker.",
+                        const message = getErrorMessage(
+                          error,
+                          "Could not open folder picker.",
                         );
+                        updateQueueMessage(message);
+                        pushErrorToast(message, "download-folder-picker-error");
                       })
                   }
                   onToggleSaveKeywords={(checked) =>
@@ -586,9 +762,7 @@ export default function App() {
                 void handleDownloadSubmissions([submissionId])
               }
               onQueueDownloads={() => void handleQueueDownloads()}
-              onLoadMore={() =>
-                void handleSearch((searchResponse?.page ?? 1) + 1)
-              }
+              onLoadMore={() => void handleSearch((searchResponse?.page ?? 1) + 1)}
             />
           </div>
 
@@ -596,19 +770,18 @@ export default function App() {
             queue={queue}
             message={queueMessage}
             selectedCount={selectedSubmissionIds.length}
-            canQueueDownloads={
-              Boolean(searchResponse) && selectedSubmissionIds.length > 0
-            }
+            canQueueDownloads={Boolean(searchResponse) && selectedSubmissionIds.length > 0}
             allSelected={allResultsSelected}
             onOpenDownloadFolder={() => {
               backend
                 .openDownloadDirectory()
                 .catch((error: unknown) => {
-                  setQueueMessage(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not open the download folder.",
-                    );
+                  const message = getErrorMessage(
+                    error,
+                    "Could not open the download folder.",
+                  );
+                  updateQueueMessage(message);
+                  pushErrorToast(message, "open-download-folder-error");
                 });
             }}
             onClearQueue={() => {
@@ -617,14 +790,12 @@ export default function App() {
                 .then((snapshot) => {
                   setQueue(snapshot);
                   setPendingDownloadSubmissionIds([]);
-                  setQueueMessage("Queue cleared.");
+                  updateQueueMessage("Queue cleared.", "success", "queue-cleared");
                 })
                 .catch((error: unknown) => {
-                  setQueueMessage(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not clear the queue.",
-                  );
+                  const message = getErrorMessage(error, "Could not clear the queue.");
+                  updateQueueMessage(message);
+                  pushErrorToast(message, "queue-clear-error");
                 });
             }}
             onQueueDownloads={() => void handleQueueDownloads()}
@@ -640,6 +811,54 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+function getToastDuration(level: ToastItem["level"], retryAfterMs?: number) {
+  const base =
+    level === "error"
+      ? 6500
+      : level === "warning"
+        ? 5500
+        : level === "success"
+          ? 3500
+          : 4000;
+  return Math.max(base, (retryAfterMs ?? 0) + 1200);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === "string") {
+    const trimmed = error.trim();
+    return trimmed || fallback;
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+
+  if (error && typeof error === "object") {
+    const withMessage = error as { message?: unknown; error?: unknown };
+    if (typeof withMessage.message === "string" && withMessage.message.trim()) {
+      return withMessage.message.trim();
+    }
+    if (typeof withMessage.error === "string" && withMessage.error.trim()) {
+      return withMessage.error.trim();
+    }
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== "{}") {
+        return serialized;
+      }
+    } catch {
+      // ignore serialization errors and use fallback
+    }
+  }
+
+  return fallback;
+}
+
+function isRateLimitMessage(message: string) {
+  const value = message.toLowerCase();
+  return value.includes("rate limiting") || (value.includes("429") && value.includes("inkbunny"));
 }
 
 function getSuggestionQuery(query: string) {
@@ -666,10 +885,7 @@ function normalizeRatingsMask(mask: string) {
   return base.includes("1") ? base : "10000";
 }
 
-function mergeSubmissionIds(
-  existing: string[],
-  next: string[],
-) {
+function mergeSubmissionIds(existing: string[], next: string[]) {
   return [...new Set([...existing, ...next])];
 }
 

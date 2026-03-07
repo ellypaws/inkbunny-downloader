@@ -16,6 +16,9 @@ func (a *App) OpenDownloadDirectory() error {
 
 	target = strings.TrimSpace(target)
 	if target == "" {
+		target = defaultDownloadDirectory()
+	}
+	if target == "" {
 		return errors.New("download folder not set")
 	}
 	if err := os.MkdirAll(target, 0o755); err != nil {

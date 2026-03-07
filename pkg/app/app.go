@@ -34,6 +34,7 @@ type App struct {
 	searchCache     *flight.Cache[searchCacheKey, cachedSearchResult]
 	loadMoreCache   *flight.Cache[loadMoreCacheKey, inkbunny.SubmissionSearchResponse]
 	detailsCache    *flight.Cache[detailsCacheKey, inkbunny.SubmissionDetailsResponse]
+	rateLimiter     *apiRateLimiter
 	downloadManager *DownloadManager
 }
 
@@ -41,14 +42,16 @@ func NewApp() *App {
 	store, _ := newStateStore()
 	defaultState := defaultStoredState()
 	return &App{
-		store:    store,
-		settings: defaultState.Settings,
-		searches: make(map[string]*searchState),
+		store:       store,
+		settings:    defaultState.Settings,
+		searches:    make(map[string]*searchState),
+		rateLimiter: newAPIRateLimiter(nil),
 	}
 }
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	a.rateLimiter.SetNotifier(a.emitNotification)
 	if a.store != nil {
 		state, err := a.store.Load()
 		if err == nil {
@@ -62,7 +65,7 @@ func (a *App) Startup(ctx context.Context) {
 		a.sessionAvatar = defaultAvatarURL
 	}
 	a.resetCaches(a.user)
-	a.downloadManager = NewDownloadManager(ctx, a.settings.MaxActive, func(event string, payload any) {
+	a.downloadManager = NewDownloadManager(ctx, a.settings.MaxActive, a.rateLimiter, func(event string, payload any) {
 		if a.ctx != nil {
 			wruntime.EventsEmit(a.ctx, event, payload)
 		}
@@ -70,6 +73,13 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func (a *App) Shutdown(context.Context) {}
+
+func (a *App) emitNotification(notification AppNotification) {
+	if a.ctx == nil {
+		return
+	}
+	wruntime.EventsEmit(a.ctx, "app-notification", notification)
+}
 
 func (a *App) GetSession() SessionInfo {
 	a.mu.RLock()
@@ -170,9 +180,12 @@ func (a *App) PickDownloadDirectory() (string, error) {
 	if a.ctx == nil {
 		return "", errors.New("application context not ready")
 	}
+	a.mu.RLock()
+	defaultDirectory := resolveDownloadPickerDirectory(a.settings.DownloadDirectory)
+	a.mu.RUnlock()
 	selected, err := wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{
 		Title:            "Choose a download folder",
-		DefaultDirectory: a.settings.DownloadDirectory,
+		DefaultDirectory: defaultDirectory,
 	})
 	if err != nil || selected == "" {
 		return "", err

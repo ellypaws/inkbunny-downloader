@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Download, FolderOpen } from "lucide-react";
-import { useRef } from "react";
+import { Download, FileImage, FolderOpen } from "lucide-react";
+import { useRef, useState } from "react";
 
 import type { QueueSnapshot } from "../lib/types";
 import { formatBytes } from "../lib/format";
@@ -217,10 +217,13 @@ function QueueRow(props: {
 }
 
 function QueueThumbnail(props: { src?: string; alt: string }) {
-  if (!props.src) {
+  const [failed, setFailed] = useState(false);
+
+  if (!props.src || failed) {
     return (
-      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-[#c2c7bc] bg-white/70 text-[11px] font-black text-[#555753] dark:border-[#4a5360] dark:bg-[#14112C]/65 dark:text-white/55">
-        No preview
+      <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border border-[#c2c7bc] bg-white/70 text-[11px] font-black text-[#555753] dark:border-[#4a5360] dark:bg-[#14112C]/65 dark:text-white/55">
+        <FileImage size={18} />
+        <span>Preview</span>
       </div>
     );
   }
@@ -231,9 +234,7 @@ function QueueThumbnail(props: { src?: string; alt: string }) {
       alt={props.alt}
       loading="lazy"
       referrerPolicy="no-referrer"
-      onError={(event) => {
-        event.currentTarget.style.display = "none";
-      }}
+      onError={() => setFailed(true)}
       className="h-20 w-20 shrink-0 rounded-2xl border border-[#c2c7bc] bg-white object-cover dark:border-[#4a5360]"
     />
   );

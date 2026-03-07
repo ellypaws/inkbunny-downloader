@@ -11,10 +11,11 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v0.4.2
 	github.com/charmbracelet/x/ansi v0.11.6
-	github.com/ellypaws/inkbunny v0.0.0-20260307181134-0a811a144cdb
+	github.com/ellypaws/inkbunny v0.0.0-20260307210948-96aa8a93265e
 	github.com/lrstanley/bubblezone v1.0.0
 	github.com/muesli/termenv v0.16.0
 	github.com/wailsapp/wails/v2 v2.11.0
+	golang.org/x/sys v0.41.0
 )
 
 require (
@@ -68,6 +69,5 @@ require (
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )

@@ -56,22 +56,27 @@ type SearchResponse struct {
 }
 
 type SubmissionCard struct {
-	SubmissionID string   `json:"submissionId"`
-	Title        string   `json:"title"`
-	Username     string   `json:"username"`
-	TypeName     string   `json:"typeName"`
-	RatingName   string   `json:"ratingName"`
-	IsPublic     bool     `json:"isPublic"`
-	PageCount    int      `json:"pageCount"`
-	Updated      bool     `json:"updated"`
-	FileName     string   `json:"fileName,omitempty"`
-	PreviewURL   string   `json:"previewUrl,omitempty"`
-	ScreenURL    string   `json:"screenUrl,omitempty"`
-	FullURL      string   `json:"fullUrl,omitempty"`
-	ThumbnailURL string   `json:"thumbnailUrl,omitempty"`
-	BadgeText    string   `json:"badgeText,omitempty"`
-	Accent       string   `json:"accent,omitempty"`
-	FileIDs      []string `json:"fileIds,omitempty"`
+	SubmissionID       string   `json:"submissionId"`
+	Title              string   `json:"title"`
+	Username           string   `json:"username"`
+	TypeName           string   `json:"typeName"`
+	SubmissionTypeID   int      `json:"submissionTypeId"`
+	RatingName         string   `json:"ratingName"`
+	IsPublic           bool     `json:"isPublic"`
+	PageCount          int      `json:"pageCount"`
+	Updated            bool     `json:"updated"`
+	FileName           string   `json:"fileName,omitempty"`
+	MimeType           string   `json:"mimeType,omitempty"`
+	LatestMimeType     string   `json:"latestMimeType,omitempty"`
+	PreviewURL         string   `json:"previewUrl,omitempty"`
+	LatestPreviewURL   string   `json:"latestPreviewUrl,omitempty"`
+	ScreenURL          string   `json:"screenUrl,omitempty"`
+	FullURL            string   `json:"fullUrl,omitempty"`
+	ThumbnailURL       string   `json:"thumbnailUrl,omitempty"`
+	LatestThumbnailURL string   `json:"latestThumbnailUrl,omitempty"`
+	BadgeText          string   `json:"badgeText,omitempty"`
+	Accent             string   `json:"accent,omitempty"`
+	FileIDs            []string `json:"fileIds,omitempty"`
 }
 
 type SelectedSubmission struct {
@@ -120,6 +125,15 @@ type DownloadJobSnapshot struct {
 type DownloadProgressEvent struct {
 	Job   DownloadJobSnapshot `json:"job"`
 	Queue QueueSnapshot       `json:"queue"`
+}
+
+type AppNotification struct {
+	ID           string `json:"id"`
+	Level        string `json:"level"`
+	Message      string `json:"message"`
+	Scope        string `json:"scope"`
+	DedupeKey    string `json:"dedupeKey,omitempty"`
+	RetryAfterMS int64  `json:"retryAfterMs,omitempty"`
 }
 
 type storedState struct {

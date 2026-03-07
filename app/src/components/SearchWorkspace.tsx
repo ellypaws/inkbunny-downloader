@@ -472,7 +472,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                           maxDownloads: Number(event.target.value) || 0,
                         }))
                       }
-                      placeholder="Unlimited"
+                      placeholder={props.session.isGuest ? "256" : "Unlimited"}
                       className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
                     />
                   </label>
