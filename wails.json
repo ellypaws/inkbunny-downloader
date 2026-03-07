@@ -3,7 +3,7 @@
   "name": "inkbunny-downloader",
   "outputfilename": "inkbunny-downloader",
   "frontend:dir": "app",
-  "frontend:install": "npm install",
+  "frontend:install": "npm ci",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev -- --host",
   "frontend:dev:serverUrl": "auto",

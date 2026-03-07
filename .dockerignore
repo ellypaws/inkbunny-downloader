@@ -1,0 +1,8 @@
+.git
+.github
+app/dist
+app/node_modules
+build/bin
+dist
+log.txt
+sid.txt

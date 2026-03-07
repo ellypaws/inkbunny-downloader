@@ -1,0 +1,32 @@
+services:
+  wails-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.wails
+    image: inkbunny-downloader-wails-dev
+    working_dir: /workspace
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-}
+      XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR:-/tmp}
+    volumes:
+      - .:/workspace
+      - wails-node-modules:/workspace/app/node_modules
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    network_mode: host
+    stdin_open: true
+    tty: true
+    command: ["wails", "dev", "-nocolour"]
+
+  wails-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.wails-build
+    image: inkbunny-downloader-wails-build
+    profiles:
+      - build
+    volumes:
+      - ./dist:/out
+
+volumes:
+  wails-node-modules:
