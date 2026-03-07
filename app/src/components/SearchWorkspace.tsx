@@ -11,6 +11,7 @@ import {
   FIND_OPTIONS,
   ORDER_OPTIONS,
   RATING_OPTIONS,
+  SCRAPS_OPTIONS,
   TIME_OPTIONS,
   TYPE_OPTIONS,
 } from "../lib/constants";
@@ -416,7 +417,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
               <SectionDivider />
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   <label className="block">
                     <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
                       Order by
@@ -446,13 +447,14 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       type="number"
                       min={1}
                       max={100}
-                      value={props.searchParams.perPage}
+                      value={props.searchParams.perPage || ""}
                       onChange={(event) =>
                         props.onChange((previous) => ({
                           ...previous,
-                          perPage: Number(event.target.value) || 24,
+                          perPage: Number(event.target.value) || 0,
                         }))
                       }
+                      placeholder="24"
                       className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
                     />
                   </label>
@@ -463,22 +465,62 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     <input
                       type="number"
                       min={0}
-                      value={props.searchParams.maxDownloads}
+                      value={props.searchParams.maxDownloads || ""}
                       onChange={(event) =>
                         props.onChange((previous) => ({
                           ...previous,
                           maxDownloads: Number(event.target.value) || 0,
                         }))
                       }
+                      placeholder="Unlimited"
                       className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
                     />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
+                      Pool ID
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={props.searchParams.poolId || ""}
+                      onChange={(event) =>
+                        props.onChange((previous) => ({
+                          ...previous,
+                          poolId: Number(event.target.value) || 0,
+                        }))
+                      }
+                      placeholder="12345"
+                      className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                    />
+                  </label>
+                  <label className="block 2xl:col-span-2">
+                    <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
+                      Scraps
+                    </span>
+                    <select
+                      value={props.searchParams.scraps}
+                      onChange={(event) =>
+                        props.onChange((previous) => ({
+                          ...previous,
+                          scraps: event.target.value,
+                        }))
+                      }
+                      className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                    >
+                      {SCRAPS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                 <button
                   type="button"
                   onClick={props.onSearch}
                   disabled={props.loading}
-                  className={`flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 border-[#1a516b] bg-[#2A7FA6] px-6 py-3.5 text-sm font-black text-white shadow-xl transition-all hover:bg-[#1e5f7e] xl:w-40 ${
+                  className={`flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 border-[#1a516b] bg-[#2A7FA6] px-6 py-3.5 text-sm font-black text-white shadow-xl transition-all hover:bg-[#1e5f7e] xl:w-40 xl:self-end ${
                     props.loading ? "opacity-70" : ""
                   }`}
                 >

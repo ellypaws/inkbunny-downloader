@@ -20,6 +20,12 @@ export const ORDER_OPTIONS = [
   { label: 'Most Popular by Views', value: 'views' },
 ]
 
+export const SCRAPS_OPTIONS = [
+  { label: 'Include scraps', value: 'both' },
+  { label: 'Exclude scraps', value: 'no' },
+  { label: 'Scraps only', value: 'only' },
+]
+
 export const FIND_OPTIONS = [
   { label: 'Find all of the words together', value: 'and' },
   { label: 'Find any one of the words', value: 'or' },
@@ -60,11 +66,13 @@ export const DEFAULT_SEARCH: SearchParams = {
   searchInMD5: false,
   artistName: '',
   favoritesBy: '',
+  poolId: 0,
+  scraps: 'both',
   timeRangeDays: 0,
   submissionTypes: [],
   orderBy: 'create_datetime',
   page: 1,
-  perPage: 18,
+  perPage: 0,
   maxDownloads: 0,
   maxActive: 4,
   saveKeywords: false,

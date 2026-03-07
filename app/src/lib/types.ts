@@ -32,6 +32,8 @@ export type SearchParams = {
   searchInMD5: boolean
   artistName: string
   favoritesBy: string
+  poolId: number
+  scraps: string
   timeRangeDays: number
   submissionTypes: number[]
   orderBy: string

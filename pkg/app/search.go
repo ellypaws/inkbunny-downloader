@@ -33,7 +33,8 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	if err != nil {
 		return SearchResponse{}, err
 	}
-	key, normalizedReq, err := makeSearchCacheKey(user, user.Ratings.String(), req)
+	ratingsMask := effectiveRatingsMask(user.Ratings.String())
+	key, normalizedReq, err := makeSearchCacheKey(user, ratingsMask, req)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -44,7 +45,8 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 			if err != nil {
 				return SearchResponse{}, err
 			}
-			key, normalizedReq, err = makeSearchCacheKey(user, user.Ratings.String(), req)
+			ratingsMask = effectiveRatingsMask(user.Ratings.String())
+			key, normalizedReq, err = makeSearchCacheKey(user, ratingsMask, req)
 			if err != nil {
 				return SearchResponse{}, err
 			}
@@ -82,7 +84,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 		Page:         page,
 		PagesCount:   int(response.PagesCount),
 		ResultsCount: int(response.ResultsCountAll),
-		Results:      mapSubmissionCards(response.Submissions, user.SID),
+		Results:      mapSubmissionCards(filterSubmissionsByRatings(response.Submissions, ratingsMask), user.SID),
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -123,6 +125,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 	if err != nil {
 		return SearchResponse{}, err
 	}
+	ratingsMask := effectiveRatingsMask(user.Ratings.String())
 
 	a.mu.Lock()
 	state.LastPage = page
@@ -133,7 +136,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 		Page:         page,
 		PagesCount:   int(response.PagesCount),
 		ResultsCount: int(response.ResultsCountAll),
-		Results:      mapSubmissionCards(response.Submissions, user.SID),
+		Results:      mapSubmissionCards(filterSubmissionsByRatings(response.Submissions, ratingsMask), user.SID),
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -216,7 +219,10 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 		GetRID:             inkbunny.Yes,
 		Page:               inkbunny.IntString(page),
 		SubmissionsPerPage: inkbunny.IntString(perPage),
-		Scraps:             inkbunny.ScrapsBoth,
+		Scraps:             normalizeScrapsMode(params.Scraps),
+	}
+	if params.PoolID > 0 {
+		req.PoolID = inkbunny.IntString(params.PoolID)
 	}
 	if params.MaxDownloads > 0 {
 		req.CountLimit = inkbunny.IntString(params.MaxDownloads)
@@ -283,6 +289,17 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	return req, nil
 }
 
+func normalizeScrapsMode(value string) inkbunny.Scraps {
+	switch inkbunny.Scraps(strings.ToLower(strings.TrimSpace(value))) {
+	case inkbunny.ScrapsNo:
+		return inkbunny.ScrapsNo
+	case inkbunny.ScrapsOnly:
+		return inkbunny.ScrapsOnly
+	default:
+		return inkbunny.ScrapsBoth
+	}
+}
+
 func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string) []SubmissionCard {
 	cards := make([]SubmissionCard, 0, len(submissions))
 	accents := []string{"rose", "mint", "lavender", "sky"}
@@ -320,6 +337,89 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string) []S
 		})
 	}
 	return cards
+}
+
+func effectiveRatingsMask(mask string) string {
+	canonical := [5]byte{'1', '0', '0', '0', '0'}
+	trimmed := strings.TrimSpace(mask)
+	if trimmed != "" {
+		canonical[0] = '0'
+	}
+	for index := 0; index < len(trimmed) && index < len(canonical); index++ {
+		if trimmed[index] == '1' {
+			canonical[index] = '1'
+		}
+	}
+	matureEnabled := canonical[1] == '1' || canonical[2] == '1'
+	adultEnabled := canonical[3] == '1' || canonical[4] == '1'
+	if matureEnabled {
+		canonical[1] = '1'
+		canonical[2] = '1'
+	} else {
+		canonical[1] = '0'
+		canonical[2] = '0'
+	}
+	if adultEnabled {
+		canonical[3] = '1'
+		canonical[4] = '1'
+	} else {
+		canonical[3] = '0'
+		canonical[4] = '0'
+	}
+	if canonical[0] != '1' && !matureEnabled && !adultEnabled {
+		canonical[0] = '1'
+	}
+	return string(canonical[:])
+}
+
+func filterSubmissionsByRatings(submissions []inkbunny.SubmissionSearch, mask string) []inkbunny.SubmissionSearch {
+	allowed := allowedRatings(mask)
+	filtered := make([]inkbunny.SubmissionSearch, 0, len(submissions))
+	for _, submission := range submissions {
+		if submissionAllowedByRatings(submission, allowed) {
+			filtered = append(filtered, submission)
+		}
+	}
+	return filtered
+}
+
+func allowedRatings(mask string) [3]bool {
+	effective := effectiveRatingsMask(mask)
+	return [3]bool{
+		effective[0] == '1',
+		effective[1] == '1' || effective[2] == '1',
+		effective[3] == '1' || effective[4] == '1',
+	}
+}
+
+func submissionAllowedByRatings(submission inkbunny.SubmissionSearch, allowed [3]bool) bool {
+	ratingID, ok := submissionRatingID(submission)
+	if !ok {
+		return true
+	}
+	if ratingID < 0 || ratingID >= len(allowed) {
+		return true
+	}
+	return allowed[ratingID]
+}
+
+func submissionRatingID(submission inkbunny.SubmissionSearch) (int, bool) {
+	name := strings.ToLower(strings.TrimSpace(submission.RatingName))
+	if name != "" {
+		switch {
+		case strings.Contains(name, "adult") || strings.Contains(name, "sexual") || strings.Contains(name, "strong violence"):
+			return 2, true
+		case strings.Contains(name, "mature") || strings.Contains(name, "nudity") || strings.Contains(name, "mild violence"):
+			return 1, true
+		case strings.Contains(name, "general"):
+			return 0, true
+		}
+	}
+
+	if ratingID := int(submission.RatingID); ratingID >= 0 && ratingID <= 2 {
+		return ratingID, true
+	}
+	return 0, false
 }
 
 func submissionPreviewURL(raw string, isPublic bool, sid string) string {
@@ -571,7 +671,7 @@ func (a *App) refreshSearchState(user *inkbunny.User, state *searchState) error 
 	if state == nil {
 		return errors.New("search state is missing")
 	}
-	key, normalizedReq, err := makeSearchCacheKey(user, user.Ratings.String(), state.Request)
+	key, normalizedReq, err := makeSearchCacheKey(user, effectiveRatingsMask(user.Ratings.String()), state.Request)
 	if err != nil {
 		return err
 	}

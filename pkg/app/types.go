@@ -34,6 +34,8 @@ type SearchParams struct {
 	SearchInMD5         bool   `json:"searchInMD5"`
 	ArtistName          string `json:"artistName"`
 	FavoritesBy         string `json:"favoritesBy"`
+	PoolID              int    `json:"poolId"`
+	Scraps              string `json:"scraps"`
 	TimeRangeDays       int    `json:"timeRangeDays"`
 	SubmissionTypes     []int  `json:"submissionTypes"`
 	OrderBy             string `json:"orderBy"`

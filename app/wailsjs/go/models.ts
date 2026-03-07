@@ -169,6 +169,8 @@ export namespace desktopapp {
 	    searchInMD5: boolean;
 	    artistName: string;
 	    favoritesBy: string;
+	    poolId: number;
+	    scraps: string;
 	    timeRangeDays: number;
 	    submissionTypes: number[];
 	    orderBy: string;
@@ -192,6 +194,8 @@ export namespace desktopapp {
 	        this.searchInMD5 = source["searchInMD5"];
 	        this.artistName = source["artistName"];
 	        this.favoritesBy = source["favoritesBy"];
+	        this.poolId = source["poolId"];
+	        this.scraps = source["scraps"];
 	        this.timeRangeDays = source["timeRangeDays"];
 	        this.submissionTypes = source["submissionTypes"];
 	        this.orderBy = source["orderBy"];
