@@ -161,7 +161,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row h-[1020px] md:h-[600px] w-full rounded-toy-lg overflow-hidden shadow-pop bg-white/80 dark:bg-gray-800/90 border-2 border-white/70 dark:border-gray-700/70">
+      <div className="flex flex-col md:flex-row h-[1020px] md:h-[600px] w-full rounded-toy-sm overflow-hidden shadow-pop bg-white/80 dark:bg-gray-800/90 border-2 border-white/70 dark:border-gray-700/70">
         {props.results.length === 0 ? (
           <div className="w-full h-full flex flex-col items-center justify-center bg-white/35 dark:bg-[#1A1733]/55 text-center px-6">
             <SearchIcon className="text-[#89CFF0]" size={42} />
@@ -433,7 +433,13 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                   : "bg-[#14112C] text-white"
                             }`}
                           >
-                            {downloaded ? <Check size={14} /> : selected ? <Check size={14} /> : <Plus size={14} />}
+                            {downloaded ? (
+                              <Check size={14} />
+                            ) : selected ? (
+                              <Check size={14} />
+                            ) : (
+                              <Plus size={14} />
+                            )}
                           </button>
                         </div>
                       </div>
@@ -583,10 +589,7 @@ const PANEL_WINDOW_SIZE = 5;
 
 function getPanelWindowStart(resultCount: number, activeIndex: number) {
   const safeIndex = activeIndex >= 0 ? activeIndex : 0;
-  return Math.max(
-    0,
-    Math.min(safeIndex - 2, resultCount - PANEL_WINDOW_SIZE),
-  );
+  return Math.max(0, Math.min(safeIndex - 2, resultCount - PANEL_WINDOW_SIZE));
 }
 
 type SubmissionDownloadState = "idle" | "downloading" | "downloaded";
@@ -616,7 +619,10 @@ function buildSubmissionDownloadStates(
       states.set(submissionId, "downloading");
       continue;
     }
-    if (statuses.length > 0 && statuses.every((status) => status === "completed")) {
+    if (
+      statuses.length > 0 &&
+      statuses.every((status) => status === "completed")
+    ) {
       states.set(submissionId, "downloaded");
     }
   }

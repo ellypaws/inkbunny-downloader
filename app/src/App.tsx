@@ -59,6 +59,8 @@ export default function App() {
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const requestRef = useRef<number | null>(null);
   const shouldScrollToResultsRef = useRef(false);
+  const ratingDebounceRef = useRef<number | null>(null);
+  const pendingRatingsMaskRef = useRef("");
   const currentY = useRef(0);
   const downloadedSubmissionIds = useMemo(
     () => getDownloadedSubmissionIds(queue),
@@ -140,6 +142,18 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
   }, [settings.darkMode]);
+
+  useEffect(() => {
+    pendingRatingsMaskRef.current = session.ratingsMask;
+  }, [session.ratingsMask]);
+
+  useEffect(() => {
+    return () => {
+      if (ratingDebounceRef.current !== null) {
+        window.clearTimeout(ratingDebounceRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!shouldScrollToResultsRef.current || !resultsRef.current) {
@@ -361,8 +375,8 @@ export default function App() {
     }
   }
 
-  async function handleToggleRating(index: number) {
-    if (!session.hasSession || ratingUpdating) {
+  function handleToggleRating(index: number) {
+    if (!session.hasSession) {
       return;
     }
 
@@ -371,19 +385,47 @@ export default function App() {
       return;
     }
 
-    setRatingUpdating(true);
     setSearchError("");
-    try {
-      const nextSession = await backend.updateRatings(nextMask);
-      setSession(nextSession);
-      setSettings(nextSession.settings);
-    } catch (error) {
-      setSearchError(
-        error instanceof Error ? error.message : "Unable to update ratings.",
-      );
-    } finally {
-      setRatingUpdating(false);
+    pendingRatingsMaskRef.current = nextMask;
+    setSession((previous) => ({
+      ...previous,
+      ratingsMask: nextMask,
+    }));
+
+    if (ratingDebounceRef.current !== null) {
+      window.clearTimeout(ratingDebounceRef.current);
     }
+
+    ratingDebounceRef.current = window.setTimeout(() => {
+      const targetMask = pendingRatingsMaskRef.current;
+      setRatingUpdating(true);
+      backend
+        .updateRatings(targetMask)
+        .then((nextSession) => {
+          setSession(nextSession);
+          setSettings(nextSession.settings);
+          pendingRatingsMaskRef.current = nextSession.ratingsMask;
+        })
+        .catch((error: unknown) => {
+          setSearchError(
+            error instanceof Error
+              ? error.message
+              : "Unable to update ratings.",
+          );
+          backend
+            .getSession()
+            .then((currentSession) => {
+              setSession(currentSession);
+              setSettings(currentSession.settings);
+              pendingRatingsMaskRef.current = currentSession.ratingsMask;
+            })
+            .catch(() => undefined);
+        })
+        .finally(() => {
+          setRatingUpdating(false);
+          ratingDebounceRef.current = null;
+        });
+    }, 350);
   }
 
   function handleToggleSelectAll() {

@@ -1,4 +1,9 @@
-import { ChevronDown, LoaderCircle, Search as SearchIcon } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  LoaderCircle,
+  Search as SearchIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -32,6 +37,13 @@ type SearchWorkspaceProps = {
 };
 
 type SuggestionField = "query" | "artistName" | "favoritesBy" | null;
+type ChoiceTone =
+  | "default"
+  | "general"
+  | "mature"
+  | "matureViolence"
+  | "adult"
+  | "adultViolence";
 
 export function SearchWorkspace(props: SearchWorkspaceProps) {
   const [focusedField, setFocusedField] = useState<SuggestionField>(null);
@@ -51,9 +63,9 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
   );
 
   return (
-    <section className="relative overflow-hidden rounded-toy-lg bg-transparent backdrop-blur-xl">
+    <section className="relative overflow-hidden rounded-toy-sm bg-transparent backdrop-blur-xl">
       <div className="pointer-events-none absolute inset-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay bg-[radial-gradient(circle_at_top_right,rgba(115,210,22,0.8),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(255,183,178,0.8),transparent_22%)]" />
-      <div className="relative z-10 overflow-hidden rounded-toy-lg border border-[#bcc1b5]/90 bg-[#eff1ea]/92 shadow-pop backdrop-blur-xl dark:border-[#4a5360]/90 dark:bg-[#252a31]/88">
+      <div className="relative z-10 overflow-hidden rounded-toy-sm border border-[#bcc1b5]/90 bg-[#eff1ea]/92 shadow-pop backdrop-blur-xl dark:border-[#4a5360]/90 dark:bg-[#252a31]/88">
         <button
           type="button"
           onClick={props.onToggleCollapse}
@@ -329,7 +341,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       subtitle="select at least one"
                     />
                     <div className="space-y-2.5">
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2">
                         {ratingRows.map((rating) => (
                           <ChoiceCard
                             key={rating.label}
@@ -337,6 +349,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                             checked={rating.enabled}
                             label={rating.label}
                             disabled={props.ratingUpdating}
+                            tone={getRatingTone(rating.index)}
                             onSelect={() => props.onToggleRating(rating.index)}
                           />
                         ))}
@@ -515,8 +528,35 @@ function ChoiceCard(props: {
   checked: boolean;
   label: string;
   disabled?: boolean;
+  tone?: ChoiceTone;
   onSelect: () => void;
 }) {
+  const tone = props.tone ?? "default";
+  const checkedClass =
+    tone === "general"
+      ? "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white"
+      : tone === "mature"
+        ? "border-[#DA8642]/70 bg-[#DA8642]/10 text-[#333333] dark:border-[#DA8642] dark:bg-[#DA8642]/12 dark:text-white"
+        : tone === "matureViolence"
+          ? "border-[#B98A63]/70 bg-[#B98A63]/10 text-[#333333] dark:border-[#B98A63] dark:bg-[#B98A63]/12 dark:text-white"
+        : tone === "adult"
+          ? "border-[#B20047]/70 bg-[#B20047]/10 text-[#333333] dark:border-[#B20047] dark:bg-[#B20047]/12 dark:text-white"
+          : tone === "adultViolence"
+            ? "border-[#8F3E5F]/70 bg-[#8F3E5F]/10 text-[#333333] dark:border-[#8F3E5F] dark:bg-[#8F3E5F]/12 dark:text-white"
+          : "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white";
+  const indicatorClass =
+    tone === "general"
+      ? "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]"
+      : tone === "mature"
+        ? "border-[#DA8642] bg-[#DA8642]"
+        : tone === "matureViolence"
+          ? "border-[#B98A63] bg-[#B98A63]"
+        : tone === "adult"
+          ? "border-[#B20047] bg-[#B20047]"
+          : tone === "adultViolence"
+            ? "border-[#8F3E5F] bg-[#8F3E5F]"
+          : "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]";
+
   return (
     <button
       type="button"
@@ -524,21 +564,29 @@ function ChoiceCard(props: {
       disabled={props.disabled}
       className={`rounded-2xl border px-3.5 py-3 text-left transition-colors ${
         props.checked
-          ? "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white"
+          ? checkedClass
           : "border-[#c2c7bc] bg-[#f7f8f2]/88 text-[#333333]/85 dark:border-[#4a5360] dark:bg-[#1f252b]/65 dark:text-white/85"
       } ${props.disabled ? "opacity-60" : "hover:bg-white/80 dark:hover:bg-white/8"}`}
     >
       <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-3">
         <span
           aria-hidden="true"
-          className={`mt-0.5 h-4 w-4 shrink-0 border ${
+          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border ${
             props.type === "radio" ? "rounded-full" : "rounded-[0.25rem]"
           } ${
             props.checked
-              ? "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]"
+              ? indicatorClass
               : "border-[#7d8576] bg-transparent dark:border-[#697384]"
           }`}
-        />
+        >
+          {props.checked ? (
+            props.type === "checkbox" ? (
+              <Check size={11} className="text-white dark:text-[#14112C]" />
+            ) : (
+              <span className="h-2 w-2 rounded-full bg-white dark:bg-[#14112C]" />
+            )
+          ) : null}
+        </span>
         <span className="min-w-0 text-[13px] font-semibold leading-5">
           {props.label}
         </span>
@@ -710,4 +758,20 @@ function isRatingEnabled(mask: string, index: number) {
     return index === 0;
   }
   return mask[index] === "1";
+}
+
+function getRatingTone(index: number): ChoiceTone {
+  if (index === 0) {
+    return "general";
+  }
+  if (index === 1) {
+    return "mature";
+  }
+  if (index === 2) {
+    return "matureViolence";
+  }
+  if (index === 3) {
+    return "adult";
+  }
+  return "adultViolence";
 }

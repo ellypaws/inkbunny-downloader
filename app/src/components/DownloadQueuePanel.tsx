@@ -28,7 +28,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   });
 
   return (
-    <section className="relative rounded-toy-lg border border-[#bcc1b5]/90 bg-[#eff1ea]/92 p-8 shadow-pop backdrop-blur-2xl dark:border-[#4a5360]/90 dark:bg-[#252a31]/90 md:p-10">
+    <section className="relative rounded-toy-sm border border-[#bcc1b5]/90 bg-[#eff1ea]/92 p-8 shadow-pop backdrop-blur-2xl dark:border-[#4a5360]/90 dark:bg-[#252a31]/90 md:p-10">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="font-display text-4xl font-black text-[#4E9A06] dark:text-[#8AE234]">
@@ -100,7 +100,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
 
       <div className="mt-6">
         {props.queue.jobs.length === 0 ? (
-          <div className="rounded-toy border border-[#c2c7bc] bg-[#f7f8f2]/92 px-6 py-10 text-center font-bold text-[#555753] dark:border-[#4a5360] dark:bg-[#1f252b]/82 dark:text-white/70">
+          <div className="rounded-toy-sm border border-[#c2c7bc] bg-[#f7f8f2]/92 px-6 py-10 text-center font-bold text-[#555753] dark:border-[#4a5360] dark:bg-[#1f252b]/82 dark:text-white/70">
             No queued downloads yet.
           </div>
         ) : (
