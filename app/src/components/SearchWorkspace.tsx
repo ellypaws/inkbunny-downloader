@@ -47,11 +47,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
   );
 
   return (
-    <section className="relative overflow-hidden rounded-toy-lg bg-gray-50/40 backdrop-blur-xl dark:bg-[#2D2D44]/40">
+    <section className="relative overflow-hidden rounded-toy-lg bg-transparent backdrop-blur-xl">
       <div className="pointer-events-none absolute inset-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay bg-[radial-gradient(circle_at_top_right,rgba(115,210,22,0.8),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(255,183,178,0.8),transparent_22%)]" />
-      <div className="relative z-10 overflow-hidden rounded-toy-lg border border-white/40 bg-white/48 dark:border-white/8 dark:bg-[#18142E]/52">
-        <div className="border-b border-[#2D2D44]/10 px-5 py-4 dark:border-white/10 sm:px-6">
-          <h2 className="font-display text-3xl font-black text-[#2D2D44] dark:text-white sm:text-[2.1rem]">
+      <div className="relative z-10 overflow-hidden rounded-toy-lg border border-[#bcc1b5]/90 bg-[#eff1ea]/92 dark:border-[#4a5360]/90 dark:bg-[#252a31]/90">
+        <div className="border-b border-[#c2c7bc] px-5 py-4 dark:border-[#4a5360] sm:px-6">
+          <h2 className="font-display text-3xl font-black text-[#4E9A06] dark:text-[#8AE234] sm:text-[2.1rem]">
             Search
           </h2>
         </div>
@@ -86,7 +86,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     }
                   }}
                   placeholder="wolf synthwave -feral"
-                  className="w-full rounded-2xl border border-white/60 bg-white/85 px-4 py-3 text-[15px] text-[#2D2D44] shadow-inner outline-none focus:border-[#73D216] dark:border-white/10 dark:bg-[#1A1733]/88 dark:text-white"
+                  className="w-full rounded-2xl border border-[#bcc1b5] bg-[#f8f8f4] px-4 py-3 text-[15px] text-[#333333] shadow-inner outline-none focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white"
                 />
                 <KeywordSuggestionList
                   open={
@@ -116,7 +116,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                 )}
                 Search
               </button>
-              <div className="text-sm leading-6 text-[#2D2D44]/70 dark:text-white/70 sm:col-span-2">
+              <div className="text-sm leading-6 text-[#555753] dark:text-white/70 sm:col-span-2">
                 Separate words with spaces. Use{" "}
                 <span className="font-black">-</span> to exclude a keyword, for
                 example <span className="font-black">leopard -snow</span>. Avoid
@@ -282,7 +282,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       timeRangeDays: Number(event.target.value),
                     }))
                   }
-                  className="w-full max-w-xs rounded-xl border border-[#2D2D44]/15 bg-white/85 px-4 py-2.5 text-sm text-[#2D2D44] outline-none focus:border-[#73D216] dark:border-white/10 dark:bg-[#1A1733]/88 dark:text-white"
+                  className="w-full max-w-xs rounded-xl border border-[#bcc1b5] bg-[#f8f8f4] px-4 py-2.5 text-sm text-[#333333] outline-none focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white"
                 >
                   {TIME_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -309,7 +309,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
               </div>
             </div>
 
-            <div className="grid gap-4 xl:border-l xl:border-[#2D2D44]/10 xl:pl-6 xl:dark:border-white/10">
+            <div className="grid gap-4 xl:border-l xl:border-[#c2c7bc] xl:pl-6 xl:dark:border-[#4a5360]">
               <FieldLabel title="Submission type" />
               <div className="space-y-3">
                 <ChoiceCard
@@ -373,7 +373,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       orderBy: event.target.value,
                     }))
                   }
-                  className="mt-2 w-full rounded-xl border border-[#2D2D44]/15 bg-white/85 px-4 py-2.5 text-sm text-[#2D2D44] outline-none focus:border-[#73D216] dark:border-white/10 dark:bg-[#1A1733]/88 dark:text-white"
+                  className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4] px-4 py-2.5 text-sm text-[#333333] outline-none focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white"
                 >
                   {ORDER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -397,7 +397,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       perPage: Number(event.target.value) || 24,
                     }))
                   }
-                  className="mt-2 w-full rounded-xl border border-[#2D2D44]/15 bg-white/85 px-4 py-2.5 text-sm text-[#2D2D44] outline-none focus:border-[#73D216] dark:border-white/10 dark:bg-[#1A1733]/88 dark:text-white"
+                  className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4] px-4 py-2.5 text-sm text-[#333333] outline-none focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white"
                 />
               </label>
               <label className="block">
@@ -414,7 +414,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       maxDownloads: Number(event.target.value) || 0,
                     }))
                   }
-                  className="mt-2 w-full rounded-xl border border-[#2D2D44]/15 bg-white/85 px-4 py-2.5 text-sm text-[#2D2D44] outline-none focus:border-[#73D216] dark:border-white/10 dark:bg-[#1A1733]/88 dark:text-white"
+                  className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4] px-4 py-2.5 text-sm text-[#333333] outline-none focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white"
                 />
               </label>
             </div>
@@ -437,7 +437,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
       </div>
 
       {props.error ? (
-        <div className="relative z-10 mt-5 rounded-toy border border-[#FFB7B2]/70 bg-[#FFB7B2]/20 px-5 py-4 text-sm font-bold text-[#CC5E00]">
+        <div className="relative z-10 mt-5 rounded-toy border border-[#dba37d] bg-[#f4d8c6] px-5 py-4 text-sm font-bold text-[#CC5E00] dark:border-[#7b5639] dark:bg-[#4b3226] dark:text-[#ffb07c]">
           {props.error}
         </div>
       ) : null}
@@ -448,11 +448,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
 function FieldLabel(props: { title: string; subtitle?: string }) {
   return (
     <div>
-      <div className="text-sm font-semibold text-[#2D2D44] dark:text-white">
+      <div className="text-sm font-semibold text-[#333333] dark:text-white">
         {props.title}:
       </div>
       {props.subtitle ? (
-        <div className="mt-1 text-xs font-medium text-[#2D2D44]/45 dark:text-white/45">
+        <div className="mt-1 text-xs font-medium text-[#555753] dark:text-white/45">
           {props.subtitle}
         </div>
       ) : null}
@@ -461,7 +461,7 @@ function FieldLabel(props: { title: string; subtitle?: string }) {
 }
 
 function SectionDivider() {
-  return <div className="border-t border-[#2D2D44]/10 dark:border-white/10" />;
+  return <div className="border-t border-[#c2c7bc] dark:border-[#4a5360]" />;
 }
 
 function ChoiceCard(props: {
@@ -476,8 +476,8 @@ function ChoiceCard(props: {
       onClick={props.onSelect}
       className={`rounded-2xl border px-3.5 py-3 text-left transition-colors ${
         props.checked
-          ? "border-[#FF34A5]/80 bg-[#FF34A5]/10 text-[#2D2D44] dark:text-white"
-          : "border-[#2D2D44]/10 bg-white/55 text-[#2D2D44]/85 dark:border-white/10 dark:bg-[#1A1733]/40 dark:text-white/85"
+          ? "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white"
+          : "border-[#c2c7bc] bg-[#f7f8f2]/88 text-[#333333]/85 dark:border-[#4a5360] dark:bg-[#1f252b]/65 dark:text-white/85"
       }`}
     >
       <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-3">
@@ -485,7 +485,7 @@ function ChoiceCard(props: {
           aria-hidden="true"
           className={`mt-0.5 h-4 w-4 shrink-0 border ${
             props.type === "radio" ? "rounded-full" : "rounded-[0.25rem]"
-          } ${props.checked ? "border-[#FF34A5] bg-[#FF34A5]" : "border-[#2D2D44]/30 bg-transparent dark:border-white/35"}`}
+          } ${props.checked ? "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]" : "border-[#7d8576] bg-transparent dark:border-[#697384]"}`}
         />
         <span className="min-w-0 text-[13px] font-semibold leading-5">
           {props.label}
@@ -500,8 +500,8 @@ function RatingBadge(props: { active: boolean; label: string }) {
     <span
       className={`rounded-full border px-3 py-1.5 text-xs font-semibold tracking-[0.04em] ${
         props.active
-          ? "border-[#2A7FA6] bg-[#2A7FA6]/8 text-[#2A7FA6] dark:border-[#89CFF0] dark:bg-[#89CFF0]/10 dark:text-[#89CFF0]"
-          : "border-[#2D2D44]/18 bg-white/55 text-[#2D2D44]/55 dark:border-white/12 dark:bg-[#1A1733]/40 dark:text-white/45"
+          ? "border-[#76B900] bg-[#76B900]/10 text-[#4E9A06] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-[#8AE234]"
+          : "border-[#c2c7bc] bg-[#f7f8f2]/88 text-[#555753] dark:border-[#4a5360] dark:bg-[#1f252b]/65 dark:text-white/45"
       }`}
     >
       {props.label}
@@ -527,12 +527,12 @@ type SuggestionFieldBlockProps = {
 function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#2D2D44] dark:text-white">
+      <label className="block text-sm font-semibold text-[#333333] dark:text-white">
         {props.title}:
       </label>
-      <div className="mt-1 text-sm leading-5 text-[#2D2D44]/65 dark:text-white/65">
+      <div className="mt-1 text-sm leading-5 text-[#555753] dark:text-white/65">
         {props.subtitle}{" "}
-        <span className="text-[#2D2D44]/45 dark:text-white/45">
+        <span className="text-[#555753] dark:text-white/45">
           ({props.optionalText})
         </span>
       </div>
@@ -543,7 +543,7 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
           onBlur={props.onBlur}
           onChange={(event) => props.onChange(event.target.value)}
           placeholder="username"
-          className="w-full rounded-xl border border-[#2D2D44]/15 bg-white/85 px-4 py-3 text-[15px] text-[#2D2D44] outline-none focus:border-[#73D216] dark:border-white/10 dark:bg-[#1A1733]/88 dark:text-white"
+          className="w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4] px-4 py-3 text-[15px] text-[#333333] outline-none focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white"
         />
         <UsernameSuggestionList
           open={props.focused && props.suggestions.length > 0}
@@ -560,12 +560,12 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
           className={`font-semibold underline underline-offset-2 ${
             props.allowUseMyName
               ? "text-[#3465A4] hover:text-[#204A87] dark:text-[#89CFF0] dark:hover:text-white"
-              : "cursor-not-allowed text-[#2D2D44]/35 no-underline dark:text-white/30"
+              : "cursor-not-allowed text-[#555753]/35 no-underline dark:text-white/30"
           }`}
         >
           Use my name
         </button>
-        <span className="text-[#2D2D44]/65 dark:text-white/65">
+        <span className="text-[#555753] dark:text-white/65">
           ({props.useMyNameLabel})
         </span>
       </div>
@@ -583,7 +583,7 @@ function KeywordSuggestionList(props: {
   }
 
   return (
-    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-[#2D2D44]/12 bg-white/96 shadow-[0_18px_40px_rgba(0,0,0,0.18)] dark:border-white/10 dark:bg-[#1A1733]/96">
+    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-[#bcc1b5] bg-[#f8f8f4]/98 shadow-[0_18px_40px_rgba(0,0,0,0.18)] dark:border-[#4a5360] dark:bg-[#1f252b]/98">
       {props.suggestions.slice(0, 8).map((suggestion) => (
         <button
           key={suggestion}
@@ -591,7 +591,7 @@ function KeywordSuggestionList(props: {
             event.preventDefault();
             props.onPick(suggestion);
           }}
-          className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-[#2D2D44] hover:bg-[#89CFF0]/16 dark:text-white dark:hover:bg-white/8"
+          className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-[#333333] hover:bg-[#dce8cf] dark:text-white dark:hover:bg-white/8"
         >
           <span className="truncate">{suggestion}</span>
           <span className="ml-3 text-xs font-black uppercase tracking-[0.16em] text-[#3465A4] dark:text-[#89CFF0]">
@@ -613,7 +613,7 @@ function UsernameSuggestionList(props: {
   }
 
   return (
-    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-[#2D2D44]/12 bg-white/96 shadow-[0_18px_40px_rgba(0,0,0,0.18)] dark:border-white/10 dark:bg-[#1A1733]/96">
+    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-[#bcc1b5] bg-[#f8f8f4]/98 shadow-[0_18px_40px_rgba(0,0,0,0.18)] dark:border-[#4a5360] dark:bg-[#1f252b]/98">
       {props.suggestions.slice(0, 8).map((suggestion) => (
         <button
           key={`${suggestion.userId}:${suggestion.username}`}
@@ -621,7 +621,7 @@ function UsernameSuggestionList(props: {
             event.preventDefault();
             props.onPick(suggestion);
           }}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#89CFF0]/16 dark:hover:bg-white/8"
+          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#dce8cf] dark:hover:bg-white/8"
         >
           <img
             src={suggestion.avatarUrl || DEFAULT_AVATAR_URL}
@@ -632,10 +632,10 @@ function UsernameSuggestionList(props: {
             className="h-10 w-10 shrink-0 rounded-full border border-white/70 bg-white object-cover"
           />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-black text-[#2D2D44] dark:text-white">
+            <div className="truncate text-sm font-black text-[#333333] dark:text-white">
               {suggestion.username || suggestion.value}
             </div>
-            <div className="truncate text-xs font-semibold text-[#2D2D44]/60 dark:text-white/60">
+            <div className="truncate text-xs font-semibold text-[#555753] dark:text-white/60">
               {suggestion.value}
             </div>
           </div>

@@ -52,7 +52,9 @@ export default function App() {
   const [queueMessage, setQueueMessage] = useState("");
 
   const lagTextRef = useRef<HTMLHeadingElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const requestRef = useRef<number | null>(null);
+  const shouldScrollToResultsRef = useRef(false);
   const currentY = useRef(0);
 
   useEffect(() => {
@@ -122,6 +124,22 @@ export default function App() {
       }
     };
   }, [settings.motionEnabled]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
+  }, [settings.darkMode]);
+
+  useEffect(() => {
+    if (!shouldScrollToResultsRef.current || !resultsRef.current) {
+      return;
+    }
+
+    shouldScrollToResultsRef.current = false;
+    resultsRef.current.scrollIntoView({
+      behavior: settings.motionEnabled ? "smooth" : "auto",
+      block: "start",
+    });
+  }, [results.length, searchResponse, settings.motionEnabled]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -236,6 +254,9 @@ export default function App() {
           : await backend.loadMoreResults(searchResponse?.searchId ?? "", page);
       setSession(response.session);
       setSettings(response.session.settings);
+      if (page === 1) {
+        shouldScrollToResultsRef.current = true;
+      }
       startTransition(() => {
         setSearchResponse(response);
         if (page === 1) {
@@ -315,7 +336,7 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-300 mobile-zoom ${settings.darkMode ? "dark" : ""} ${
+      className={`theme-switch min-h-screen transition-colors duration-300 mobile-zoom ${settings.darkMode ? "dark theme-dark" : "theme-light"} ${
         !settings.motionEnabled ? "motion-reduced" : ""
       }`}
     >
@@ -325,7 +346,7 @@ export default function App() {
         motionEnabled={settings.motionEnabled}
       />
 
-      <div className="text-[#2D2D44] dark:text-[#E0BBE4] min-h-screen overflow-x-hidden font-sans selection:bg-[#FFB7B2] selection:text-white transition-colors duration-300">
+      <div className="min-h-screen overflow-x-hidden font-sans text-[var(--theme-text)] selection:bg-[#76B900] selection:text-white transition-colors duration-300">
         <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none select-none z-0">
           <h1
             ref={lagTextRef}
@@ -407,33 +428,37 @@ export default function App() {
             />
           </div>
 
-          <ResultsShowcase
-            searchResponse={searchResponse}
-            results={results}
-            activeSubmissionId={activeSubmissionId}
-            selectedSubmissionIds={selectedSubmissionIds}
-            allSelected={allResultsSelected}
-            loading={searchLoading}
-            onSelectActive={setActiveSubmissionId}
-            onToggleSelectAll={handleToggleSelectAll}
-            onToggleSelection={(submissionId) =>
-              setSelectedSubmissionIds((previous) =>
-                previous.includes(submissionId)
-                  ? previous.filter((value) => value !== submissionId)
-                  : [...previous, submissionId],
-              )
-            }
-            onQueueDownloads={() => void handleQueueDownloads()}
-            onLoadMore={() =>
-              void handleSearch((searchResponse?.page ?? 1) + 1)
-            }
-          />
+          <div ref={resultsRef}>
+            <ResultsShowcase
+              searchResponse={searchResponse}
+              results={results}
+              activeSubmissionId={activeSubmissionId}
+              selectedSubmissionIds={selectedSubmissionIds}
+              allSelected={allResultsSelected}
+              loading={searchLoading}
+              onSelectActive={setActiveSubmissionId}
+              onToggleSelectAll={handleToggleSelectAll}
+              onToggleSelection={(submissionId) =>
+                setSelectedSubmissionIds((previous) =>
+                  previous.includes(submissionId)
+                    ? previous.filter((value) => value !== submissionId)
+                    : [...previous, submissionId],
+                )
+              }
+              onQueueDownloads={() => void handleQueueDownloads()}
+              onLoadMore={() =>
+                void handleSearch((searchResponse?.page ?? 1) + 1)
+              }
+            />
+          </div>
 
           <DownloadQueuePanel
             queue={queue}
             message={queueMessage}
             selectedCount={selectedSubmissionIds.length}
-            canQueueDownloads={Boolean(searchResponse) && selectedSubmissionIds.length > 0}
+            canQueueDownloads={
+              Boolean(searchResponse) && selectedSubmissionIds.length > 0
+            }
             allSelected={allResultsSelected}
             onQueueDownloads={() => void handleQueueDownloads()}
             onToggleSelectAll={handleToggleSelectAll}

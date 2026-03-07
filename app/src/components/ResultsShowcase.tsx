@@ -105,7 +105,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     <section className="relative mt-4">
       <div className="flex items-center gap-3 mb-8 justify-center">
         <Star className="text-[#FFB7B2] fill-current" size={36} />
-        <h3 className="text-4xl font-display font-bold text-[#2D2D44] dark:text-white">
+        <h3 className="text-4xl font-display font-bold text-[#4E9A06] dark:text-[#8AE234]">
           Results
         </h3>
       </div>
@@ -115,20 +115,20 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       </h1>
 
       <div className="relative z-10 flex items-center justify-between mb-5 px-2 gap-4 flex-wrap">
-        <div className="text-sm font-bold text-[#2D2D44]/75 dark:text-white/75 mt-6">
+        <div className="mt-6 text-sm font-bold text-[#555753] dark:text-white/75">
           {props.searchResponse
             ? `${props.results.length} loaded of ${props.searchResponse.resultsCount} total`
             : "Run a search to view matching submissions."}
         </div>
         <div className="flex items-center gap-3">
-          <div className="rounded-full bg-white/70 dark:bg-[#1A1733]/80 px-4 py-2 text-sm font-bold text-[#2D2D44] dark:text-white">
+          <div className="rounded-full border border-[#c2c7bc] bg-[#f7f8f2]/92 px-4 py-2 text-sm font-bold text-[#333333] dark:border-[#4a5360] dark:bg-[#1f252b]/90 dark:text-white">
             {selectedCount} selected
           </div>
           <button
             type="button"
             onClick={props.onToggleSelectAll}
             disabled={props.results.length === 0}
-            className="px-5 py-3 rounded-2xl border border-[#2D2D44]/15 bg-white/80 text-sm font-black text-[#2D2D44] shadow-sm transition-all hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white"
+            className="rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/92 px-5 py-3 text-sm font-black text-[#333333] shadow-sm transition-all hover:bg-[#e8eddc] disabled:opacity-50 dark:border-[#4a5360] dark:bg-[#1f252b]/90 dark:text-white dark:hover:bg-[#2f353a]"
           >
             {props.allSelected ? "Deselect All" : "Select All"}
           </button>
@@ -143,11 +143,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row h-[1020px] md:h-[600px] w-full rounded-toy-lg overflow-hidden shadow-pop bg-white/80 dark:bg-gray-800/90 border-2 border-white/70 dark:border-gray-700/70">
+      <div className="flex flex-col md:flex-row h-[1020px] md:h-[600px] w-full rounded-toy-lg overflow-hidden border-2 border-[#bcc1b5]/90 bg-[#eff1ea]/92 shadow-pop dark:border-[#4a5360]/90 dark:bg-[#252a31]/90">
         {props.results.length === 0 ? (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-white/35 dark:bg-[#1A1733]/55 text-center px-6">
+          <div className="flex h-full w-full flex-col items-center justify-center bg-[#f7f8f2]/85 px-6 text-center dark:bg-[#1f252b]/85">
             <SearchIcon className="text-[#89CFF0]" size={42} />
-            <p className="mt-4 max-w-md text-lg font-bold text-[#2D2D44] dark:text-white">
+            <p className="mt-4 max-w-md text-lg font-bold text-[#333333] dark:text-white">
               Search results appear here.
             </p>
           </div>
@@ -232,10 +232,23 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       </div>
 
       {props.results.length > 0 ? (
-        <div className="mt-6 rounded-toy-lg border-2 border-[#89CFF0]/30 bg-white/50 p-5 shadow-pop backdrop-blur-2xl dark:bg-gray-800/50">
+        <div className="mt-6 rounded-toy-lg border border-[#bcc1b5]/90 bg-[#eff1ea]/90 p-5 shadow-pop backdrop-blur-2xl dark:border-[#4a5360]/90 dark:bg-[#252a31]/88">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/88 px-4 py-3 dark:border-[#4a5360] dark:bg-[#1f252b]/78">
+            <div className="text-sm font-bold text-[#555753] dark:text-white/75">
+              Grid selection: {selectedCount} chosen
+            </div>
+            <button
+              type="button"
+              onClick={props.onToggleSelectAll}
+              disabled={props.results.length === 0}
+              className="rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/92 px-4 py-2.5 text-sm font-black text-[#333333] shadow-sm transition-all hover:bg-[#e8eddc] disabled:opacity-50 dark:border-[#4a5360] dark:bg-[#1f252b]/90 dark:text-white dark:hover:bg-[#2f353a]"
+            >
+              {props.allSelected ? "Deselect All" : "Select All"}
+            </button>
+          </div>
           <div
             ref={scrollRef}
-            className="mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border border-white/40 bg-white/55 p-2.5 dark:border-white/8 dark:bg-[#151129]/55"
+            className="mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border border-[#c2c7bc] bg-[#f7f8f2]/88 p-2.5 dark:border-[#4a5360] dark:bg-[#1f252b]/80"
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {props.results.map((item) => {
@@ -251,11 +264,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     onClick={() => props.onSelectActive(item.submissionId)}
                     className={`cursor-pointer overflow-hidden rounded-[1.35rem] border transition-colors ${
                       isActive
-                        ? "border-[#73D216]/80 bg-[#73D216]/10"
-                        : "border-[#2D2D44]/10 bg-white/72 hover:bg-[#89CFF0]/10 dark:border-white/10 dark:bg-[#1A1733]/72 dark:hover:bg-white/8"
+                        ? "border-[#76B900]/80 bg-[#76B900]/10"
+                        : "border-[#c2c7bc] bg-[#f7f8f2]/92 hover:bg-[#dce8cf] dark:border-[#4a5360] dark:bg-[#1f252b]/72 dark:hover:bg-white/8"
                     }`}
                   >
-                    <div className="relative aspect-[5/4] overflow-hidden bg-[#2D2D44]/10 dark:bg-white/10">
+                    <div className="relative aspect-[5/4] overflow-hidden bg-[#cdd2c7] dark:bg-white/10">
                       <SubmissionPreviewImage
                         submission={item}
                         alt={item.title}
@@ -264,7 +277,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[#14112C]/75 via-[#14112C]/20 to-transparent p-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-[#2D2D44]">
+                          <span className="rounded-full bg-[#f7f8f2]/94 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-[#333333]">
                             {item.typeName || "Submission"}
                           </span>
                           <span className="rounded-full border border-white/45 bg-[#14112C]/40 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/92 backdrop-blur-sm">
@@ -276,16 +289,16 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
                     <div className="space-y-2.5 p-3">
                       <div className="min-w-0">
-                        <div className="truncate text-[13px] font-black text-[#2D2D44] dark:text-white">
+                        <div className="truncate text-[13px] font-black text-[#333333] dark:text-white">
                           {item.title}
                         </div>
-                        <div className="mt-1 truncate text-[11px] font-bold text-[#2D2D44]/70 dark:text-white/70">
+                        <div className="mt-1 truncate text-[11px] font-bold text-[#555753] dark:text-white/70">
                           @{item.username} · {item.ratingName || "Unrated"}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2D2D44]/55 dark:text-white/55">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#555753] dark:text-white/55">
                           {item.submissionId}
                         </div>
                         <button
@@ -443,16 +456,16 @@ function getPanelItems(results: SubmissionCard[], startIndex: number) {
     return results;
   }
 
-  const safeStart = Math.max(0, Math.min(startIndex, results.length - PANEL_WINDOW_SIZE))
-  return results.slice(safeStart, safeStart + PANEL_WINDOW_SIZE)
+  const safeStart = Math.max(
+    0,
+    Math.min(startIndex, results.length - PANEL_WINDOW_SIZE),
+  );
+  return results.slice(safeStart, safeStart + PANEL_WINDOW_SIZE);
 }
 
 const PANEL_WINDOW_SIZE = 5;
 
 function getPanelWindowStart(resultCount: number, activeIndex: number) {
   const safeIndex = activeIndex >= 0 ? activeIndex : 0;
-  return Math.max(
-    0,
-    Math.min(safeIndex - 2, resultCount - PANEL_WINDOW_SIZE),
-  );
+  return Math.max(0, Math.min(safeIndex - 2, resultCount - PANEL_WINDOW_SIZE));
 }
