@@ -23,15 +23,9 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/ellypaws/inkbunny"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
-)
-
-const (
-	Keywords int = 1 << iota
-	Title
-	Description
-	MD5
 )
 
 func main() {
@@ -39,6 +33,7 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	log.SetReportTimestamp(true)
 	log.SetColorProfile(termenv.TrueColor)
+	config := flags.Parse()
 	var (
 		request      inkbunny.SubmissionSearchRequest
 		searchIn     []int
@@ -49,7 +44,7 @@ func main() {
 		keywordAutocompletes []inkbunny.KeywordAutocomplete
 
 		toDownload      int
-		downloadCaption bool = true
+		downloadCaption bool = false
 		downloaded      atomic.Int64
 		search          inkbunny.SubmissionSearchResponse
 	)
@@ -101,8 +96,13 @@ Login:
 		}, username
 	}
 
+	var form *huh.Form
 Search:
-	form := huh.NewForm(
+	if config.NoTUI {
+		config.ApplyTo(&request, &searchIn, &favBy, &maxDownloads, nil, &downloadCaption)
+		goto Process
+	}
+	form = huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().Title("Logged in as").Description(user.Username),
 			huh.NewNote().Title("Ratings").Description(user.Ratings.String()),
@@ -154,10 +154,10 @@ Search:
 			huh.NewMultiSelect[int]().
 				Title("Search in").
 				Options(
-					huh.NewOption("Keywords", Keywords).Selected(true),
-					huh.NewOption("Title", Title).Selected(true),
-					huh.NewOption("Description or Story", Description),
-					huh.NewOption("MD5 Hash", MD5),
+					huh.NewOption("Keywords", flags.Keywords).Selected(true),
+					huh.NewOption("Title", flags.Title).Selected(true),
+					huh.NewOption("Description or Story", flags.Description),
+					huh.NewOption("MD5 Hash", flags.MD5),
 				).Value(&searchIn).
 				Validate(minimum[int](1)),
 
@@ -249,6 +249,7 @@ Search:
 		log.Fatal(err)
 	}
 
+Process:
 	request.Keywords = nil
 	request.Title = nil
 	request.Description = nil
@@ -256,13 +257,13 @@ Search:
 
 	for _, v := range searchIn {
 		switch v {
-		case Keywords:
+		case flags.Keywords:
 			request.Keywords = &inkbunny.Yes
-		case Title:
+		case flags.Title:
 			request.Title = &inkbunny.Yes
-		case Description:
+		case flags.Description:
 			request.Description = &inkbunny.Yes
-		case MD5:
+		case flags.MD5:
 			request.MD5 = &inkbunny.Yes
 		}
 	}
@@ -431,6 +432,10 @@ Search:
 	}
 
 	log.Infof("Downloaded %d files", downloaded.Load())
+
+	if config.NoTUI {
+		return
+	}
 
 	var exit bool
 	huh.NewForm(huh.NewGroup(huh.NewConfirm().

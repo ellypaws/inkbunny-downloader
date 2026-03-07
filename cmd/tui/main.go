@@ -20,16 +20,10 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/ellypaws/inkbunny"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/tui"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
-)
-
-const (
-	Keywords int = 1 << iota
-	Title
-	Description
-	MD5
 )
 
 func main() {
@@ -37,6 +31,7 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	log.SetReportTimestamp(true)
 	log.SetColorProfile(termenv.TrueColor)
+	config := flags.Parse()
 	var (
 		request      inkbunny.SubmissionSearchRequest
 		searchIn     []int
@@ -45,7 +40,7 @@ func main() {
 		maxActiveStr string
 
 		toDownload      int
-		downloadCaption bool = true
+		downloadCaption bool = false
 		search          inkbunny.SubmissionSearchResponse
 	)
 
@@ -83,15 +78,25 @@ Login:
 	usernameCache := flight.NewCache(user.SearchMembers)
 	model := tui.NewModel(user, user.Username, new(flight.NewCache(keywordCache(user.Ratings))), &usernameCache)
 
+	var (
+		p          *tea.Program
+		rawModel   tea.Model
+		finalModel *tui.Model
+		ok         bool
+	)
 Search:
+	if config.NoTUI {
+		config.ApplyTo(&request, &searchIn, &favBy, &maxDownloads, &maxActiveStr, &downloadCaption)
+		goto Process
+	}
 
-	p := tea.NewProgram(model)
-	rawModel, err := p.Run()
+	p = tea.NewProgram(model)
+	rawModel, err = p.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	finalModel, ok := rawModel.(*tui.Model)
+	finalModel, ok = rawModel.(*tui.Model)
 	if !ok {
 		log.Fatal("Could not cast model")
 	}
@@ -120,18 +125,19 @@ Search:
 
 	searchIn = nil
 	if finalModel.SearchInKeywords {
-		searchIn = append(searchIn, Keywords)
+		searchIn = append(searchIn, flags.Keywords)
 	}
 	if finalModel.SearchInTitle {
-		searchIn = append(searchIn, Title)
+		searchIn = append(searchIn, flags.Title)
 	}
 	if finalModel.SearchInDesc {
-		searchIn = append(searchIn, Description)
+		searchIn = append(searchIn, flags.Description)
 	}
 	if finalModel.SearchInMD5 {
-		searchIn = append(searchIn, MD5)
+		searchIn = append(searchIn, flags.MD5)
 	}
 
+Process:
 	request.Keywords = nil
 	request.Title = nil
 	request.Description = nil
@@ -139,13 +145,13 @@ Search:
 
 	for _, v := range searchIn {
 		switch v {
-		case Keywords:
+		case flags.Keywords:
 			request.Keywords = &inkbunny.Yes
-		case Title:
+		case flags.Title:
 			request.Title = &inkbunny.Yes
-		case Description:
+		case flags.Description:
 			request.Description = &inkbunny.Yes
-		case MD5:
+		case flags.MD5:
 			request.MD5 = &inkbunny.Yes
 		}
 	}
@@ -281,6 +287,10 @@ Search:
 		if _, err := p.Run(); err != nil {
 			log.Error("Failed to run downloader TUI", "err", err)
 		}
+	}
+
+	if config.NoTUI {
+		return
 	}
 
 	var exit bool
