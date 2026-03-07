@@ -64,9 +64,6 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
             <h2 className="font-display text-3xl font-black text-[#4E9A06] dark:text-[#8AE234] sm:text-[2.1rem]">
               Search
             </h2>
-            <p className="mt-1 text-sm font-semibold text-[#555753] dark:text-white/60">
-              Click to {props.collapsed ? "show" : "hide"} filters
-            </p>
           </div>
           <span
             className={`flex h-11 w-11 items-center justify-center rounded-full border border-[#c2c7bc] bg-[#f7f8f2]/92 text-[#3465A4] shadow-sm backdrop-blur-md transition-all duration-300 group-hover:scale-105 group-hover:bg-white dark:border-[#4a5360] dark:bg-[#1f252b]/88 dark:text-[#89CFF0] ${
@@ -344,11 +341,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                           />
                         ))}
                       </div>
-                      <div className="text-sm font-semibold text-[#555753] dark:text-white/60">
-                        {props.ratingUpdating
-                          ? "Updating ratings..."
-                          : "These checkboxes update the active Inkbunny session."}
-                      </div>
+                      {props.ratingUpdating ? (
+                        <div className="text-sm font-semibold text-[#555753] dark:text-white/60">
+                          Updating ratings...
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>

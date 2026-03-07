@@ -213,6 +213,13 @@ func (a *App) CancelDownload(jobID string) QueueSnapshot {
 	return a.downloadManager.Cancel(jobID)
 }
 
+func (a *App) ClearQueue() QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.Clear()
+}
+
 func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, options DownloadOptions) (QueueSnapshot, error) {
 	user, err := a.ensureSearchSession()
 	if err != nil {

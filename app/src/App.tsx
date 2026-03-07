@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountSidebar } from "./components/AccountSidebar";
 import { LoginModal } from "./components/LoginModal";
@@ -51,6 +51,8 @@ export default function App() {
     UsernameSuggestion[]
   >([]);
   const [queue, setQueue] = useState<QueueSnapshot>(EMPTY_QUEUE);
+  const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] =
+    useState<string[]>([]);
   const [queueMessage, setQueueMessage] = useState("");
 
   const lagTextRef = useRef<HTMLHeadingElement | null>(null);
@@ -58,6 +60,14 @@ export default function App() {
   const requestRef = useRef<number | null>(null);
   const shouldScrollToResultsRef = useRef(false);
   const currentY = useRef(0);
+  const downloadedSubmissionIds = useMemo(
+    () => getDownloadedSubmissionIds(queue),
+    [queue],
+  );
+  const unavailableSubmissionIds = useMemo(
+    () => getUnavailableSubmissionIds(queue, pendingDownloadSubmissionIds),
+    [pendingDownloadSubmissionIds, queue],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -142,6 +152,15 @@ export default function App() {
       block: "start",
     });
   }, [results.length, searchResponse, settings.motionEnabled]);
+
+  useEffect(() => {
+    if (downloadedSubmissionIds.size === 0) {
+      return;
+    }
+    setSelectedSubmissionIds((previous) =>
+      previous.filter((submissionId) => !downloadedSubmissionIds.has(submissionId)),
+    );
+  }, [downloadedSubmissionIds]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -264,7 +283,9 @@ export default function App() {
         if (page === 1) {
           setResults(response.results);
           setSelectedSubmissionIds(
-            response.results.map((item) => item.submissionId),
+            response.results
+              .map((item) => item.submissionId)
+              .filter((submissionId) => !downloadedSubmissionIds.has(submissionId)),
           );
           setActiveSubmissionId(response.results[0]?.submissionId ?? "");
         } else {
@@ -273,6 +294,7 @@ export default function App() {
             ...previous,
             ...response.results
               .map((item) => item.submissionId)
+              .filter((submissionId) => !downloadedSubmissionIds.has(submissionId))
               .filter((id) => !previous.includes(id)),
           ]);
           if (!activeSubmissionId && response.results[0]) {
@@ -295,12 +317,24 @@ export default function App() {
     if (!searchResponse || submissionIds.length === 0) {
       return;
     }
+    const eligibleSubmissionIds = submissionIds.filter(
+      (submissionId) => !unavailableSubmissionIds.has(submissionId),
+    );
+    if (eligibleSubmissionIds.length === 0) {
+      setQueueMessage(
+        "Those submissions are already downloading or downloaded.",
+      );
+      return;
+    }
     setQueueMessage("");
+    setPendingDownloadSubmissionIds((previous) =>
+      mergeSubmissionIds(previous, eligibleSubmissionIds),
+    );
     try {
       const snapshot = await backend.enqueueDownloads(
         searchResponse.searchId,
         {
-          submissions: submissionIds.map((submissionId) => ({
+          submissions: eligibleSubmissionIds.map((submissionId) => ({
             submissionId,
           })),
         },
@@ -312,11 +346,17 @@ export default function App() {
       );
       setQueue(snapshot);
       setQueueMessage(
-        `Queued ${submissionIds.length} submission${submissionIds.length === 1 ? "" : "s"}.`,
+        `Queued ${eligibleSubmissionIds.length} submission${eligibleSubmissionIds.length === 1 ? "" : "s"}.`,
       );
     } catch (error) {
       setQueueMessage(
         error instanceof Error ? error.message : "Failed to queue downloads.",
+      );
+    } finally {
+      setPendingDownloadSubmissionIds((previous) =>
+        previous.filter(
+          (submissionId) => !eligibleSubmissionIds.includes(submissionId),
+        ),
       );
     }
   }
@@ -352,18 +392,23 @@ export default function App() {
     }
 
     const resultIds = results.map((item) => item.submissionId);
+    const selectableResultIds = resultIds.filter(
+      (submissionId) => !downloadedSubmissionIds.has(submissionId),
+    );
     const allSelected =
-      resultIds.length > 0 &&
-      resultIds.every((submissionId) =>
+      selectableResultIds.length > 0 &&
+      selectableResultIds.every((submissionId) =>
         selectedSubmissionIds.includes(submissionId),
       );
 
-    setSelectedSubmissionIds(allSelected ? [] : resultIds);
+    setSelectedSubmissionIds(allSelected ? [] : selectableResultIds);
   }
 
   const allResultsSelected =
-    results.length > 0 &&
-    results.every((item) => selectedSubmissionIds.includes(item.submissionId));
+    results.some((item) => !downloadedSubmissionIds.has(item.submissionId)) &&
+    results
+      .filter((item) => !downloadedSubmissionIds.has(item.submissionId))
+      .every((item) => selectedSubmissionIds.includes(item.submissionId));
 
   return (
     <div
@@ -448,6 +493,7 @@ export default function App() {
                   session={session}
                   settings={settings}
                   searchParams={searchParams}
+                  onLogout={() => void handleLogout()}
                   onPickDirectory={() =>
                     void backend
                       .pickDownloadDirectory()
@@ -483,6 +529,8 @@ export default function App() {
               selectedSubmissionIds={selectedSubmissionIds}
               allSelected={allResultsSelected}
               loading={searchLoading}
+              queue={queue}
+              pendingDownloadSubmissionIds={pendingDownloadSubmissionIds}
               onSelectActive={setActiveSubmissionId}
               onToggleSelectAll={handleToggleSelectAll}
               onToggleSelection={(submissionId) =>
@@ -518,6 +566,22 @@ export default function App() {
                     error instanceof Error
                       ? error.message
                       : "Could not open the download folder.",
+                    );
+                });
+            }}
+            onClearQueue={() => {
+              backend
+                .clearQueue()
+                .then((snapshot) => {
+                  setQueue(snapshot);
+                  setPendingDownloadSubmissionIds([]);
+                  setQueueMessage("Queue cleared.");
+                })
+                .catch((error: unknown) => {
+                  setQueueMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not clear the queue.",
                   );
                 });
             }}
@@ -558,4 +622,57 @@ function toggleRatingMask(mask: string, index: number) {
 function normalizeRatingsMask(mask: string) {
   const base = mask.padEnd(5, "0").slice(0, 5);
   return base.includes("1") ? base : "10000";
+}
+
+function mergeSubmissionIds(
+  existing: string[],
+  next: string[],
+) {
+  return [...new Set([...existing, ...next])];
+}
+
+function getDownloadedSubmissionIds(queue: QueueSnapshot) {
+  const completedBySubmission = new Map<string, boolean>();
+
+  for (const job of queue.jobs) {
+    if (!job.submissionId) {
+      continue;
+    }
+
+    const current = completedBySubmission.get(job.submissionId);
+    if (job.status === "completed") {
+      completedBySubmission.set(job.submissionId, current ?? true);
+      continue;
+    }
+
+    completedBySubmission.set(job.submissionId, false);
+  }
+
+  return new Set(
+    [...completedBySubmission.entries()]
+      .filter(([, completed]) => completed)
+      .map(([submissionId]) => submissionId),
+  );
+}
+
+function getUnavailableSubmissionIds(
+  queue: QueueSnapshot,
+  pendingDownloadSubmissionIds: string[],
+) {
+  const unavailable = new Set(pendingDownloadSubmissionIds);
+
+  for (const job of queue.jobs) {
+    if (!job.submissionId) {
+      continue;
+    }
+    if (
+      job.status === "queued" ||
+      job.status === "active" ||
+      job.status === "completed"
+    ) {
+      unavailable.add(job.submissionId);
+    }
+  }
+
+  return unavailable;
 }

@@ -1,4 +1,4 @@
-import { Moon, Sparkles, Sun, Waves } from 'lucide-react'
+import { Moon, Sun, Waves } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { DEFAULT_AVATAR_URL } from '../lib/constants'
@@ -34,9 +34,11 @@ export function NavigationPill(props: NavigationPillProps) {
       <div className="absolute -bottom-3 -right-3 text-2xl drop-shadow-md">🐇</div>
       <div className="flex items-center gap-3">
         <div className="relative flex items-center">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8fbb29] via-[#76B900] to-[#4E9A06] border border-white/70 shadow-pop flex items-center justify-center text-white dark:from-[#89CFF0] dark:via-[#76B900] dark:to-[#4E9A06]">
-            <Sparkles size={22} />
-          </div>
+          <img
+            src="/inkbunny.png"
+            alt="Inkbunny"
+            className="h-12 w-12 rounded-full border border-white/70 bg-white object-cover shadow-pop"
+          />
           <img
             src={props.session.avatarUrl || DEFAULT_AVATAR_URL}
             alt={props.session.hasSession ? props.session.username : 'signed out'}
@@ -77,7 +79,7 @@ export function NavigationPill(props: NavigationPillProps) {
             onClick={props.onLogout}
             className="hidden md:block bg-[#76B900] hover:bg-[#4E9A06] text-white cursor-pointer font-display font-bold px-6 py-2 rounded-full shadow-pop hover:shadow-pop-hover transition-all"
           >
-            {`Logout ${props.session.username}`}
+            Logout
           </button>
         ) : (
           <button

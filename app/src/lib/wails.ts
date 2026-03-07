@@ -27,6 +27,7 @@ type BackendApi = {
   ): Promise<QueueSnapshot>
   GetQueueSnapshot(): Promise<QueueSnapshot>
   CancelDownload(jobId: string): Promise<QueueSnapshot>
+  ClearQueue(): Promise<QueueSnapshot>
   PickDownloadDirectory(): Promise<string>
   UpdateSettings(settings: AppSettings): Promise<AppSettings>
 }
@@ -105,6 +106,9 @@ export const backend = {
   },
   async cancelDownload(jobId: string): Promise<QueueSnapshot> {
     return getBackend().CancelDownload(jobId)
+  },
+  async clearQueue(): Promise<QueueSnapshot> {
+    return getBackend().ClearQueue()
   },
   async pickDownloadDirectory(): Promise<string> {
     return getBackend().PickDownloadDirectory()

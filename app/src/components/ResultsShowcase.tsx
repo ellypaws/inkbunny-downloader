@@ -5,12 +5,15 @@ import {
   LoaderCircle,
   Plus,
   Search as SearchIcon,
-  Star,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { accentClass } from "../lib/format";
-import type { SearchResponse, SubmissionCard } from "../lib/types";
+import type {
+  QueueSnapshot,
+  SearchResponse,
+  SubmissionCard,
+} from "../lib/types";
 
 type ResultsShowcaseProps = {
   searchResponse: SearchResponse | null;
@@ -19,6 +22,8 @@ type ResultsShowcaseProps = {
   selectedSubmissionIds: string[];
   allSelected: boolean;
   loading: boolean;
+  queue: QueueSnapshot;
+  pendingDownloadSubmissionIds: string[];
   onSelectActive: (submissionId: string) => void;
   onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
@@ -42,11 +47,35 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     props.searchResponse.page < props.searchResponse.pagesCount;
   const [panelStart, setPanelStart] = useState(0);
   const [panelVisible, setPanelVisible] = useState(true);
+  const [gridCardWidth, setGridCardWidth] = useState(220);
 
   const panelItems = useMemo(
     () => getPanelItems(props.results, panelStart),
     [props.results, panelStart],
   );
+  const downloadStates = useMemo(
+    () =>
+      buildSubmissionDownloadStates(
+        props.queue,
+        props.pendingDownloadSubmissionIds,
+      ),
+    [props.pendingDownloadSubmissionIds, props.queue],
+  );
+  const downloadedCount = useMemo(
+    () =>
+      props.results.filter(
+        (item) => downloadStates.get(item.submissionId) === "downloaded",
+      ).length,
+    [downloadStates, props.results],
+  );
+  const selectableCount = props.results.length - downloadedCount;
+  const selectAllDisabled = props.results.length === 0 || selectableCount === 0;
+  const selectAllLabel =
+    selectableCount === 0
+      ? "All downloaded"
+      : props.allSelected
+        ? "Deselect all"
+        : "Select all";
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -104,23 +133,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   return (
     <section className="relative mt-4">
-      <div className="flex items-center gap-3 mb-8 justify-center">
-        <Star className="text-[#FFB7B2] fill-current" size={36} />
-        <h3 className="text-4xl font-display font-bold text-[#2D2D44] dark:text-white">
-          Results
-        </h3>
-      </div>
-
       <h1 className="font-teko text-[144px] font-bold text-[#2D2D44] dark:text-white tracking-[-0.02em] leading-[118.8px] -mb-[54px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
         PREVIEW
       </h1>
 
-      <div className="relative z-10 flex items-center justify-between mb-5 px-2 gap-4 flex-wrap">
-        <div className="text-sm font-bold text-[#2D2D44]/75 dark:text-white/75 mt-6">
-          {props.searchResponse
-            ? `${props.results.length} loaded of ${props.searchResponse.resultsCount} total`
-            : "Run a search to view matching submissions."}
-        </div>
+      <div className="relative z-10 mb-5 flex items-center justify-end gap-4 px-2 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="rounded-full bg-white/72 px-4 py-2 text-sm font-bold text-[#2D2D44] backdrop-blur-md dark:bg-[#1A1733]/80 dark:text-white">
             {selectedCount} selected
@@ -128,10 +145,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           <button
             type="button"
             onClick={props.onToggleSelectAll}
-            disabled={props.results.length === 0}
+            disabled={selectAllDisabled}
             className="rounded-2xl border border-[#2D2D44]/15 bg-white/80 px-5 py-3 text-sm font-black text-[#2D2D44] shadow-sm backdrop-blur-md transition-all hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white"
           >
-            {props.allSelected ? "Deselect All" : "Select All"}
+            {selectAllLabel}
           </button>
           <button
             onClick={props.onQueueDownloads}
@@ -157,12 +174,17 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             const selected = props.selectedSubmissionIds.includes(
               item.submissionId,
             );
+            const downloadState =
+              downloadStates.get(item.submissionId) ?? "idle";
+            const downloaded = downloadState === "downloaded";
             return (
               <div
                 key={item.submissionId}
                 onClick={() => {
                   props.onSelectActive(item.submissionId);
-                  props.onToggleSelection(item.submissionId);
+                  if (!downloaded) {
+                    props.onToggleSelection(item.submissionId);
+                  }
                 }}
                 className={`slide-panel relative cursor-pointer group ${
                   props.activeSubmissionId === item.submissionId
@@ -195,9 +217,16 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       props.onDownloadSubmission(item.submissionId);
                     }}
                     aria-label={`Download ${item.title}`}
-                    className="flex h-11 w-11 items-center justify-center rounded-full bg-[#14112C]/72 text-white shadow-pop backdrop-blur-md transition-transform hover:scale-105"
+                    disabled={downloadState !== "idle"}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-transform ${
+                      downloadState === "downloaded"
+                        ? "bg-[#73D216]/85 text-white"
+                        : downloadState === "downloading"
+                          ? "bg-[#2A7FA6] text-white"
+                          : "bg-[#14112C]/72 text-white hover:scale-105"
+                    } disabled:cursor-default disabled:hover:scale-100`}
                   >
-                    <Download size={18} />
+                    {renderDownloadIcon(downloadState, 18)}
                   </button>
                   <button
                     type="button"
@@ -205,18 +234,27 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       event.stopPropagation();
                       props.onToggleSelection(item.submissionId);
                     }}
+                    disabled={downloaded}
                     aria-label={
                       selected
                         ? `Remove ${item.title} from selection`
                         : `Select ${item.title}`
                     }
                     className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md ${
-                      selected
-                        ? "bg-[#73D216] text-white"
-                        : "bg-white/85 text-[#2D2D44]"
+                      downloaded
+                        ? "bg-white/40 text-[#2D2D44]/35 dark:bg-white/10 dark:text-white/35"
+                        : selected
+                          ? "bg-[#73D216] text-white"
+                          : "bg-white/85 text-[#2D2D44]"
                     }`}
                   >
-                    {selected ? <Check size={18} /> : <Plus size={18} />}
+                    {downloaded ? (
+                      <Check size={18} />
+                    ) : selected ? (
+                      <Check size={18} />
+                    ) : (
+                      <Plus size={18} />
+                    )}
                   </button>
                 </div>
 
@@ -231,7 +269,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     >
                       {item.badgeText || item.typeName || "Submission"}
                     </span>
-                    <span className="rounded-full border border-white/55 bg-[#14112C]/35 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-white/92 backdrop-blur-sm">
+                    <span className="rounded-full border border-white/55 bg-[#14112C]/35 px-3 py-1 text-xs font-bold text-white/92 backdrop-blur-sm">
                       {formatFileCount(item.pageCount)}
                     </span>
                   </div>
@@ -250,24 +288,72 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
       {props.results.length > 0 ? (
         <div className="mt-6 rounded-toy-lg border-2 border-[#89CFF0]/30 bg-white/50 p-5 shadow-pop backdrop-blur-2xl dark:bg-gray-800/50">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="text-sm font-bold text-[#2D2D44]/65 dark:text-white/65">
+              Gallery Grid
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={props.onToggleSelectAll}
+                disabled={selectAllDisabled}
+                className="rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md transition-colors hover:bg-white dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75 dark:hover:bg-[#241e46] disabled:opacity-50"
+              >
+                {selectAllLabel}
+              </button>
+              <button
+                type="button"
+                onClick={props.onQueueDownloads}
+                disabled={!props.searchResponse || selectedCount === 0}
+                className="flex items-center gap-2 rounded-full bg-[#73D216] px-4 py-2 text-xs font-black text-white shadow-lg transition-all hover:bg-[#4E9A06] disabled:opacity-60"
+              >
+                <Download size={14} />
+                Download
+              </button>
+              <label className="flex items-center gap-3 rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75">
+                Grid Size
+                <input
+                  type="range"
+                  min={180}
+                  max={320}
+                  step={10}
+                  value={gridCardWidth}
+                  onChange={(event) =>
+                    setGridCardWidth(Number(event.target.value))
+                  }
+                  className="h-1.5 w-32 cursor-pointer accent-[#2A7FA6]"
+                />
+              </label>
+            </div>
+          </div>
           <div
             ref={scrollRef}
             className="mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border border-white/40 bg-white/55 p-2.5 dark:border-white/8 dark:bg-[#151129]/55"
           >
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div
+              className="grid gap-3"
+              style={{
+                gridTemplateColumns: `repeat(auto-fill, minmax(${gridCardWidth}px, 1fr))`,
+              }}
+            >
               {props.results.map((item) => {
                 const isActive =
                   item.submissionId === activeSubmission?.submissionId;
                 const selected = props.selectedSubmissionIds.includes(
                   item.submissionId,
                 );
+                const downloadState =
+                  downloadStates.get(item.submissionId) ?? "idle";
+                const downloaded = downloadState === "downloaded";
 
                 return (
                   <article
                     key={item.submissionId}
                     onClick={() => {
                       props.onSelectActive(item.submissionId);
-                      props.onToggleSelection(item.submissionId);
+                      if (!downloaded) {
+                        props.onToggleSelection(item.submissionId);
+                      }
                     }}
                     className={`cursor-pointer overflow-hidden rounded-[1.35rem] border transition-colors ${
                       isActive
@@ -284,10 +370,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[#14112C]/75 via-[#14112C]/20 to-transparent p-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-[#2D2D44]">
+                          <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-black text-[#2D2D44]">
                             {item.typeName || "Submission"}
                           </span>
-                          <span className="rounded-full border border-white/45 bg-[#14112C]/40 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/92 backdrop-blur-sm">
+                          <span className="rounded-full border border-white/45 bg-[#14112C]/40 px-3 py-1 text-[11px] font-bold text-white/92 backdrop-blur-sm">
                             {formatFileCount(item.pageCount)}
                           </span>
                         </div>
@@ -305,8 +391,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2D2D44]/55 dark:text-white/55">
-                          {item.submissionId}
+                        <div className="text-[10px] font-semibold text-[#2D2D44]/55 dark:text-white/55">
+                          {formatDownloadStatus(downloadState)}
                         </div>
                         <div className="flex items-center gap-2">
                           <button
@@ -316,9 +402,16 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                               props.onDownloadSubmission(item.submissionId);
                             }}
                             aria-label={`Download ${item.title}`}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2A7FA6] text-white shadow-sm backdrop-blur-md transition-transform hover:scale-105"
+                            disabled={downloadState !== "idle"}
+                            className={`flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-transform ${
+                              downloadState === "downloaded"
+                                ? "bg-[#73D216]/85 text-white"
+                                : downloadState === "downloading"
+                                  ? "bg-[#2A7FA6] text-white"
+                                  : "bg-[#2A7FA6] text-white hover:scale-105"
+                            } disabled:cursor-default disabled:hover:scale-100`}
                           >
-                            <Download size={14} />
+                            {renderDownloadIcon(downloadState, 14)}
                           </button>
                           <button
                             type="button"
@@ -326,18 +419,21 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                               event.stopPropagation();
                               props.onToggleSelection(item.submissionId);
                             }}
+                            disabled={downloaded}
                             aria-label={
                               selected
                                 ? `Remove ${item.title} from selection`
                                 : `Select ${item.title}`
                             }
                             className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md ${
-                              selected
-                                ? "bg-[#73D216] text-white"
-                                : "bg-[#14112C] text-white"
+                              downloaded
+                                ? "bg-[#2D2D44]/12 text-[#2D2D44]/35 dark:bg-white/10 dark:text-white/35"
+                                : selected
+                                  ? "bg-[#73D216] text-white"
+                                  : "bg-[#14112C] text-white"
                             }`}
                           >
-                            {selected ? <Check size={14} /> : <Plus size={14} />}
+                            {downloaded ? <Check size={14} /> : selected ? <Check size={14} /> : <Plus size={14} />}
                           </button>
                         </div>
                       </div>
@@ -491,4 +587,59 @@ function getPanelWindowStart(resultCount: number, activeIndex: number) {
     0,
     Math.min(safeIndex - 2, resultCount - PANEL_WINDOW_SIZE),
   );
+}
+
+type SubmissionDownloadState = "idle" | "downloading" | "downloaded";
+
+function buildSubmissionDownloadStates(
+  queue: QueueSnapshot,
+  pendingDownloadSubmissionIds: string[],
+) {
+  const states = new Map<string, SubmissionDownloadState>();
+
+  for (const submissionId of pendingDownloadSubmissionIds) {
+    states.set(submissionId, "downloading");
+  }
+
+  const statusesBySubmission = new Map<string, string[]>();
+  for (const job of queue.jobs) {
+    if (!job.submissionId) {
+      continue;
+    }
+    const statuses = statusesBySubmission.get(job.submissionId) ?? [];
+    statuses.push(job.status);
+    statusesBySubmission.set(job.submissionId, statuses);
+  }
+
+  for (const [submissionId, statuses] of statusesBySubmission.entries()) {
+    if (statuses.some((status) => status === "queued" || status === "active")) {
+      states.set(submissionId, "downloading");
+      continue;
+    }
+    if (statuses.length > 0 && statuses.every((status) => status === "completed")) {
+      states.set(submissionId, "downloaded");
+    }
+  }
+
+  return states;
+}
+
+function formatDownloadStatus(state: SubmissionDownloadState) {
+  if (state === "downloading") {
+    return "Downloading";
+  }
+  if (state === "downloaded") {
+    return "Downloaded";
+  }
+  return "Ready";
+}
+
+function renderDownloadIcon(state: SubmissionDownloadState, size: number) {
+  if (state === "downloading") {
+    return <LoaderCircle className="animate-spin" size={size} />;
+  }
+  if (state === "downloaded") {
+    return <Check size={size} />;
+  }
+  return <Download size={size} />;
 }

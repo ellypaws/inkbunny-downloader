@@ -9,6 +9,7 @@ type AccountSidebarProps = {
   searchParams: SearchParams;
   onPickDirectory: () => void;
   onToggleSaveKeywords: (checked: boolean) => void;
+  onLogout: () => void;
 };
 
 export function AccountSidebar(props: AccountSidebarProps) {
@@ -26,8 +27,18 @@ export function AccountSidebar(props: AccountSidebarProps) {
       <div className="relative rounded-toy-lg bg-gradient-to-b from-[#FF34A5]/75 to-[#00A372]/75 p-1 shadow-pop">
         <div className="flex flex-col gap-5 rounded-[2.75rem] bg-white/78 p-5 backdrop-blur-md dark:bg-[#14112C]/84 sm:p-6">
           <div className="border-b-2 border-dashed border-[#2D2D44]/10 pb-5 dark:border-white/10">
-            <div className="text-xs font-black uppercase tracking-[0.24em] text-[#2D2D44]/50 dark:text-white/45">
-              Account
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-[#2D2D44]/50 dark:text-white/45">
+                Account
+              </div>
+              {props.session.hasSession ? (
+                <button
+                  onClick={props.onLogout}
+                  className="rounded-full border border-[#c2c7bc] bg-[#f7f8f2]/92 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-[#555753] transition-colors hover:bg-[#e8eddc] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white/75 dark:hover:bg-[#2f353a]"
+                >
+                  Logout
+                </button>
+              ) : null}
             </div>
             <div className="mt-4 flex items-center gap-4">
               <AvatarImage src={props.session.avatarUrl} alt={displayName} />
@@ -42,7 +53,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
             </div>
           </div>
 
-          <div className="space-y-3 text-sm font-bold text-[#2D2D44]/85 dark:text-gray-200">
+          <div className="text-sm font-bold text-[#2D2D44]/85 dark:text-gray-200">
             <div className="flex items-start justify-between gap-4">
               <span>Allowed ratings</span>
               <div className="flex max-w-[13rem] flex-wrap justify-end gap-2">
@@ -60,24 +71,6 @@ export function AccountSidebar(props: AccountSidebarProps) {
                 ))}
               </div>
             </div>
-            <SummaryRow
-              label="Results per page"
-              value={String(props.searchParams.perPage)}
-            />
-            <SummaryRow
-              label="Maximum files"
-              value={
-                props.searchParams.maxDownloads > 0
-                  ? String(props.searchParams.maxDownloads)
-                  : "No limit"
-              }
-            />
-            <SummaryRow
-              label="Download keywords"
-              value={
-                props.searchParams.saveKeywords ? "Save sidecar files" : "Off"
-              }
-            />
           </div>
 
           <div className="space-y-3">
@@ -115,15 +108,6 @@ export function AccountSidebar(props: AccountSidebarProps) {
         </div>
       </div>
     </aside>
-  );
-}
-
-function SummaryRow(props: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span>{props.label}</span>
-      <span className="text-right">{props.value}</span>
-    </div>
   );
 }
 
