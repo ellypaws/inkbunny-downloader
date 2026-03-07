@@ -79,7 +79,7 @@ func keywordCache(ratings inkbunny.Ratings) func(string) ([]inkbunny.KeywordAuto
 	}
 }
 
-func login() (*inkbunny.User, error) {
+func promptLogin() (*inkbunny.User, error) {
 	var (
 		username string
 		password string
@@ -91,8 +91,14 @@ func login() (*inkbunny.User, error) {
 		),
 	)
 	if err := form.Run(); err != nil {
-		log.Fatal("failed to login", "err", err)
+		return nil, fmt.Errorf("%w: %w", errLoginPromptAborted, err)
 	}
+
+	return loginWithCredentials(username, password)
+}
+
+func loginWithCredentials(username, password string) (*inkbunny.User, error) {
+	username = strings.TrimSpace(username)
 
 	var (
 		user *inkbunny.User
@@ -180,13 +186,20 @@ func changeRatings(user *inkbunny.User) error {
 	return err
 }
 
-func prepareGuestSession(user *inkbunny.User) func() {
+func prepareGuestSession(user *inkbunny.User, allowInteractive bool) func() {
+	if user == nil {
+		return func() {}
+	}
 	if strings.ToLower(user.Username) != "guest" {
 		return func() {}
 	}
 
-	if err := changeRatings(user); err != nil {
-		log.Fatal("failed to change ratings", "err", err)
+	if allowInteractive {
+		if err := changeRatings(user); err != nil {
+			log.Fatal("failed to change ratings", "err", err)
+		}
+	} else {
+		log.Info("Running headless with a guest session; default guest ratings will be used")
 	}
 
 	return func() {
@@ -198,6 +211,9 @@ func prepareGuestSession(user *inkbunny.User) func() {
 			}).Run()
 		if err != nil {
 			log.Fatal("failed to logout", "err", err)
+		}
+		if err := os.Remove(sidFile); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			log.Warn("failed to remove session file", "err", err)
 		}
 	}
 }

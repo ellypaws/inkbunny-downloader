@@ -1,8 +1,10 @@
 package flags
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -21,6 +23,9 @@ type Config struct {
 	OrderBy         string
 	MaxDownloads    string
 	MaxActive       string
+	Username        string
+	Password        string
+	SID             string
 	DownloadCaption bool
 
 	NoTUI      bool
@@ -30,10 +35,29 @@ type Config struct {
 }
 
 func Parse() Config {
-	var c Config
+	config, err := ParseArgs(os.Args[1:])
+	if err == nil {
+		return config
+	}
+	if errors.Is(err, flag.ErrHelp) {
+		os.Exit(0)
+	}
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(2)
+	return Config{}
+}
 
-	flag.Usage = func() {
-		out := flag.CommandLine.Output()
+func ParseArgs(args []string) (Config, error) {
+	return parse(args, os.Args[0], flag.CommandLine.Output())
+}
+
+func parse(args []string, program string, output io.Writer) (Config, error) {
+	var c Config
+	fs := flag.NewFlagSet(program, flag.ContinueOnError)
+	fs.SetOutput(output)
+
+	fs.Usage = func() {
+		out := fs.Output()
 
 		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF79C6"))
 		headingStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#BD93F9")).Underline(true)
@@ -42,10 +66,10 @@ func Parse() Config {
 		exampleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8BE9FD")).Italic(true)
 
 		fmt.Fprintf(out, "%s\n\n", titleStyle.Render("Inkbunny Downloader"))
-		fmt.Fprintf(out, "%s %s [options]\n\n", headingStyle.Render("Usage:"), os.Args[0])
+		fmt.Fprintf(out, "%s %s [options]\n\n", headingStyle.Render("Usage:"), program)
 
 		fmt.Fprintf(out, "%s\n", headingStyle.Render("OPTIONS:"))
-		flag.PrintDefaults()
+		fs.PrintDefaults()
 
 		fmt.Fprintf(out, "\n%s\n\n", headingStyle.Render("DETAILED USAGE & EXAMPLES:"))
 
@@ -89,6 +113,18 @@ func Parse() Config {
 		fmt.Fprintf(out, "      %s\n", descStyle.Render("Maximum number of concurrent downloads."))
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--active 5"))
 
+		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--username <username>"))
+		fmt.Fprintf(out, "      %s\n", descStyle.Render("Username for non-interactive login. Use with --password, or use guest with an empty password."))
+		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--username \"Elly\" --password \"hunter2\""))
+
+		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--password <password>"))
+		fmt.Fprintf(out, "      %s\n", descStyle.Render("Password for non-interactive login. Ignored when --sid is provided."))
+		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--username \"Elly\" --password \"hunter2\""))
+
+		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--sid <session_id>"))
+		fmt.Fprintf(out, "      %s\n", descStyle.Render("Existing session ID for non-interactive authentication. Overrides username/password and saved sessions."))
+		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--sid \"abc123\""))
+
 		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--caption"))
 		fmt.Fprintf(out, "      %s\n", descStyle.Render("Whether to save keywords as a .txt file alongside the download (default false)."))
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--caption=false"))
@@ -105,32 +141,40 @@ func Parse() Config {
 
 		fmt.Fprintf(out, "%s\n", headingStyle.Render("EXAMPLES:"))
 		fmt.Fprintf(out, "  1) %s\n", descStyle.Render("Download up to 10 sketches by 'artist_name', ordered by favorites:"))
-		fmt.Fprintf(out, "     %s\n\n", exampleStyle.Render(fmt.Sprintf("%s --artist \"artist_name\" --type sketch --order favs --limit 10", os.Args[0])))
+		fmt.Fprintf(out, "     %s\n\n", exampleStyle.Render(fmt.Sprintf("%s --artist \"artist_name\" --type sketch --order favs --limit 10", program)))
 
-		fmt.Fprintf(out, "  2) %s\n", descStyle.Render("Search for 'cats' excluding 'dogs' in the last 7 days, quietly in headless form:"))
-		fmt.Fprintf(out, "     %s\n", exampleStyle.Render(fmt.Sprintf("%s --search \"cats -dogs\" --time 7 --headless", os.Args[0])))
+		fmt.Fprintf(out, "  2) %s\n", descStyle.Render("Search for 'cats' excluding 'dogs' in the last 7 days, quietly in headless form with explicit credentials:"))
+		fmt.Fprintf(out, "     %s\n\n", exampleStyle.Render(fmt.Sprintf("%s --search \"cats -dogs\" --time 7 --headless --username \"Elly\" --password \"hunter2\"", program)))
+
+		fmt.Fprintf(out, "  3) %s\n", descStyle.Render("Reuse an existing session ID without any interactive prompts:"))
+		fmt.Fprintf(out, "     %s\n", exampleStyle.Render(fmt.Sprintf("%s --sid \"abc123\" --search \"fox\"", program)))
 	}
 
-	flag.StringVar(&c.SearchWords, "search", "", "Search words")
-	flag.StringVar(&c.StringJoinType, "join", "and", "Join type (and, or, exact)")
-	flag.StringVar(&c.SearchIn, "in", "keywords,title", "Search in (comma separated): keywords, title, description, md5")
-	flag.StringVar(&c.ArtistName, "artist", "", "Search only submissions by this user")
-	flag.StringVar(&c.FavBy, "favby", "", "Search Favorites by this user")
-	flag.IntVar(&c.TimeRange, "time", 0, "Time Range in days (0 for any)")
-	flag.StringVar(&c.SubmissionType, "type", "any", "Submission type (any, pinup, sketch, etc.)")
-	flag.StringVar(&c.OrderBy, "order", inkbunny.OrderByCreateDatetime, "Order by (create_datetime, favs, views)")
-	flag.StringVar(&c.MaxDownloads, "limit", "", "Max number of submissions to download")
-	flag.StringVar(&c.MaxActive, "active", "", "Max active downloads")
-	flag.BoolVar(&c.DownloadCaption, "caption", false, "Download keywords as .txt")
-	flag.BoolVar(&c.Headless, "headless", false, "Force headless mode")
-	flag.BoolVar(&c.TUI, "tui", false, "Force TUI mode")
+	fs.StringVar(&c.SearchWords, "search", "", "Search words")
+	fs.StringVar(&c.StringJoinType, "join", "and", "Join type (and, or, exact)")
+	fs.StringVar(&c.SearchIn, "in", "keywords,title", "Search in (comma separated): keywords, title, description, md5")
+	fs.StringVar(&c.ArtistName, "artist", "", "Search only submissions by this user")
+	fs.StringVar(&c.FavBy, "favby", "", "Search Favorites by this user")
+	fs.IntVar(&c.TimeRange, "time", 0, "Time Range in days (0 for any)")
+	fs.StringVar(&c.SubmissionType, "type", "any", "Submission type (any, pinup, sketch, etc.)")
+	fs.StringVar(&c.OrderBy, "order", inkbunny.OrderByCreateDatetime, "Order by (create_datetime, favs, views)")
+	fs.StringVar(&c.MaxDownloads, "limit", "", "Max number of submissions to download")
+	fs.StringVar(&c.MaxActive, "active", "", "Max active downloads")
+	fs.StringVar(&c.Username, "username", "", "Username for non-interactive login")
+	fs.StringVar(&c.Password, "password", "", "Password for non-interactive login")
+	fs.StringVar(&c.SID, "sid", "", "Session ID for non-interactive login")
+	fs.BoolVar(&c.DownloadCaption, "caption", false, "Download keywords as .txt")
+	fs.BoolVar(&c.Headless, "headless", false, "Force headless mode")
+	fs.BoolVar(&c.TUI, "tui", false, "Force TUI mode")
 
-	flag.Parse()
+	if err := fs.Parse(args); err != nil {
+		return Config{}, err
+	}
 
-	c.NoTUI = len(os.Args) > 1
+	c.NoTUI = len(args) > 0
 	headlessProvided := false
 	tuiProvided := false
-	flag.Visit(func(f *flag.Flag) {
+	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "headless" {
 			headlessProvided = true
 		}
@@ -148,7 +192,7 @@ func Parse() Config {
 		c.Headless = c.NoTUI
 	}
 
-	return c
+	return c, nil
 }
 
 const (

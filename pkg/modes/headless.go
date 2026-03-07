@@ -38,21 +38,18 @@ func RunHeadless(config flags.Config) {
 	)
 
 Login:
-	user, err := loadSession()
+	user, source, persistSession, err := authenticateUser(config, false)
 	if err != nil {
-		user, err = login()
-		if err != nil {
-			log.Error("Failed to login", "err", err)
-			goto Login
-		}
-
-		_ = saveSession(user)
-		log.Info("Logged in", "username", user.Username)
-	} else {
-		log.Info("Logged in as", "username", user.Username)
+		log.Fatal("Failed to authenticate", "err", err)
 	}
+	if persistSession {
+		if err := saveSession(user); err != nil {
+			log.Warn("failed to save session", "err", err)
+		}
+	}
+	logAuthenticatedUser(user, source)
 
-	cleanup := prepareGuestSession(user)
+	cleanup := prepareGuestSession(user, false)
 	defer cleanup()
 
 	usernameCache := flight.NewCache(user.SearchMembers)
@@ -111,9 +108,7 @@ Login:
 		}).Run()
 	if err != nil {
 		if err, ok := errors.AsType[inkbunny.ErrorResponse](err); ok && err.Code != nil && *err.Code == inkbunny.ErrInvalidSessionID {
-			if err := os.Remove(sidFile); err != nil {
-				log.Warn("failed to remove session file", "err", err)
-			}
+			invalidateAuthSource(&config, source)
 			log.Warn("Session expired, please login again")
 			goto Login
 		}

@@ -35,21 +35,23 @@ func RunTUI(config flags.Config) {
 	)
 
 Login:
-	user, err := loadSession()
+	user, source, persistSession, err := authenticateUser(config, true)
 	if err != nil {
-		user, err = login()
-		if err != nil {
-			log.Error("Failed to login", "err", err)
-			goto Login
+		if errors.Is(err, errLoginPromptAborted) {
+			log.Info("Login aborted by user")
+			return
 		}
-
-		_ = saveSession(user)
-		log.Info("Logged in", "username", user.Username)
-	} else {
-		log.Info("Logged in as", "username", user.Username)
+		log.Error("Failed to login", "err", err)
+		goto Login
 	}
+	if persistSession {
+		if err := saveSession(user); err != nil {
+			log.Warn("failed to save session", "err", err)
+		}
+	}
+	logAuthenticatedUser(user, source)
 
-	cleanup := prepareGuestSession(user)
+	cleanup := prepareGuestSession(user, true)
 	defer cleanup()
 
 	usernameCache := flight.NewCache(user.SearchMembers)
@@ -168,9 +170,7 @@ Process:
 		}).Run()
 	if err != nil {
 		if err, ok := errors.AsType[inkbunny.ErrorResponse](err); ok && err.Code != nil && *err.Code == inkbunny.ErrInvalidSessionID {
-			if err := os.Remove(sidFile); err != nil {
-				log.Warn("failed to remove session file", "err", err)
-			}
+			invalidateAuthSource(&config, source)
 			log.Warn("Session expired, please login again")
 			goto Login
 		}
