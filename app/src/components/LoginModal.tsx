@@ -1,25 +1,28 @@
-import { LoaderCircle, LogIn, UserRound, X } from 'lucide-react'
+import { LoaderCircle, LogIn, UserRound, X } from "lucide-react";
 
-import type { SessionInfo } from '../lib/types'
+import type { SessionInfo } from "../lib/types";
 
 type LoginModalProps = {
-  open: boolean
-  session: SessionInfo
-  username: string
-  password: string
-  loading: boolean
-  error: string
-  onChangeUsername: (value: string) => void
-  onChangePassword: (value: string) => void
-  onClose: () => void
-  onSubmit: () => void
-}
+  open: boolean;
+  session: SessionInfo;
+  username: string;
+  password: string;
+  loading: boolean;
+  error: string;
+  onChangeUsername: (value: string) => void;
+  onChangePassword: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+};
 
 export function LoginModal(props: LoginModalProps) {
-  if (!props.open) return null
+  if (!props.open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" onClick={props.onClose}>
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+      onClick={props.onClose}
+    >
       <div className="absolute inset-0 bg-[#14112C]/45 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-xl bg-gray-50/60 dark:bg-[#2D2D44]/70 backdrop-blur-xl rounded-toy-lg p-6 sm:p-8 border-4 border-[#89CFF0]/20 shadow-[0_22px_80px_rgba(0,0,0,0.28)]"
@@ -84,15 +87,21 @@ export function LoginModal(props: LoginModalProps) {
             disabled={props.loading}
             className="w-full py-5 bg-[#2A7FA6] hover:bg-[#1e5f7e] disabled:opacity-65 text-white font-black rounded-2xl shadow-xl hover:shadow-2xl active:scale-95 transform transition-all flex justify-center items-center gap-2 border-b-8 border-[#1a516b]"
           >
-            {props.loading ? <LoaderCircle className="animate-spin" size={20} /> : <LogIn size={20} />}
+            {props.loading ? (
+              <LoaderCircle className="animate-spin" size={20} />
+            ) : (
+              <LogIn size={20} />
+            )}
             Login
           </button>
         </div>
 
         <div className="mt-4 rounded-2xl bg-white/45 dark:bg-[#1A1733]/50 px-4 py-3 text-sm font-bold text-[#2D2D44]/80 dark:text-white/75">
-          {props.session.hasSession ? `${props.session.username} (${props.session.isGuest ? 'guest' : 'member'})` : 'Not signed in'}
+          {props.session.hasSession
+            ? `${props.session.username} (${props.session.isGuest ? "guest" : "member"})`
+            : "Not signed in"}
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,23 +1,25 @@
-import { Check, FolderOpen } from 'lucide-react'
+import { Check, FolderOpen } from "lucide-react";
 
-import { DEFAULT_AVATAR_URL } from '../lib/constants'
-import type { AppSettings, SearchParams, SessionInfo } from '../lib/types'
+import { DEFAULT_AVATAR_URL } from "../lib/constants";
+import type { AppSettings, SearchParams, SessionInfo } from "../lib/types";
 
 type AccountSidebarProps = {
-  session: SessionInfo
-  settings: AppSettings
-  searchParams: SearchParams
-  onPickDirectory: () => void
-  onToggleSaveKeywords: (checked: boolean) => void
-}
+  session: SessionInfo;
+  settings: AppSettings;
+  searchParams: SearchParams;
+  onPickDirectory: () => void;
+  onToggleSaveKeywords: (checked: boolean) => void;
+};
 
 export function AccountSidebar(props: AccountSidebarProps) {
-  const displayName = props.session.hasSession ? props.session.username : 'Not signed in'
+  const displayName = props.session.hasSession
+    ? props.session.username
+    : "Not signed in";
   const statusText = props.session.hasSession
     ? props.session.isGuest
-      ? 'Guest session active'
-      : 'Signed in'
-    : 'No session yet'
+      ? "Guest session active"
+      : "Signed in"
+    : "No session yet";
 
   return (
     <aside className="xl:sticky xl:top-28">
@@ -49,8 +51,8 @@ export function AccountSidebar(props: AccountSidebarProps) {
                     key={rating.label}
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-4 ${
                       rating.enabled
-                        ? 'border-[#2A7FA6] text-[#2A7FA6] dark:border-[#89CFF0] dark:text-[#89CFF0]'
-                        : 'border-[#2D2D44]/18 text-[#2D2D44]/45 dark:border-white/12 dark:text-white/35'
+                        ? "border-[#2A7FA6] text-[#2A7FA6] dark:border-[#89CFF0] dark:text-[#89CFF0]"
+                        : "border-[#2D2D44]/18 text-[#2D2D44]/45 dark:border-white/12 dark:text-white/35"
                     }`}
                   >
                     {rating.label}
@@ -58,12 +60,24 @@ export function AccountSidebar(props: AccountSidebarProps) {
                 ))}
               </div>
             </div>
-            <SummaryRow label="Results per page" value={String(props.searchParams.perPage)} />
+            <SummaryRow
+              label="Results per page"
+              value={String(props.searchParams.perPage)}
+            />
             <SummaryRow
               label="Maximum files"
-              value={props.searchParams.maxDownloads > 0 ? String(props.searchParams.maxDownloads) : 'No limit'}
+              value={
+                props.searchParams.maxDownloads > 0
+                  ? String(props.searchParams.maxDownloads)
+                  : "No limit"
+              }
             />
-            <SummaryRow label="Download keywords" value={props.searchParams.saveKeywords ? 'Save sidecar files' : 'Off'} />
+            <SummaryRow
+              label="Download keywords"
+              value={
+                props.searchParams.saveKeywords ? "Save sidecar files" : "Off"
+              }
+            />
           </div>
 
           <div className="space-y-3">
@@ -75,16 +89,21 @@ export function AccountSidebar(props: AccountSidebarProps) {
               Choose Download Folder
             </button>
             <div className="break-all rounded-2xl bg-white/55 px-4 py-3 text-xs font-bold text-[#2D2D44]/75 dark:bg-[#1A1733]/60 dark:text-white/70">
-              {props.settings.downloadDirectory || 'No download folder selected yet.'}
+              {props.settings.downloadDirectory ||
+                "No download folder selected yet."}
             </div>
             <label className="grid grid-cols-[1.1rem_minmax(0,1fr)] items-start gap-3 rounded-2xl border border-[#2D2D44]/10 bg-white/55 px-4 py-3 text-sm font-bold text-[#2D2D44] dark:border-white/10 dark:bg-[#1A1733]/60 dark:text-white">
               <input
                 type="checkbox"
                 checked={props.searchParams.saveKeywords}
-                onChange={(event) => props.onToggleSaveKeywords(event.target.checked)}
+                onChange={(event) =>
+                  props.onToggleSaveKeywords(event.target.checked)
+                }
                 className="mt-0.5 h-[1.05rem] w-[1.05rem] accent-[#73D216]"
               />
-              <span className="min-w-0 leading-5">Save keywords as text files</span>
+              <span className="min-w-0 leading-5">
+                Save keywords as text files
+              </span>
             </label>
             {!props.session.hasSession ? (
               <div className="flex items-start gap-2 rounded-2xl bg-[#4ED2D6]/18 p-4 text-sm font-semibold text-[#2D2D44]/80 dark:bg-[#FFFACD]/14 dark:text-gray-200">
@@ -96,7 +115,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
         </div>
       </div>
     </aside>
-  )
+  );
 }
 
 function SummaryRow(props: { label: string; value: string }) {
@@ -105,7 +124,7 @@ function SummaryRow(props: { label: string; value: string }) {
       <span>{props.label}</span>
       <span className="text-right">{props.value}</span>
     </div>
-  )
+  );
 }
 
 function AvatarImage(props: { src: string; alt: string }) {
@@ -114,17 +133,17 @@ function AvatarImage(props: { src: string; alt: string }) {
       src={props.src || DEFAULT_AVATAR_URL}
       alt={props.alt}
       onError={(event) => {
-        event.currentTarget.src = DEFAULT_AVATAR_URL
+        event.currentTarget.src = DEFAULT_AVATAR_URL;
       }}
       className="h-16 w-16 shrink-0 rounded-full border-2 border-white/75 bg-white object-cover shadow-pop"
     />
-  )
+  );
 }
 
 function getRatingBadges(mask: string) {
-  const labels = ['General', 'Nudity', 'Violence', 'Sexual', 'Strong Violence']
+  const labels = ["General", "Nudity", "Violence", "Sexual", "Strong Violence"];
   return labels.map((label, index) => ({
     label,
-    enabled: mask[index] === '1' || (!mask && index === 0),
-  }))
+    enabled: mask[index] === "1" || (!mask && index === 0),
+  }));
 }
