@@ -17,6 +17,7 @@ import (
 	teaV1 "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/ellypaws/inkbunny"
@@ -80,13 +81,15 @@ type DownloadModel struct {
 	Aborted   bool
 	Confirmed bool
 
-	ScrollOffset int
+	ScrollOffset  int
+	HScrollOffset int
+	contentWidth  int
 
 	ZoneManager *zone.Manager
 }
 
-func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int, toDownload int, caption bool) DownloadModel {
-	m := DownloadModel{
+func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int, toDownload int, caption bool) *DownloadModel {
+	m := &DownloadModel{
 		Items:           items,
 		User:            user,
 		Client:          &http.Client{Timeout: 5 * time.Minute},
@@ -107,11 +110,11 @@ func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int,
 	return m
 }
 
-func (m DownloadModel) Init() tea.Cmd {
+func (m *DownloadModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -146,6 +149,13 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.Confirmed && m.ScrollOffset < len(m.Items)-1 {
 				m.ScrollOffset++
 			}
+		case "left", "h":
+			if m.HScrollOffset > 0 {
+				m.HScrollOffset--
+			}
+		case "right", "l":
+			m.HScrollOffset++
+			m.clampHScroll()
 		case "pgup":
 			if !m.Confirmed {
 				m.ScrollOffset -= m.Height / 2
@@ -208,6 +218,46 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.Confirmed && m.ScrollOffset < len(m.Items)-1 {
 				m.ScrollOffset++
 			}
+		} else if msg.Mouse().Button == tea.MouseWheelLeft {
+			if m.HScrollOffset > 0 {
+				m.HScrollOffset--
+			}
+		} else if msg.Mouse().Button == tea.MouseWheelRight {
+			m.HScrollOffset++
+			m.clampHScroll()
+		}
+
+	case teaV1.MouseMsg:
+		v1msg := msg
+		if v1msg.Type == teaV1.MouseWheelUp {
+			if !m.Confirmed && m.ScrollOffset > 0 {
+				m.ScrollOffset--
+			}
+		} else if v1msg.Type == teaV1.MouseWheelDown {
+			if !m.Confirmed && m.ScrollOffset < len(m.Items)-1 {
+				m.ScrollOffset++
+			}
+		} else if v1msg.Type == teaV1.MouseRelease && v1msg.Button == teaV1.MouseButtonLeft {
+			if !m.Confirmed {
+				if m.ZoneManager.Get("btn_confirm").InBounds(v1msg) {
+					m.Confirmed = true
+					var initCmds []tea.Cmd
+					activeCount := 0
+					for _, item := range m.Items {
+						if activeCount >= m.MaxActive {
+							break
+						}
+						item.Status = StatusActive
+						initCmds = append(initCmds, startDownloadCmd(item, m.User, m.Client, m.DownloadCaption))
+						activeCount++
+					}
+					cmds = append(cmds, initCmds...)
+				}
+				if m.ZoneManager.Get("btn_cancel").InBounds(v1msg) {
+					m.Aborted = true
+					return m, tea.Quit
+				}
+			}
 		}
 
 	case tea.MouseMsg:
@@ -239,7 +289,7 @@ func (m DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m DownloadModel) startNextDownload() tea.Cmd {
+func (m *DownloadModel) startNextDownload() tea.Cmd {
 	if m.ToDownload > 0 && m.Downloaded >= m.ToDownload {
 		return tea.Quit // Done
 	}
@@ -263,7 +313,7 @@ func (m DownloadModel) startNextDownload() tea.Cmd {
 	return nil
 }
 
-func (m DownloadModel) isDone() bool {
+func (m *DownloadModel) isDone() bool {
 	if m.ToDownload > 0 && m.Downloaded >= m.ToDownload {
 		return true
 	}
@@ -275,7 +325,81 @@ func (m DownloadModel) isDone() bool {
 	return true
 }
 
-func (m DownloadModel) View() tea.View {
+func (m *DownloadModel) clampHScroll() {
+	maxH := m.contentWidth - m.Width
+	if maxH < 0 {
+		maxH = 0
+	}
+	if m.HScrollOffset > maxH {
+		m.HScrollOffset = maxH
+	}
+	if m.HScrollOffset < 0 {
+		m.HScrollOffset = 0
+	}
+}
+
+func renderHScrollbar(trackWidth, contentWidth, offset int) string {
+	if trackWidth <= 0 || contentWidth <= trackWidth {
+		return ""
+	}
+	thumbSize := max(1, trackWidth*trackWidth/contentWidth)
+	maxOffset := contentWidth - trackWidth
+	thumbPos := 0
+	if maxOffset > 0 {
+		thumbPos = offset * (trackWidth - thumbSize) / maxOffset
+	}
+
+	thumbStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#E04080"))
+	trackStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B6B6B"))
+
+	var sb strings.Builder
+	for i := range trackWidth {
+		if i >= thumbPos && i < thumbPos+thumbSize {
+			sb.WriteString(thumbStyle.Render("━"))
+		} else {
+			sb.WriteString(trackStyle.Render("─"))
+		}
+	}
+	return sb.String()
+}
+
+func (m *DownloadModel) applyHorizontalViewport(content string) string {
+	lines := strings.Split(content, "\n")
+
+	maxW := 0
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > maxW {
+			maxW = w
+		}
+	}
+	m.contentWidth = maxW
+
+	viewWidth := m.Width
+	if viewWidth <= 0 {
+		return content
+	}
+
+	if maxW <= viewWidth {
+		m.HScrollOffset = 0
+		return content
+	}
+
+	m.clampHScroll()
+
+	for i, line := range lines {
+		lines[i] = ansi.Cut(line, m.HScrollOffset, m.HScrollOffset+viewWidth)
+	}
+
+	scrollbar := renderHScrollbar(viewWidth, maxW, m.HScrollOffset)
+	if scrollbar != "" {
+		lines = append(lines, scrollbar)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m *DownloadModel) View() tea.View {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#5F7FFF")).
@@ -298,9 +422,9 @@ func (m DownloadModel) View() tea.View {
 		out = append(out, "---")
 
 		start := m.ScrollOffset
-		end := start + (m.Height - 5) // -5 to account for border and header
+		end := start + (m.Height - 5)
 
-		if m.Height == 0 { // fallback
+		if m.Height == 0 {
 			end = start + 10
 		}
 		if end-start > 256 {
@@ -320,7 +444,14 @@ func (m DownloadModel) View() tea.View {
 			out = append(out, fmt.Sprintf("... %d more", len(m.Items)-end))
 		}
 
-		return tea.NewView(m.ZoneManager.Scan(borderStyle.Render(strings.Join(out, "\n"))))
+		rendered := borderStyle.Render(strings.Join(out, "\n"))
+		rendered = m.applyHorizontalViewport(rendered)
+		return tea.NewView(m.ZoneManager.Scan(rendered))
+	}
+
+	progWidth := m.Width - 40
+	if progWidth < 10 {
+		progWidth = 10
 	}
 
 	var active []string
@@ -335,6 +466,7 @@ func (m DownloadModel) View() tea.View {
 			if total > 0 {
 				pct = float64(item.Written.Load()) / float64(total)
 			}
+			item.Progress.Width = progWidth
 			prog := item.Progress.ViewAs(pct)
 			line := fmt.Sprintf("%s Downloading %s... %s", item.Spinner.View(), item.FileName, prog)
 			active = append(active, line)
@@ -347,10 +479,10 @@ func (m DownloadModel) View() tea.View {
 		}
 	}
 
-	availableLines := m.Height - 4 // border lines top & bottom plus empty lines
+	availableLines := m.Height - 4
 
 	if availableLines < 5 {
-		availableLines = 10 // fallback
+		availableLines = 10
 	}
 
 	var out []string
@@ -378,7 +510,9 @@ func (m DownloadModel) View() tea.View {
 		}
 	}
 
-	return tea.NewView(m.ZoneManager.Scan(borderStyle.Render(strings.Join(out, "\n"))))
+	rendered := borderStyle.Render(strings.Join(out, "\n"))
+	rendered = m.applyHorizontalViewport(rendered)
+	return tea.NewView(m.ZoneManager.Scan(rendered))
 }
 
 func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Client, saveCaption bool) tea.Cmd {

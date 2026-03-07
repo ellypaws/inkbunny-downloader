@@ -1,0 +1,14 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "inkbunny-downloader",
+  "outputfilename": "inkbunny-downloader",
+  "frontend:dir": "app",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev -- --host",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Elly",
+    "email": "145195760+ellypaws@users.noreply.github.com"
+  }
+}

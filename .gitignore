@@ -3,9 +3,9 @@ vendor
 
 # config
 *.txt
-*.json
 *.exe
 *.env
+*_test.go
 
 # images
 *.png
@@ -15,8 +15,10 @@ vendor
 *.webp
 
 # other files
-*.js
-*.ts
-*.css
-*.html
 *.zip
+
+# wails
+/build
+/app/node_modules/
+/app/dist/
+/app/dist-ssr/

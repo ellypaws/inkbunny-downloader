@@ -116,12 +116,21 @@ func (m *Model) View() tea.View {
 func (m *Model) renderTopSection() string {
 	inputBox := m.renderInput("search_words", m.SearchWords, FieldSearchWords)
 	searchBtn := m.renderButton("btn_search_top", "Search")
-	row1 := lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("Search words:"),
-		inputBox,
-		"  ",
-		searchBtn,
-	)
+	var row1 string
+	if m.Width > 0 && m.Width < 100 {
+		row1 = lipgloss.JoinVertical(lipgloss.Left,
+			labelStyle.Render("Search words:"),
+			inputBox,
+			searchBtn,
+		)
+	} else {
+		row1 = lipgloss.JoinHorizontal(lipgloss.Top,
+			labelStyle.Render("Search words:"),
+			inputBox,
+			"  ",
+			searchBtn,
+		)
+	}
 
 	helper := helperTextStyle.Render(
 		"Separate words with spaces.\n" +
@@ -138,14 +147,26 @@ func (m *Model) renderTopSection() string {
 	r1 := m.renderRadio("rad_and", m.StringJoinType == inkbunny.JoinTypeAnd, "Find all the words together")
 	r2 := m.renderRadio("rad_or", m.StringJoinType == inkbunny.JoinTypeOr, "Find any one of the words")
 	r3 := m.renderRadio("rad_exact", m.StringJoinType == inkbunny.JoinTypeExact, "Contains the exact phrase")
-	row2 := lipgloss.JoinHorizontal(lipgloss.Top, findLabel, r1, "   ", r2, "   ", r3)
+
+	var row2 string
+	if m.Width > 0 && m.Width < 100 {
+		row2 = lipgloss.JoinVertical(lipgloss.Left, findLabel, r1, r2, r3)
+	} else {
+		row2 = lipgloss.JoinHorizontal(lipgloss.Top, findLabel, r1, "   ", r2, "   ", r3)
+	}
 
 	searchInLabel := labelStyle.Render("Search in:")
 	c1 := m.renderCheckbox("chk_keywords", m.SearchInKeywords, "Keywords")
 	c2 := m.renderCheckbox("chk_title", m.SearchInTitle, "Title")
 	c3 := m.renderCheckbox("chk_desc", m.SearchInDesc, "Description or Story")
 	c4 := m.renderCheckbox("chk_md5", m.SearchInMD5, "MD5 Hash")
-	row3 := lipgloss.JoinHorizontal(lipgloss.Top, searchInLabel, c1, "   ", c2, "   ", c3, "   ", c4)
+
+	var row3 string
+	if m.Width > 0 && m.Width < 100 {
+		row3 = lipgloss.JoinVertical(lipgloss.Left, searchInLabel, c1, c2, c3, c4)
+	} else {
+		row3 = lipgloss.JoinHorizontal(lipgloss.Top, searchInLabel, c1, "   ", c2, "   ", c3, "   ", c4)
+	}
 
 	parts := []string{row1, helper}
 	if sugBlock != "" {
@@ -196,6 +217,9 @@ func (m *Model) renderMiddleSection() string {
 	favParts = append(favParts, favSub)
 	favCol := lipgloss.JoinVertical(lipgloss.Left, favParts...)
 
+	if m.Width > 0 && m.Width < 100 {
+		return lipgloss.JoinVertical(lipgloss.Left, artistCol, "", favCol)
+	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, artistCol, "      ", favCol)
 }
 
@@ -238,25 +262,38 @@ func (m *Model) renderBottomSection() string {
 
 	rightCol := lipgloss.JoinVertical(lipgloss.Left, typeLabel, radAny, orText, "", typeChecks)
 
+	if m.Width > 0 && m.Width < 100 {
+		return lipgloss.JoinVertical(lipgloss.Left, leftCol, "", rightCol)
+	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "          ", rightCol)
 }
 
 func (m *Model) renderFooterSection() string {
 	orderLabel := labelStyle.Render("Order by:")
 	orderCycle := m.renderCycle("cycle_order", m.OrderByLabels[m.OrderByIndex])
-	orderBlock := lipgloss.JoinHorizontal(lipgloss.Center, orderLabel, orderCycle)
 
 	dlMaxLabel := labelStyle.Render("Max downloads:")
 	dlMaxInput := m.renderInput("max_dl", m.MaxDownloads, FieldMaxDownloads)
-	dlMaxBlock := lipgloss.JoinHorizontal(lipgloss.Center, dlMaxLabel, dlMaxInput)
 
 	activeMaxLabel := labelStyle.Render("Simultaneous downloads:")
 	activeMaxInput := m.renderInput("max_active", m.MaxActive, FieldMaxActive)
-	activeMaxBlock := lipgloss.JoinHorizontal(lipgloss.Center, activeMaxLabel, activeMaxInput)
 
 	dlCaptionLabel := labelStyle.Render("Download keywords:")
 	dlCaptionCheckbox := m.renderCheckbox("chk_dl_caption", m.DownloadCaption, "Save as .txt")
-	dlCaptionBlock := lipgloss.JoinHorizontal(lipgloss.Top, dlCaptionLabel, dlCaptionCheckbox)
+
+	var orderBlock, dlMaxBlock, activeMaxBlock, dlCaptionBlock string
+
+	if m.Width > 0 && m.Width < 100 {
+		orderBlock = lipgloss.JoinVertical(lipgloss.Left, orderLabel, orderCycle)
+		dlMaxBlock = lipgloss.JoinVertical(lipgloss.Left, dlMaxLabel, dlMaxInput)
+		activeMaxBlock = lipgloss.JoinVertical(lipgloss.Left, activeMaxLabel, activeMaxInput)
+		dlCaptionBlock = lipgloss.JoinVertical(lipgloss.Left, dlCaptionLabel, dlCaptionCheckbox)
+	} else {
+		orderBlock = lipgloss.JoinHorizontal(lipgloss.Center, orderLabel, orderCycle)
+		dlMaxBlock = lipgloss.JoinHorizontal(lipgloss.Center, dlMaxLabel, dlMaxInput)
+		activeMaxBlock = lipgloss.JoinHorizontal(lipgloss.Center, activeMaxLabel, activeMaxInput)
+		dlCaptionBlock = lipgloss.JoinHorizontal(lipgloss.Top, dlCaptionLabel, dlCaptionCheckbox)
+	}
 
 	searchBtn := m.renderButton("btn_search_bottom", "Search")
 

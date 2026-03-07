@@ -63,3 +63,21 @@ func (p *Cache[K, V]) Get(k K) (V, error) {
 
 	return j.val, j.err
 }
+
+func (p *Cache[K, V]) Delete(k K) {
+	p.pmu.Lock()
+	defer p.pmu.Unlock()
+
+	p.fmu.Lock()
+	delete(p.finished, k)
+	p.fmu.Unlock()
+}
+
+func (p *Cache[K, V]) Clear() {
+	p.pmu.Lock()
+	defer p.pmu.Unlock()
+
+	p.fmu.Lock()
+	clear(p.finished)
+	p.fmu.Unlock()
+}

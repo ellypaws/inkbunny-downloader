@@ -151,6 +151,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		res, c := m.handleMouse(msg)
 		return res, c
 
+	case teaV1.MouseMsg:
+		if msg.Type == teaV1.MouseWheelUp {
+			m.ScrollOffset -= 3
+		} else if msg.Type == teaV1.MouseWheelDown {
+			m.ScrollOffset += 3
+		}
+		m.clampScroll()
+		return m, nil
+
 	case tea.MouseMsg:
 		res, c := m.handleMouse(msg)
 		return res, c
