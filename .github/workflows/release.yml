@@ -148,6 +148,10 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             output="${APP_NAME}-windows${{ matrix.ext }}"
           fi
+          nopackage_flag="-nopackage"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            nopackage_flag=""
+          fi
           upx_flag=""
           if [ "${{ matrix.use_upx }}" = "true" ]; then
             upx_flag="-upx"
@@ -157,7 +161,7 @@ jobs:
             -clean \
             -trimpath \
             -m \
-            -nopackage \
+            $nopackage_flag \
             -s \
             -platform "${{ matrix.platform }}" \
             -o "$output" \
