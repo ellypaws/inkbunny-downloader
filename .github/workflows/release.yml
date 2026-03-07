@@ -1,0 +1,194 @@
+name: Build And Release
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: inkbunny-downloader
+
+jobs:
+  build-tui:
+    name: TUI ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ""
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: .exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download Go modules
+        run: go mod download
+        shell: bash
+
+      - name: Build TUI binary
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=0
+          export GOOS="${{ matrix.goos }}"
+          export GOARCH="${{ matrix.goarch }}"
+
+          output="${APP_NAME}-tui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          go build -trimpath -ldflags="-s -w" -o "$output" ./cmd/tui
+        shell: bash
+
+      - name: Upload TUI artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APP_NAME }}-tui-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.APP_NAME }}-tui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          if-no-files-found: error
+
+  build-wails:
+    name: Wails ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            platform: linux/amd64
+            ext: ""
+            use_upx: true
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            platform: windows/amd64
+            ext: .exe
+            use_upx: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install Linux Wails dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -f -o Dpkg::Options::="--force-overwrite" -y --no-install-recommends \
+            build-essential \
+            gcc \
+            pkg-config \
+            libwebkit2gtk-4.0-dev \
+            libgtk-3-dev \
+            upx
+          sudo rm -rf /var/lib/apt/lists/*
+        shell: bash
+
+      - name: Download Go modules
+        run: go mod download
+        shell: bash
+
+      - name: Resolve Wails CLI version
+        id: wails-version
+        run: |
+          echo "version=$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ steps.wails-version.outputs.version }}
+        shell: bash
+
+      - name: Build frontend
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+        shell: bash
+
+      - name: Build Wails app
+        run: |
+          set -euo pipefail
+          export PATH="$(go env GOPATH)/bin:$PATH"
+
+          output="${APP_NAME}-wails-${{ matrix.goos }}-${{ matrix.goarch }}"
+          upx_flag=""
+          if [ "${{ matrix.use_upx }}" = "true" ]; then
+            upx_flag="-upx"
+          fi
+
+          wails build \
+            -clean \
+            -trimpath \
+            -m \
+            -nopackage \
+            -s \
+            -platform "${{ matrix.platform }}" \
+            -o "$output" \
+            $upx_flag
+        shell: bash
+
+      - name: Upload Wails artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APP_NAME }}-wails-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/bin/${{ env.APP_NAME }}-wails-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-tui
+      - build-wails
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ env.APP_NAME }}-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
