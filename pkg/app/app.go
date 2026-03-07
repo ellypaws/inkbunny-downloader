@@ -107,13 +107,14 @@ func (a *App) Login(username, password string) (SessionInfo, error) {
 }
 
 func (a *App) EnsureGuestSession() (SessionInfo, error) {
-	user, err := a.ensureSearchSession()
+	guest, err := inkbunny.Login("guest", "")
 	if err != nil {
 		return SessionInfo{}, err
 	}
-	if user == nil {
+	if guest == nil {
 		return SessionInfo{}, errors.New("guest session unavailable")
 	}
+	a.setSession(guest)
 	return a.GetSession(), nil
 }
 
@@ -292,12 +293,7 @@ func (a *App) ensureSearchSession() (*inkbunny.User, error) {
 	if current != nil && current.SID != "" {
 		return current, nil
 	}
-	guest, err := inkbunny.Login("guest", "")
-	if err != nil {
-		return nil, err
-	}
-	a.setSession(guest)
-	return guest, nil
+	return nil, errors.New("sign in to continue")
 }
 
 func (a *App) setSession(user *inkbunny.User) {

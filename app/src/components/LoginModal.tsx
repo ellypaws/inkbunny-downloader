@@ -1,4 +1,4 @@
-import { LoaderCircle, LogIn, Sparkles, UserRound, X } from 'lucide-react'
+import { LoaderCircle, LogIn, UserRound, X } from 'lucide-react'
 
 import type { SessionInfo } from '../lib/types'
 
@@ -12,7 +12,6 @@ type LoginModalProps = {
   onChangeUsername: (value: string) => void
   onChangePassword: (value: string) => void
   onClose: () => void
-  onGuest: () => void
   onSubmit: () => void
 }
 
@@ -42,7 +41,7 @@ export function LoginModal(props: LoginModalProps) {
               Sign In
             </h2>
             <p className="text-[#2D2D44]/70 dark:text-white/80 font-medium">
-              Sign in now, continue as guest, or close this window and start searching.
+              Enter your Inkbunny credentials to continue.
             </p>
           </div>
         </div>
@@ -79,7 +78,7 @@ export function LoginModal(props: LoginModalProps) {
           </p>
         ) : null}
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="mt-6">
           <button
             onClick={props.onSubmit}
             disabled={props.loading}
@@ -88,18 +87,10 @@ export function LoginModal(props: LoginModalProps) {
             {props.loading ? <LoaderCircle className="animate-spin" size={20} /> : <LogIn size={20} />}
             Login
           </button>
-          <button
-            onClick={props.onGuest}
-            disabled={props.loading}
-            className="w-full py-5 bg-[#73D216] hover:bg-[#4E9A06] disabled:opacity-65 text-white font-black rounded-2xl shadow-xl hover:shadow-2xl active:scale-95 transform transition-all flex justify-center items-center gap-2 border-b-8 border-[#2f6d05]"
-          >
-            <Sparkles size={20} />
-            Continue as Guest
-          </button>
         </div>
 
         <div className="mt-4 rounded-2xl bg-white/45 dark:bg-[#1A1733]/50 px-4 py-3 text-sm font-bold text-[#2D2D44]/80 dark:text-white/75">
-          Session: {props.session.hasSession ? `${props.session.username} (${props.session.isGuest ? 'guest' : 'member'})` : 'Not signed in'}
+          {props.session.hasSession ? `${props.session.username} (${props.session.isGuest ? 'guest' : 'member'})` : 'Not signed in'}
         </div>
       </div>
     </div>

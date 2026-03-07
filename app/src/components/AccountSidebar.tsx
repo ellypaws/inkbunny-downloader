@@ -41,7 +41,23 @@ export function AccountSidebar(props: AccountSidebarProps) {
           </div>
 
           <div className="space-y-3 text-sm font-bold text-[#2D2D44]/85 dark:text-gray-200">
-            <SummaryRow label="Allowed ratings" value={formatRatingsSummary(props.session.ratingsMask)} />
+            <div className="flex items-start justify-between gap-4">
+              <span>Allowed ratings</span>
+              <div className="flex max-w-[13rem] flex-wrap justify-end gap-2">
+                {getRatingBadges(props.session.ratingsMask).map((rating) => (
+                  <span
+                    key={rating.label}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-4 ${
+                      rating.enabled
+                        ? 'border-[#2A7FA6] text-[#2A7FA6] dark:border-[#89CFF0] dark:text-[#89CFF0]'
+                        : 'border-[#2D2D44]/18 text-[#2D2D44]/45 dark:border-white/12 dark:text-white/35'
+                    }`}
+                  >
+                    {rating.label}
+                  </span>
+                ))}
+              </div>
+            </div>
             <SummaryRow label="Results per page" value={String(props.searchParams.perPage)} />
             <SummaryRow
               label="Maximum files"
@@ -70,10 +86,12 @@ export function AccountSidebar(props: AccountSidebarProps) {
               />
               <span className="min-w-0 leading-5">Save keywords as text files</span>
             </label>
-            <div className="flex items-start gap-2 rounded-2xl bg-[#4ED2D6]/18 p-4 text-sm font-semibold text-[#2D2D44]/80 dark:bg-[#FFFACD]/14 dark:text-gray-200">
-              <Check className="mt-0.5 shrink-0 text-[#73D216]" size={16} />
-              <span>Searching before signing in will automatically start a guest session.</span>
-            </div>
+            {!props.session.hasSession ? (
+              <div className="flex items-start gap-2 rounded-2xl bg-[#4ED2D6]/18 p-4 text-sm font-semibold text-[#2D2D44]/80 dark:bg-[#FFFACD]/14 dark:text-gray-200">
+                <Check className="mt-0.5 shrink-0 text-[#73D216]" size={16} />
+                <span>Sign in before searching or downloading.</span>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -103,8 +121,10 @@ function AvatarImage(props: { src: string; alt: string }) {
   )
 }
 
-function formatRatingsSummary(mask: string) {
-  const labels = ['General', 'Mature - Nudity', 'Mature - Violence', 'Adult - Sexual Themes', 'Adult - Strong Violence']
-  const enabled = labels.filter((_, index) => mask[index] === '1')
-  return enabled.length > 0 ? enabled.join(', ') : 'General only'
+function getRatingBadges(mask: string) {
+  const labels = ['General', 'Nudity', 'Violence', 'Sexual', 'Strong Violence']
+  return labels.map((label, index) => ({
+    label,
+    enabled: mask[index] === '1' || (!mask && index === 0),
+  }))
 }

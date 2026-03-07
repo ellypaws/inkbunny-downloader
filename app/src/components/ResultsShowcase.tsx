@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ChevronDown, Download, LoaderCircle, Search as SearchIcon, Star } from 'lucide-react'
-import { useEffect, useMemo, useRef } from 'react'
+import { Check, ChevronDown, Download, LoaderCircle, Plus, Search as SearchIcon, Star } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { accentClass } from '../lib/format'
 import type { SearchResponse, SubmissionCard } from '../lib/types'
@@ -50,10 +50,6 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </h3>
       </div>
 
-      <h1 className="font-teko text-[144px] font-bold text-[#2D2D44] dark:text-[#73D216] tracking-[-0.02em] leading-[118.8px] -mb-[54px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
-        PREVIEW
-      </h1>
-
       <div className="relative z-10 flex items-center justify-between mb-5 px-2 gap-4 flex-wrap">
         <div className="text-sm font-bold text-[#2D2D44]/75 dark:text-white/75 mt-6">
           {props.searchResponse
@@ -80,7 +76,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           <div className="w-full h-full flex flex-col items-center justify-center bg-white/35 dark:bg-[#1A1733]/55 text-center px-6">
             <SearchIcon className="text-[#89CFF0]" size={42} />
             <p className="mt-4 max-w-md text-lg font-bold text-[#2D2D44] dark:text-white">
-              Matching submissions will appear here after you search.
+              Search results appear here.
             </p>
           </div>
         ) : (
@@ -96,26 +92,26 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   index < panelItems.length - 1 ? 'border-b-4 md:border-b-0 md:border-r-4 border-white/70 dark:border-gray-700/70' : ''
                 }`}
               >
-                {item.thumbnailUrl || item.previewUrl || item.screenUrl ? (
-                  <img
-                    src={item.thumbnailUrl || item.previewUrl || item.screenUrl}
-                    alt={item.title}
-                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-500"
-                  />
-                ) : null}
+                <SubmissionPreviewImage
+                  submission={item}
+                  alt={item.title}
+                  className="absolute inset-0 h-full w-full object-cover opacity-70 transition-opacity duration-500 group-hover:opacity-100"
+                />
                 <div className={`absolute inset-0 bg-gradient-to-t ${accentClass(item.accent)} via-transparent to-transparent`} />
                 <div className="absolute inset-0 bg-gradient-to-br from-[#14112C]/10 via-transparent to-[#14112C]/60" />
 
                 <button
+                  type="button"
                   onClick={(event) => {
                     event.stopPropagation()
                     props.onToggleSelection(item.submissionId)
                   }}
-                  className={`absolute top-5 right-5 z-20 rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em] shadow-pop ${
-                    selected ? 'bg-[#73D216] text-white' : 'bg-white/80 text-[#2D2D44]'
+                  aria-label={selected ? `Remove ${item.title} from selection` : `Select ${item.title}`}
+                  className={`absolute top-5 right-5 z-20 flex h-11 w-11 items-center justify-center rounded-full shadow-pop ${
+                    selected ? 'bg-[#73D216] text-white' : 'bg-white/85 text-[#2D2D44]'
                   }`}
                 >
-                  {selected ? 'Selected' : 'Select'}
+                  {selected ? <Check size={18} /> : <Plus size={18} />}
                 </button>
 
                 <div className="absolute bottom-8 left-8 z-10 max-w-[72%]">
@@ -139,23 +135,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
       {props.results.length > 0 ? (
         <div className="mt-6 bg-white/50 dark:bg-gray-800/50 backdrop-blur-2xl rounded-toy-lg p-5 shadow-pop relative border-4 border-[#89CFF0]/30">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <div className="font-display text-2xl font-black text-[#2D2D44] dark:text-white">
-                Result List
-              </div>
-              <div className="mt-1 text-sm font-semibold text-[#2D2D44]/70 dark:text-white/70">
-                Scroll through the full search result set without rendering every row at once.
-              </div>
-            </div>
-            <div className="rounded-full bg-white/70 dark:bg-[#1A1733]/80 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#3465A4] dark:text-[#89CFF0]">
-              Virtualized
-            </div>
-          </div>
 
           <div
             ref={scrollRef}
-            className="mt-4 h-[420px] overflow-y-auto rounded-toy-sm bg-white/55 dark:bg-[#151129]/55 border border-white/40 dark:border-white/8"
+            className="mt-4 h-[75vh] overflow-y-auto rounded-toy-sm bg-white/55 dark:bg-[#151129]/55 border border-white/40 dark:border-white/8"
           >
             <div
               className="relative w-full"
@@ -184,13 +167,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       }`}
                     >
                       <div className="h-14 w-[72px] overflow-hidden rounded-xl bg-[#2D2D44]/10 dark:bg-white/10">
-                        {item.thumbnailUrl || item.previewUrl || item.screenUrl ? (
-                          <img
-                            src={item.thumbnailUrl || item.previewUrl || item.screenUrl}
-                            alt={item.title}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
+                        <SubmissionPreviewImage submission={item} alt={item.title} className="h-full w-full object-cover" />
                       </div>
                       <div className="min-w-0">
                         <div className="truncate text-sm font-black text-[#2D2D44] dark:text-white">
@@ -201,15 +178,17 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                         </div>
                       </div>
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation()
                           props.onToggleSelection(item.submissionId)
                         }}
-                        className={`rounded-full px-3 py-2 text-xs font-black uppercase tracking-[0.18em] ${
+                        aria-label={selected ? `Remove ${item.title} from selection` : `Select ${item.title}`}
+                        className={`flex h-9 w-9 items-center justify-center rounded-full ${
                           selected ? 'bg-[#73D216] text-white' : 'bg-[#14112C] text-white'
                         }`}
                       >
-                        {selected ? 'Selected' : 'Select'}
+                        {selected ? <Check size={16} /> : <Plus size={16} />}
                       </button>
                     </div>
                   </div>
@@ -251,6 +230,39 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       ) : null}
     </section>
+  )
+}
+
+function SubmissionPreviewImage(props: { submission: SubmissionCard; alt: string; className: string }) {
+  const sources = getPreviewSources(props.submission)
+  const [sourceIndex, setSourceIndex] = useState(0)
+
+  useEffect(() => {
+    setSourceIndex(0)
+  }, [props.submission.submissionId, props.submission.thumbnailUrl, props.submission.previewUrl, props.submission.screenUrl, props.submission.fullUrl])
+
+  const source = sources[sourceIndex]
+  if (!source) {
+    return null
+  }
+
+  return (
+    <img
+      src={source}
+      alt={props.alt}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => {
+        setSourceIndex((current) => (current < sources.length - 1 ? current + 1 : current))
+      }}
+      className={props.className}
+    />
+  )
+}
+
+function getPreviewSources(submission: SubmissionCard) {
+  return [submission.thumbnailUrl, submission.previewUrl, submission.screenUrl, submission.fullUrl].filter(
+    (value): value is string => Boolean(value),
   )
 }
 

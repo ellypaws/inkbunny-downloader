@@ -38,9 +38,6 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
       <div className="relative z-10 overflow-hidden rounded-toy border-2 border-white/45 bg-white/48 dark:border-white/8 dark:bg-[#18142E]/52">
         <div className="border-b border-[#2D2D44]/10 px-5 py-4 dark:border-white/10 sm:px-6">
           <h2 className="font-display text-3xl font-black text-[#2D2D44] dark:text-white sm:text-[2.1rem]">Search</h2>
-          <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-[#2D2D44]/70 dark:text-white/70">
-            Search as a member or continue with guest access. Session ratings are applied automatically.
-          </p>
         </div>
 
         <div className="space-y-6 px-5 py-5 sm:px-6 sm:py-6">
@@ -213,13 +210,10 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
 
               <div className="grid gap-4 sm:grid-cols-[132px_minmax(0,1fr)]">
                 <FieldLabel title="Content rated" subtitle="based on the current session" />
-                <div className="space-y-2.5">
+                <div className="flex flex-wrap gap-2">
                   {ratingRows.map((rating) => (
-                    <ReadonlyChoiceRow key={rating.label} checked={rating.enabled} label={rating.label} />
+                    <RatingBadge key={rating.label} active={rating.enabled} label={rating.label} />
                   ))}
-                  <div className="pt-1 text-sm font-semibold text-[#3465A4] dark:text-[#89CFF0]">
-                    Ratings follow the current Inkbunny session.
-                  </div>
                 </div>
               </div>
             </div>
@@ -361,12 +355,17 @@ function ChoiceCard(props: { type: 'radio' | 'checkbox'; checked: boolean; label
   )
 }
 
-function ReadonlyChoiceRow(props: { checked: boolean; label: string }) {
+function RatingBadge(props: { active: boolean; label: string }) {
   return (
-    <label className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-3 text-sm font-semibold text-[#2D2D44] dark:text-white/90">
-      <input type="checkbox" checked={props.checked} readOnly className="mt-0.5 h-4 w-4 accent-[#FF34A5]" />
-      <span className="min-w-0 leading-5">{props.label}</span>
-    </label>
+    <span
+      className={`rounded-full border px-3 py-1.5 text-xs font-semibold tracking-[0.04em] ${
+        props.active
+          ? 'border-[#2A7FA6] bg-[#2A7FA6]/8 text-[#2A7FA6] dark:border-[#89CFF0] dark:bg-[#89CFF0]/10 dark:text-[#89CFF0]'
+          : 'border-[#2D2D44]/18 bg-white/55 text-[#2D2D44]/55 dark:border-white/12 dark:bg-[#1A1733]/40 dark:text-white/45'
+      }`}
+    >
+      {props.label}
+    </span>
   )
 }
 

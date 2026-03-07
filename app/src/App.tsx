@@ -168,21 +168,6 @@ export default function App() {
     }
   }
 
-  async function handleGuest() {
-    setAuthLoading(true)
-    setAuthError('')
-    try {
-      const nextSession = await backend.ensureGuestSession()
-      setSession(nextSession)
-      setSettings(nextSession.settings)
-      setLoginOpen(false)
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Guest login failed.')
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
   async function handleLogout() {
     try {
       const nextSession = await backend.logout()
@@ -195,6 +180,11 @@ export default function App() {
   }
 
   async function handleSearch(page = 1) {
+    if (!session.hasSession) {
+      setSearchError('Sign in to search.')
+      setLoginOpen(true)
+      return
+    }
     setSearchLoading(true)
     setSearchError('')
     try {
@@ -291,7 +281,6 @@ export default function App() {
           onChangeUsername={setLoginUsername}
           onChangePassword={setLoginPassword}
           onClose={() => setLoginOpen(false)}
-          onGuest={() => void handleGuest()}
           onSubmit={() => void handleLogin()}
         />
 
