@@ -25,6 +25,7 @@ type Config struct {
 
 	NoTUI      bool
 	Headless   bool
+	TUI        bool
 	NeedsLogin bool
 }
 
@@ -98,6 +99,10 @@ func Parse() Config {
 		fmt.Fprintf(out, "      %s\n", descStyle.Render("but we can force it to false instead (e.g., --headless=false)."))
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--headless=false"))
 
+		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--tui"))
+		fmt.Fprintf(out, "      %s\n", descStyle.Render("Forces Terminal UI mode even when other flags are provided."))
+		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--search \"cats\" --tui"))
+
 		fmt.Fprintf(out, "%s\n", headingStyle.Render("EXAMPLES:"))
 		fmt.Fprintf(out, "  1) %s\n", descStyle.Render("Download up to 10 sketches by 'artist_name', ordered by favorites:"))
 		fmt.Fprintf(out, "     %s\n\n", exampleStyle.Render(fmt.Sprintf("%s --artist \"artist_name\" --type sketch --order favs --limit 10", os.Args[0])))
@@ -118,18 +123,26 @@ func Parse() Config {
 	flag.StringVar(&c.MaxActive, "active", "", "Max active downloads")
 	flag.BoolVar(&c.DownloadCaption, "caption", false, "Download keywords as .txt")
 	flag.BoolVar(&c.Headless, "headless", false, "Force headless mode")
+	flag.BoolVar(&c.TUI, "tui", false, "Force TUI mode")
 
 	flag.Parse()
 
 	c.NoTUI = len(os.Args) > 1
 	headlessProvided := false
+	tuiProvided := false
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == "headless" {
 			headlessProvided = true
 		}
+		if f.Name == "tui" {
+			tuiProvided = true
+		}
 	})
 
-	if headlessProvided {
+	if tuiProvided && c.TUI {
+		c.NoTUI = false
+		c.Headless = false
+	} else if headlessProvided {
 		c.NoTUI = c.Headless
 	} else {
 		c.Headless = c.NoTUI
