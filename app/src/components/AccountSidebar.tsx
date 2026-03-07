@@ -34,7 +34,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
               {props.session.hasSession ? (
                 <button
                   onClick={props.onLogout}
-                  className="rounded-full border border-[#c2c7bc] bg-[#f7f8f2]/92 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-[#555753] transition-colors hover:bg-[#e8eddc] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white/75 dark:hover:bg-[#2f353a]"
+                  className="rounded-full border border-[#2D2D44]/18 px-2.5 py-1 text-[11px] font-semibold text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
                 >
                   Logout
                 </button>

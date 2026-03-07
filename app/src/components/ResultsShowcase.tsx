@@ -133,8 +133,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   return (
     <section className="relative mt-4">
-      <h1 className="font-teko text-[144px] font-bold text-[#2D2D44] dark:text-white tracking-[-0.02em] leading-[118.8px] -mb-[54px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
-        PREVIEW
+      <h1 className="font-teko text-[144px] font-bold text-[#2D2D44] dark:text-white tracking-[-0.02em] leading-[118.8px] -mb-[130px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
+        Preview
       </h1>
 
       <div className="relative z-10 mb-5 flex items-center justify-end gap-4 px-2 flex-wrap">

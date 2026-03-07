@@ -82,7 +82,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 		Page:         page,
 		PagesCount:   int(response.PagesCount),
 		ResultsCount: int(response.ResultsCountAll),
-		Results:      mapSubmissionCards(response.Submissions),
+		Results:      mapSubmissionCards(response.Submissions, user.SID),
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -133,7 +133,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 		Page:         page,
 		PagesCount:   int(response.PagesCount),
 		ResultsCount: int(response.ResultsCountAll),
-		Results:      mapSubmissionCards(response.Submissions),
+		Results:      mapSubmissionCards(response.Submissions, user.SID),
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -283,7 +283,7 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	return req, nil
 }
 
-func mapSubmissionCards(submissions []inkbunny.SubmissionSearch) []SubmissionCard {
+func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string) []SubmissionCard {
 	cards := make([]SubmissionCard, 0, len(submissions))
 	accents := []string{"rose", "mint", "lavender", "sky"}
 
@@ -311,15 +311,25 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch) []SubmissionCar
 			PageCount:    int(submission.PageCount),
 			Updated:      submission.Updated.Bool(),
 			FileName:     submission.FileName.String(),
-			PreviewURL:   submission.FileURLPreview.String(),
-			ScreenURL:    submission.FileURLScreen.String(),
-			FullURL:      submission.FileURLFull.String(),
-			ThumbnailURL: thumbnail,
+			PreviewURL:   submissionPreviewURL(submission.FileURLPreview.String(), submission.Public.Bool(), sid),
+			ScreenURL:    submissionPreviewURL(submission.FileURLScreen.String(), submission.Public.Bool(), sid),
+			FullURL:      submissionPreviewURL(submission.FileURLFull.String(), submission.Public.Bool(), sid),
+			ThumbnailURL: submissionPreviewURL(thumbnail, submission.Public.Bool(), sid),
 			BadgeText:    badge,
 			Accent:       accents[index%len(accents)],
 		})
 	}
 	return cards
+}
+
+func submissionPreviewURL(raw string, isPublic bool, sid string) string {
+	if raw == "" || isPublic || sid == "" {
+		return raw
+	}
+	if strings.Contains(raw, "?") {
+		return raw + "&sid=" + sid
+	}
+	return raw + "?sid=" + sid
 }
 
 func (a *App) ensureCaches(user *inkbunny.User) {
