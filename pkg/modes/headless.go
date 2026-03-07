@@ -55,7 +55,7 @@ Login:
 	usernameCache := flight.NewCache(user.SearchMembers)
 	config.ApplyTo(&request, &searchIn, &favBy, &maxDownloads, nil, &downloadCaption)
 
-	request.Keywords = nil
+	request.SearchInKeywords = nil
 	request.Title = nil
 	request.Description = nil
 	request.MD5 = nil
@@ -63,7 +63,7 @@ Login:
 	for _, v := range searchIn {
 		switch v {
 		case flags.Keywords:
-			request.Keywords = &inkbunny.Yes
+			request.SearchInKeywords = &inkbunny.Yes
 		case flags.Title:
 			request.Title = &inkbunny.Yes
 		case flags.Description:

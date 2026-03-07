@@ -11,7 +11,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v0.4.2
 	github.com/charmbracelet/x/ansi v0.11.6
-	github.com/ellypaws/inkbunny v0.0.0-20260307100241-8d2565748efb
+	github.com/ellypaws/inkbunny v0.0.0-20260307181134-0a811a144cdb
 	github.com/lrstanley/bubblezone v1.0.0
 	github.com/muesli/termenv v0.16.0
 	github.com/wailsapp/wails/v2 v2.11.0

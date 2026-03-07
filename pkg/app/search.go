@@ -235,7 +235,7 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	}
 
 	if params.SearchInKeywords {
-		req.Keywords = &inkbunny.Yes
+		req.SearchInKeywords = &inkbunny.Yes
 	}
 	if params.SearchInTitle {
 		req.Title = &inkbunny.Yes
@@ -246,8 +246,8 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	if params.SearchInMD5 {
 		req.MD5 = &inkbunny.Yes
 	}
-	if req.Keywords == nil && req.Title == nil && req.Description == nil && req.MD5 == nil {
-		req.Keywords = &inkbunny.Yes
+	if req.SearchInKeywords == nil && req.Title == nil && req.Description == nil && req.MD5 == nil {
+		req.SearchInKeywords = &inkbunny.Yes
 		req.Title = &inkbunny.Yes
 	}
 
