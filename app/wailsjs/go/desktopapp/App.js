@@ -46,12 +46,20 @@ export function Logout() {
   return window['go']['desktopapp']['App']['Logout']();
 }
 
+export function OpenDownloadDirectory() {
+  return window['go']['desktopapp']['App']['OpenDownloadDirectory']();
+}
+
 export function PickDownloadDirectory() {
   return window['go']['desktopapp']['App']['PickDownloadDirectory']();
 }
 
 export function Search(arg1) {
   return window['go']['desktopapp']['App']['Search'](arg1);
+}
+
+export function UpdateRatings(arg1) {
+  return window['go']['desktopapp']['App']['UpdateRatings'](arg1);
 }
 
 export function UpdateSettings(arg1) {

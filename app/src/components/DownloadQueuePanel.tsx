@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, FolderOpen } from "lucide-react";
 
 import type { QueueSnapshot } from "../lib/types";
 import { formatBytes } from "../lib/format";
@@ -9,6 +9,7 @@ type DownloadQueuePanelProps = {
   selectedCount: number;
   canQueueDownloads: boolean;
   allSelected: boolean;
+  onOpenDownloadFolder: () => void;
   onQueueDownloads: () => void;
   onToggleSelectAll: () => void;
   onCancel: (jobId: string) => void;
@@ -42,11 +43,19 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/88 px-4 py-4 dark:border-[#4a5360] dark:bg-[#1f252b]/80">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/88 px-4 py-4 backdrop-blur-xl dark:border-[#4a5360] dark:bg-[#1f252b]/80">
         <div className="text-sm font-bold text-[#555753] dark:text-white/75">
           {props.selectedCount} selected for download
         </div>
         <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={props.onOpenDownloadFolder}
+            className="flex items-center gap-2 rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/92 px-4 py-2.5 text-sm font-black text-[#333333] transition-all hover:bg-[#e8eddc] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white dark:hover:bg-[#2f353a]"
+          >
+            <FolderOpen size={16} />
+            Open Folder
+          </button>
           <button
             type="button"
             onClick={props.onToggleSelectAll}

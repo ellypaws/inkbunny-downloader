@@ -24,8 +24,12 @@ export function Login(arg1:string,arg2:string):Promise<desktopapp.SessionInfo>;
 
 export function Logout():Promise<desktopapp.SessionInfo>;
 
+export function OpenDownloadDirectory():Promise<void>;
+
 export function PickDownloadDirectory():Promise<string>;
 
 export function Search(arg1:desktopapp.SearchParams):Promise<desktopapp.SearchResponse>;
+
+export function UpdateRatings(arg1:string):Promise<desktopapp.SessionInfo>;
 
 export function UpdateSettings(arg1:desktopapp.AppSettings):Promise<desktopapp.AppSettings>;

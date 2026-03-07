@@ -40,6 +40,8 @@ export default function App() {
     [],
   );
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchCollapsed, setSearchCollapsed] = useState(false);
+  const [ratingUpdating, setRatingUpdating] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [keywordSuggestions, setKeywordSuggestions] = useState<string[]>([]);
   const [artistSuggestions, setArtistSuggestions] = useState<
@@ -286,7 +288,11 @@ export default function App() {
   }
 
   async function handleQueueDownloads() {
-    if (!searchResponse || selectedSubmissionIds.length === 0) {
+    await handleDownloadSubmissions(selectedSubmissionIds);
+  }
+
+  async function handleDownloadSubmissions(submissionIds: string[]) {
+    if (!searchResponse || submissionIds.length === 0) {
       return;
     }
     setQueueMessage("");
@@ -294,7 +300,7 @@ export default function App() {
       const snapshot = await backend.enqueueDownloads(
         searchResponse.searchId,
         {
-          submissions: selectedSubmissionIds.map((submissionId) => ({
+          submissions: submissionIds.map((submissionId) => ({
             submissionId,
           })),
         },
@@ -306,12 +312,37 @@ export default function App() {
       );
       setQueue(snapshot);
       setQueueMessage(
-        `Queued ${selectedSubmissionIds.length} submission${selectedSubmissionIds.length === 1 ? "" : "s"}.`,
+        `Queued ${submissionIds.length} submission${submissionIds.length === 1 ? "" : "s"}.`,
       );
     } catch (error) {
       setQueueMessage(
         error instanceof Error ? error.message : "Failed to queue downloads.",
       );
+    }
+  }
+
+  async function handleToggleRating(index: number) {
+    if (!session.hasSession || ratingUpdating) {
+      return;
+    }
+
+    const nextMask = toggleRatingMask(session.ratingsMask, index);
+    if (nextMask === session.ratingsMask) {
+      return;
+    }
+
+    setRatingUpdating(true);
+    setSearchError("");
+    try {
+      const nextSession = await backend.updateRatings(nextMask);
+      setSession(nextSession);
+      setSettings(nextSession.settings);
+    } catch (error) {
+      setSearchError(
+        error instanceof Error ? error.message : "Unable to update ratings.",
+      );
+    } finally {
+      setRatingUpdating(false);
     }
   }
 
@@ -393,39 +424,55 @@ export default function App() {
               artistSuggestions={artistSuggestions}
               favoriteSuggestions={favoriteSuggestions}
               loading={searchLoading}
+              ratingUpdating={ratingUpdating}
+              collapsed={searchCollapsed}
               error={searchError}
               onChange={(updater) =>
                 setSearchParams((previous) => updater(previous))
               }
               onSearch={() => void handleSearch(1)}
-            />
-            <AccountSidebar
-              session={session}
-              settings={settings}
-              searchParams={searchParams}
-              onPickDirectory={() =>
-                void backend
-                  .pickDownloadDirectory()
-                  .then((directory) => {
-                    if (directory) {
-                      void persistSettings({ downloadDirectory: directory });
-                    }
-                  })
-                  .catch((error: unknown) => {
-                    setQueueMessage(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not open folder picker.",
-                    );
-                  })
+              onToggleCollapse={() =>
+                setSearchCollapsed((current) => !current)
               }
-              onToggleSaveKeywords={(checked) =>
-                setSearchParams((previous) => ({
-                  ...previous,
-                  saveKeywords: checked,
-                }))
-              }
+              onToggleRating={(index) => void handleToggleRating(index)}
             />
+            <div
+              className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+                searchCollapsed
+                  ? "grid-rows-[0fr] opacity-0"
+                  : "grid-rows-[1fr] opacity-100"
+              }`}
+            >
+              <div className="overflow-hidden">
+                <AccountSidebar
+                  session={session}
+                  settings={settings}
+                  searchParams={searchParams}
+                  onPickDirectory={() =>
+                    void backend
+                      .pickDownloadDirectory()
+                      .then((directory) => {
+                        if (directory) {
+                          void persistSettings({ downloadDirectory: directory });
+                        }
+                      })
+                      .catch((error: unknown) => {
+                        setQueueMessage(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not open folder picker.",
+                        );
+                      })
+                  }
+                  onToggleSaveKeywords={(checked) =>
+                    setSearchParams((previous) => ({
+                      ...previous,
+                      saveKeywords: checked,
+                    }))
+                  }
+                />
+              </div>
+            </div>
           </div>
 
           <div ref={resultsRef}>
@@ -445,6 +492,9 @@ export default function App() {
                     : [...previous, submissionId],
                 )
               }
+              onDownloadSubmission={(submissionId) =>
+                void handleDownloadSubmissions([submissionId])
+              }
               onQueueDownloads={() => void handleQueueDownloads()}
               onLoadMore={() =>
                 void handleSearch((searchResponse?.page ?? 1) + 1)
@@ -460,6 +510,17 @@ export default function App() {
               Boolean(searchResponse) && selectedSubmissionIds.length > 0
             }
             allSelected={allResultsSelected}
+            onOpenDownloadFolder={() => {
+              backend
+                .openDownloadDirectory()
+                .catch((error: unknown) => {
+                  setQueueMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not open the download folder.",
+                  );
+                });
+            }}
             onQueueDownloads={() => void handleQueueDownloads()}
             onToggleSelectAll={handleToggleSelectAll}
             onCancel={(jobId) => {
@@ -483,4 +544,18 @@ function getSuggestionQuery(query: string) {
 
   const token = trimmed.split(/\s+/).pop() ?? "";
   return token.startsWith("-") ? token.slice(1) : token;
+}
+
+function toggleRatingMask(mask: string, index: number) {
+  const characters = normalizeRatingsMask(mask).split("");
+  characters[index] = characters[index] === "1" ? "0" : "1";
+  if (!characters.includes("1")) {
+    characters[index] = "1";
+  }
+  return characters.join("");
+}
+
+function normalizeRatingsMask(mask: string) {
+  const base = mask.padEnd(5, "0").slice(0, 5);
+  return base.includes("1") ? base : "10000";
 }

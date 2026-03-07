@@ -86,6 +86,19 @@ export function LoginModal(props: LoginModalProps) {
           </p>
         ) : null}
 
+        <div className="mt-4 rounded-2xl border border-[#c8cbc1] bg-[#f7f8f2]/88 px-4 py-3 text-sm font-semibold text-[#555753] backdrop-blur-md dark:border-[#4a5360] dark:bg-[#1f252b]/88 dark:text-white/75">
+          If sign-in fails, make sure API access is enabled in your Inkbunny
+          account settings.
+          <a
+            href="https://inkbunny.net/account.php#:~:text=API%20(External%20Scripting)%3A-,Enable%20API%20Access,-Enable%20this%20option"
+            target="_blank"
+            rel="noreferrer"
+            className="ml-1 font-black text-[#3465A4] underline underline-offset-2 transition-colors hover:text-[#204A87] dark:text-[#89CFF0] dark:hover:text-white"
+          >
+            Open API settings
+          </a>
+        </div>
+
         <div className="mt-6">
           <button
             type="submit"

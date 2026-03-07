@@ -131,6 +131,35 @@ func (a *App) Logout() (SessionInfo, error) {
 	return a.GetSession(), nil
 }
 
+func (a *App) UpdateRatings(mask string) (SessionInfo, error) {
+	user, err := a.ensureSearchSession()
+	if err != nil {
+		return SessionInfo{}, err
+	}
+	ratings := inkbunny.ParseMask(strings.TrimSpace(mask))
+	if err := user.ChangeRatings(ratings); err != nil {
+		if a.handleSessionError(err) {
+			user, err = a.ensureSearchSession()
+			if err != nil {
+				return SessionInfo{}, err
+			}
+			if retryErr := user.ChangeRatings(ratings); retryErr != nil {
+				return SessionInfo{}, retryErr
+			}
+		} else {
+			return SessionInfo{}, err
+		}
+	}
+
+	a.mu.Lock()
+	if a.user != nil && a.user.SID == user.SID {
+		a.user.Ratings = ratings
+	}
+	a.mu.Unlock()
+	a.resetCaches(user)
+	return a.GetSession(), a.persist()
+}
+
 func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 	a.mu.Lock()
 	if settings.DownloadDirectory != "" {

@@ -14,6 +14,8 @@ type BackendApi = {
   Login(username: string, password: string): Promise<SessionInfo>
   EnsureGuestSession(): Promise<SessionInfo>
   Logout(): Promise<SessionInfo>
+  UpdateRatings(mask: string): Promise<SessionInfo>
+  OpenDownloadDirectory(): Promise<void>
   Search(params: SearchParams): Promise<SearchResponse>
   LoadMoreResults(searchId: string, page: number): Promise<SearchResponse>
   GetKeywordSuggestions(query: string): Promise<string[]>
@@ -69,6 +71,12 @@ export const backend = {
   },
   async logout(): Promise<SessionInfo> {
     return getBackend().Logout()
+  },
+  async updateRatings(mask: string): Promise<SessionInfo> {
+    return getBackend().UpdateRatings(mask)
+  },
+  async openDownloadDirectory(): Promise<void> {
+    return getBackend().OpenDownloadDirectory()
   },
   async search(params: SearchParams): Promise<SearchResponse> {
     return getBackend().Search(params)
