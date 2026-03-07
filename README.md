@@ -47,7 +47,7 @@ Inkbunny Downloader is a desktop and terminal app for searching Inkbunny, review
 
 ![Desktop overview](docs/hero.webp)
 
-> [!INFO]
+> [!NOTE]
 > This is an unofficial project. It uses the public Inkbunny API, but it is not affiliated with or endorsed by Inkbunny.
 
 > [!IMPORTANT]
