@@ -135,6 +135,11 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 				return SearchResponse{}, err
 			}
 			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(user, state, nil)
+		} else if a.handleRIDExpiredError(err) {
+			if err := a.refreshSearchStateForced(user, state); err != nil {
+				return SearchResponse{}, err
+			}
+			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(user, state, nil)
 		}
 	}
 	if err != nil {
@@ -770,12 +775,44 @@ func (a *App) resetCaches(user *inkbunny.User) {
 }
 
 func (a *App) handleSessionError(err error) bool {
-	var apiErr inkbunny.ErrorResponse
-	if errors.As(err, &apiErr) && apiErr.Code != nil && *apiErr.Code == inkbunny.ErrInvalidSessionID {
+	code, ok := inkbunnyErrorCode(err)
+	if ok && code == inkbunny.ErrInvalidSessionID {
 		a.clearSession()
 		return true
 	}
 	return false
+}
+
+func (a *App) handleRIDExpiredError(err error) bool {
+	code, ok := inkbunnyErrorCode(err)
+	return ok && (code == inkbunny.ErrNoResultsFound || code == inkbunny.ErrInvalidResultsID)
+}
+
+func inkbunnyErrorCode(err error) (int, bool) {
+	if err == nil {
+		return 0, false
+	}
+
+	var apiErr inkbunny.ErrorResponse
+	if errors.As(err, &apiErr) && apiErr.Code != nil {
+		return *apiErr.Code, true
+	}
+
+	message := strings.TrimSpace(err.Error())
+	if !strings.HasPrefix(message, "[") {
+		return 0, false
+	}
+
+	end := strings.Index(message, "]")
+	if end <= 1 {
+		return 0, false
+	}
+
+	code, parseErr := strconv.Atoi(message[1:end])
+	if parseErr != nil {
+		return 0, false
+	}
+	return code, true
 }
 
 func (a *App) newSearchID() string {
@@ -823,12 +860,24 @@ func (a *App) cachedSearchResponse(user *inkbunny.User, key searchCacheKey) (cac
 }
 
 func (a *App) refreshSearchState(user *inkbunny.User, state *searchState) error {
+	return a.refreshSearchStateWithOptions(user, state, false)
+}
+
+func (a *App) refreshSearchStateForced(user *inkbunny.User, state *searchState) error {
+	return a.refreshSearchStateWithOptions(user, state, true)
+}
+
+func (a *App) refreshSearchStateWithOptions(user *inkbunny.User, state *searchState, force bool) error {
 	if state == nil {
 		return errors.New("search state is missing")
 	}
 	key, normalizedReq, err := makeSearchCacheKey(user, effectiveRatingsMask(user.Ratings.String()), state.Request)
 	if err != nil {
 		return err
+	}
+	if force {
+		a.ensureCaches(user)
+		a.searchCache.Delete(key)
 	}
 	entry, err := a.cachedSearchResponse(user, key)
 	if err != nil {
