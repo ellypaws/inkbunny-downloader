@@ -74,7 +74,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             goos: linux
             goarch: amd64
             platform: linux/amd64
@@ -108,22 +108,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          webkit_pkg=""
-          for candidate in libwebkit2gtk-4.1-dev libwebkit2gtk-4.0-dev; do
-            if apt-cache show "$candidate" >/dev/null 2>&1; then
-              webkit_pkg="$candidate"
-              break
-            fi
-          done
-          if [ -z "$webkit_pkg" ]; then
-            echo "Unable to find a supported WebKitGTK development package" >&2
-            exit 1
-          fi
           sudo apt-get install -f -o Dpkg::Options::="--force-overwrite" -y --no-install-recommends \
             build-essential \
             gcc \
             pkg-config \
-            "$webkit_pkg" \
+            libwebkit2gtk-4.0-dev \
             libgtk-3-dev \
             upx
           sudo rm -rf /var/lib/apt/lists/*
@@ -157,7 +146,7 @@ jobs:
 
           output="${APP_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            output="${APP_NAME}-windows"
+            output="${APP_NAME}-windows${{ matrix.ext }}"
           fi
           upx_flag=""
           if [ "${{ matrix.use_upx }}" = "true" ]; then
