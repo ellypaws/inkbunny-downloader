@@ -640,7 +640,7 @@ function getDownloadedSubmissionIds(queue: QueueSnapshot) {
     }
 
     const current = completedBySubmission.get(job.submissionId);
-    if (job.status === "completed") {
+    if (job.status === "completed" && job.fileExists) {
       completedBySubmission.set(job.submissionId, current ?? true);
       continue;
     }
@@ -668,7 +668,7 @@ function getUnavailableSubmissionIds(
     if (
       job.status === "queued" ||
       job.status === "active" ||
-      job.status === "completed"
+      (job.status === "completed" && job.fileExists)
     ) {
       unavailable.add(job.submissionId);
     }

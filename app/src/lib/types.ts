@@ -93,6 +93,7 @@ export type DownloadJobSnapshot = {
   username: string
   fileName: string
   previewUrl?: string
+  fileExists: boolean
   status: string
   bytesWritten: number
   totalBytes: number

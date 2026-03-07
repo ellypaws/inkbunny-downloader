@@ -26,6 +26,7 @@ export namespace desktopapp {
 	    username: string;
 	    fileName: string;
 	    previewUrl?: string;
+	    fileExists: boolean;
 	    status: string;
 	    bytesWritten: number;
 	    totalBytes: number;
@@ -48,6 +49,7 @@ export namespace desktopapp {
 	        this.username = source["username"];
 	        this.fileName = source["fileName"];
 	        this.previewUrl = source["previewUrl"];
+	        this.fileExists = source["fileExists"];
 	        this.status = source["status"];
 	        this.bytesWritten = source["bytesWritten"];
 	        this.totalBytes = source["totalBytes"];

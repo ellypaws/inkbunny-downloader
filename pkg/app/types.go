@@ -104,6 +104,7 @@ type DownloadJobSnapshot struct {
 	Username     string  `json:"username"`
 	FileName     string  `json:"fileName"`
 	PreviewURL   string  `json:"previewUrl,omitempty"`
+	FileExists   bool    `json:"fileExists"`
 	Status       string  `json:"status"`
 	BytesWritten int64   `json:"bytesWritten"`
 	TotalBytes   int64   `json:"totalBytes"`

@@ -369,11 +369,13 @@ func (m *DownloadManager) snapshotLocked() QueueSnapshot {
 	jobs := make([]orderedJob, 0, len(m.jobs))
 	var queued, active, completed, failed, cancelled int
 	for _, job := range m.jobs {
+		snapshot := job.snapshot
+		snapshot.FileExists = jobFileExists(job)
 		jobs = append(jobs, orderedJob{
 			created:  job.created,
-			snapshot: job.snapshot,
+			snapshot: snapshot,
 		})
-		switch job.snapshot.Status {
+		switch snapshot.Status {
 		case "queued":
 			queued++
 		case "active":
@@ -440,6 +442,16 @@ func removeString(items []string, target string) []string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func jobFileExists(job *downloadJob) bool {
+	if job == nil {
+		return false
+	}
+	if job.task.DownloadRoot == "" || job.task.Username == "" || job.task.FileName == "" {
+		return false
+	}
+	return fileExists(filepath.Join(job.task.DownloadRoot, job.task.Username, job.task.FileName))
 }
 
 func max64(a, b int64) int64 {
