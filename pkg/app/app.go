@@ -38,6 +38,8 @@ type App struct {
 	downloadManager *DownloadManager
 }
 
+const submissionDetailsBatchSize = 100
+
 func NewApp() *App {
 	store, _ := newStateStore()
 	defaultState := defaultStoredState()
@@ -280,14 +282,14 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 		return a.GetQueueSnapshot(), nil
 	}
 
-	details, err := a.cachedSubmissionDetails(user, submissionIDs)
+	details, err := a.cachedSubmissionDetailsBatched(user, submissionIDs)
 	if err != nil {
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
 			if err != nil {
 				return QueueSnapshot{}, err
 			}
-			details, err = a.cachedSubmissionDetails(user, submissionIDs)
+			details, err = a.cachedSubmissionDetailsBatched(user, submissionIDs)
 		}
 	}
 	if err != nil {
@@ -468,6 +470,71 @@ func (a *App) cachedSubmissionDetails(user *inkbunny.User, submissionIDs []strin
 		SubmissionIDs: strings.Join(ids, ","),
 	}
 	return a.detailsCache.Get(key)
+}
+
+func (a *App) cachedSubmissionDetailsBatched(user *inkbunny.User, submissionIDs []string) (inkbunny.SubmissionDetailsResponse, error) {
+	ids := normalizeSubmissionIDs(submissionIDs)
+	if len(ids) == 0 {
+		return inkbunny.SubmissionDetailsResponse{}, nil
+	}
+	if len(ids) <= submissionDetailsBatchSize {
+		return a.cachedSubmissionDetails(user, ids)
+	}
+
+	response := inkbunny.SubmissionDetailsResponse{}
+	if user != nil {
+		response.SID = user.SID
+	}
+
+	detailsByID := make(map[string]inkbunny.SubmissionDetails, len(ids))
+	for start := 0; start < len(ids); start += submissionDetailsBatchSize {
+		end := start + submissionDetailsBatchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+
+		batch, err := a.cachedSubmissionDetails(user, ids[start:end])
+		if err != nil {
+			return inkbunny.SubmissionDetailsResponse{}, err
+		}
+		if response.SID == "" {
+			response.SID = batch.SID
+		}
+		if response.UserLocation == "" {
+			response.UserLocation = batch.UserLocation
+		}
+		for _, submission := range batch.Submissions {
+			detailsByID[submission.SubmissionID.String()] = submission
+		}
+	}
+
+	response.Submissions = make([]inkbunny.SubmissionDetails, 0, len(detailsByID))
+	for _, id := range ids {
+		submission, ok := detailsByID[id]
+		if !ok {
+			continue
+		}
+		response.Submissions = append(response.Submissions, submission)
+	}
+	response.ResultsCount = inkbunny.IntString(len(response.Submissions))
+	return response, nil
+}
+
+func normalizeSubmissionIDs(submissionIDs []string) []string {
+	seen := make(map[string]struct{}, len(submissionIDs))
+	normalized := make([]string, 0, len(submissionIDs))
+	for _, submissionID := range submissionIDs {
+		id := strings.TrimSpace(submissionID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+	return normalized
 }
 
 func ternary[T any](condition bool, truthy, falsy T) T {

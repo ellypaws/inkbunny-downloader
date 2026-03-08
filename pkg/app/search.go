@@ -538,7 +538,7 @@ func (a *App) lookupDownloadedSubmissions(user *inkbunny.User, submissions []ink
 		return downloaded, nil
 	}
 
-	details, err := a.cachedSubmissionDetails(user, submissionIDs)
+	details, err := a.cachedSubmissionDetailsBatched(user, submissionIDs)
 	if err != nil {
 		return nil, err
 	}
