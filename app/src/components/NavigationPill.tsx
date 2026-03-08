@@ -1,4 +1,4 @@
-import { Moon, Sun, Waves } from 'lucide-react'
+import { Moon, PanelsTopLeft, Sun, Waves } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { DEFAULT_AVATAR_URL } from '../lib/constants'
@@ -7,9 +7,11 @@ import type { SessionInfo } from '../lib/types'
 type NavigationPillProps = {
   darkMode: boolean
   motionEnabled: boolean
+  tabsOpen: boolean
   session: SessionInfo
   onToggleDarkMode: () => void
   onToggleMotion: () => void
+  onToggleTabs: () => void
   onOpenLogin: () => void
   onLogout: () => void
 }
@@ -58,6 +60,16 @@ export function NavigationPill(props: NavigationPillProps) {
         </div>
       </div>
       <div className="flex items-center gap-3 md:gap-4">
+        <button
+          onClick={props.onToggleTabs}
+          className={`p-2 rounded-full text-[#333333] hover:bg-[#dbe4ca] dark:text-white dark:hover:bg-[#2f353a] transition-colors ${
+            props.tabsOpen ? 'bg-[#dbe4ca] dark:bg-[#2f353a]' : ''
+          }`}
+          title="Toggle tabs"
+          aria-pressed={props.tabsOpen}
+        >
+          <PanelsTopLeft size={22} />
+        </button>
         <button
           onClick={props.onToggleMotion}
           className={`p-2 rounded-full text-[#333333] hover:bg-[#dbe4ca] dark:text-white dark:hover:bg-[#2f353a] transition-colors ${
