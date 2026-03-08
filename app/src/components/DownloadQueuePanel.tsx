@@ -9,12 +9,18 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import ElasticSlider from "./ElasticSlider";
+import {
+  MAX_CONCURRENT_DOWNLOADS,
+  MIN_CONCURRENT_DOWNLOADS,
+} from "../lib/constants";
 import { formatBytes } from "../lib/format";
 import type { QueueSnapshot } from "../lib/types";
 
 type DownloadQueuePanelProps = {
   queue: QueueSnapshot;
   message: string;
+  maxActive: number;
   selectedCount: number;
   canQueueDownloads: boolean;
   allSelected: boolean;
@@ -25,6 +31,7 @@ type DownloadQueuePanelProps = {
   onQueueDownloads: () => void;
   onToggleSelectAll: () => void;
   onToggleAutoClearCompleted: (enabled: boolean) => void;
+  onMaxActiveChange: (value: number) => void;
   onCancel: (jobId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
 };
@@ -63,55 +70,78 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
       </div>
 
       <div className="theme-panel-soft relative z-10 mt-4 flex flex-col gap-3 rounded-2xl border px-4 py-3 backdrop-blur-xl">
-        <div className="flex flex-wrap gap-2.5">
-          <button
-            type="button"
-            onClick={props.onOpenDownloadFolder}
-            className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
-          >
-            <FolderOpen size={16} />
-            Open Folder
-          </button>
-          <button
-            type="button"
-            onClick={props.onClearCompleted}
-            disabled={props.queue.completedCount === 0}
-            className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
-          >
-            <Trash2 size={16} />
-            Clear Completed
-          </button>
-          <button
-            type="button"
-            onClick={props.onClearQueue}
-            disabled={props.queue.jobs.length === 0}
-            className="theme-button-secondary rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
-          >
-            Clear List
-          </button>
-          <button
-            type="button"
-            onClick={props.onToggleSelectAll}
-            disabled={props.selectedCount === 0 && props.allSelected}
-            className="theme-button-secondary rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
-          >
-            {props.allSelected ? "Deselect All" : "Select All"}
-          </button>
-          <button
-            type="button"
-            onClick={props.onQueueDownloads}
-            disabled={!props.canQueueDownloads}
-            className="theme-button-accent flex items-center gap-2 rounded-2xl border-b-8 px-4 py-2.5 text-sm font-black shadow-xl transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-60"
-            data-tour-anchor="queue-download"
-          >
-            <Download size={16} />
-            Download
-          </button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              onClick={props.onOpenDownloadFolder}
+              className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
+            >
+              <FolderOpen size={16} />
+              Open Folder
+            </button>
+            <button
+              type="button"
+              onClick={props.onClearCompleted}
+              disabled={props.queue.completedCount === 0}
+              className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
+            >
+              <Trash2 size={16} />
+              Clear Completed
+            </button>
+            <button
+              type="button"
+              onClick={props.onClearQueue}
+              disabled={props.queue.jobs.length === 0}
+              className="theme-button-secondary rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
+            >
+              Clear List
+            </button>
+            <button
+              type="button"
+              onClick={props.onToggleSelectAll}
+              disabled={props.selectedCount === 0 && props.allSelected}
+              className="theme-button-secondary rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
+            >
+              {props.allSelected ? "Deselect All" : "Select All"}
+            </button>
+            <button
+              type="button"
+              onClick={props.onQueueDownloads}
+              disabled={!props.canQueueDownloads}
+              className="theme-button-accent flex items-center gap-2 rounded-2xl border-b-8 px-4 py-2.5 text-sm font-black shadow-xl transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-60"
+              data-tour-anchor="queue-download"
+            >
+              <Download size={16} />
+              Download
+            </button>
 
-          <AutoClearToggle
-            checked={props.autoClearCompleted}
-            onChange={props.onToggleAutoClearCompleted}
-          />
+            <AutoClearToggle
+              checked={props.autoClearCompleted}
+              onChange={props.onToggleAutoClearCompleted}
+            />
+          </div>
+
+          <div className="theme-panel-strong min-w-[16rem] flex-1 rounded-2xl border px-4 pt-3 shadow-sm md:max-w-sm">
+            <div className="flex items-center gap-3">
+              <ElasticSlider
+                value={props.maxActive}
+                onChange={props.onMaxActiveChange}
+                startingValue={MIN_CONCURRENT_DOWNLOADS}
+                maxValue={MAX_CONCURRENT_DOWNLOADS}
+                isStepped
+                stepSize={1}
+                valueFormatter={(value) => `Download ${Math.round(value)} at once`}
+                leftIcon={<span className="text-xs font-black">1</span>}
+                rightIcon={
+                  <span className="text-xs font-black">
+                    {MAX_CONCURRENT_DOWNLOADS}
+                  </span>
+                }
+                className="w-full"
+              />
+            </div>
+          </div>
         </div>
       </div>
 

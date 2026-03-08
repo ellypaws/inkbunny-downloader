@@ -13,7 +13,13 @@ import { ResultsShowcase } from "./components/ResultsShowcase";
 import { SearchWorkspace } from "./components/SearchWorkspace";
 import { StarBackground } from "./components/StarBackground";
 import { ToastHost, type ToastItem } from "./components/ToastHost";
-import { DEFAULT_SEARCH, EMPTY_QUEUE, EMPTY_SESSION } from "./lib/constants";
+import {
+  DEFAULT_SEARCH,
+  EMPTY_QUEUE,
+  EMPTY_SESSION,
+  MAX_CONCURRENT_DOWNLOADS,
+  MIN_CONCURRENT_DOWNLOADS,
+} from "./lib/constants";
 import type {
   AppNotification,
   AppSettings,
@@ -723,7 +729,7 @@ export default function App() {
 
   async function persistSettings(partial: Partial<AppSettings>) {
     const next = { ...settingsRef.current, ...partial };
-    setSettings(next);
+    syncSettings(next);
     try {
       syncSettings(await backend.updateSettings(next));
     } catch (error) {
@@ -1049,6 +1055,14 @@ export default function App() {
     }
   }
 
+  function handleMaxActiveChange(maxActive: number) {
+    const nextMaxActive = clampConcurrentDownloads(maxActive);
+    if (nextMaxActive === settingsRef.current.maxActive) {
+      return;
+    }
+    void persistSettings({ maxActive: nextMaxActive });
+  }
+
   function handleToggleRating(index: number) {
     if (!sessionRef.current.hasSession) {
       return;
@@ -1296,6 +1310,7 @@ export default function App() {
           <DownloadQueuePanel
             queue={queue}
             message={queueMessage}
+            maxActive={settings.maxActive}
             selectedCount={activeSelectedSubmissionIds.length}
             canQueueDownloads={Boolean(activeSearchResponse) && activeSelectedSubmissionIds.length > 0}
             allSelected={allResultsSelected}
@@ -1327,6 +1342,7 @@ export default function App() {
             onToggleAutoClearCompleted={(enabled) =>
               void persistSettings({ autoClearCompleted: enabled })
             }
+            onMaxActiveChange={handleMaxActiveChange}
             onCancel={(jobId) => {
               backend.cancelDownload(jobId).then(setQueue).catch(() => undefined);
             }}
@@ -1374,6 +1390,13 @@ function getErrorMessage(error: unknown, fallback: string) {
 function isRateLimitMessage(message: string) {
   const value = message.toLowerCase();
   return value.includes("rate limiting") || (value.includes("429") && value.includes("inkbunny"));
+}
+
+function clampConcurrentDownloads(value: number) {
+  return Math.min(
+    MAX_CONCURRENT_DOWNLOADS,
+    Math.max(MIN_CONCURRENT_DOWNLOADS, Math.round(value)),
+  );
 }
 
 function getSuggestionQuery(query: string) {

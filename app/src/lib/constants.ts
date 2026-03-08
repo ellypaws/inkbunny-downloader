@@ -1,6 +1,8 @@
 import type { QueueSnapshot, SearchParams, SessionInfo } from './types'
 
 export const DEFAULT_AVATAR_URL = 'https://inkbunny.net/images80/usericons/large/noicon.png'
+export const MIN_CONCURRENT_DOWNLOADS = 1
+export const MAX_CONCURRENT_DOWNLOADS = 16
 
 export const TIME_OPTIONS = [
   { label: 'Any Time', value: 0 },

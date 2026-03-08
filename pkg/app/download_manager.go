@@ -52,9 +52,7 @@ type DownloadManager struct {
 }
 
 func NewDownloadManager(ctx context.Context, maxActive int, limiter *apiRateLimiter, emit func(string, any)) *DownloadManager {
-	if maxActive <= 0 {
-		maxActive = defaultMaxActive()
-	}
+	maxActive = normalizeMaxActive(maxActive)
 	return &DownloadManager{
 		ctx:       ctx,
 		client:    &http.Client{Timeout: 5 * time.Minute},
@@ -69,7 +67,7 @@ func (m *DownloadManager) SetMaxActive(maxActive int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if maxActive > 0 {
-		m.maxActive = maxActive
+		m.maxActive = normalizeMaxActive(maxActive)
 	}
 	m.maybeStartLocked()
 }
@@ -79,7 +77,7 @@ func (m *DownloadManager) Enqueue(tasks []downloadTask, maxActive int) QueueSnap
 	defer m.mu.Unlock()
 
 	if maxActive > 0 {
-		m.maxActive = maxActive
+		m.maxActive = normalizeMaxActive(maxActive)
 	}
 	now := time.Now()
 	for _, task := range tasks {

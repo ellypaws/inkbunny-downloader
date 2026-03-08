@@ -177,7 +177,7 @@ func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 		a.settings.DownloadDirectory = settings.DownloadDirectory
 	}
 	if settings.MaxActive > 0 {
-		a.settings.MaxActive = settings.MaxActive
+		a.settings.MaxActive = normalizeMaxActive(settings.MaxActive)
 	}
 	a.settings.DarkMode = settings.DarkMode
 	a.settings.MotionEnabled = settings.MotionEnabled

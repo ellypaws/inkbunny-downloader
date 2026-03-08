@@ -18,6 +18,8 @@ type stateStore struct {
 	mu   sync.Mutex
 }
 
+const maxConcurrentDownloads = 16
+
 func newStateStore() (*stateStore, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
@@ -48,9 +50,7 @@ func (s *stateStore) Load() (storedState, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return state, err
 	}
-	if state.Settings.MaxActive <= 0 {
-		state.Settings.MaxActive = defaultMaxActive()
-	}
+	state.Settings.MaxActive = normalizeMaxActive(state.Settings.MaxActive)
 	if state.Settings.DownloadDirectory == "" {
 		state.Settings.DownloadDirectory = defaultDownloadDirectory()
 	}
@@ -105,6 +105,16 @@ func defaultMaxActive() int {
 	}
 	if value > 6 {
 		value = 6
+	}
+	return value
+}
+
+func normalizeMaxActive(value int) int {
+	if value <= 0 {
+		return defaultMaxActive()
+	}
+	if value > maxConcurrentDownloads {
+		return maxConcurrentDownloads
 	}
 	return value
 }
