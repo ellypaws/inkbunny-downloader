@@ -224,11 +224,27 @@ export const GLOBAL_STYLES = `
     80% { transform: translate3d(3px, 0, 0) rotate(0deg); }
     100% { transform: translate3d(0, 0, 0); }
   }
+  @keyframes tutorial-nag {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    20% { transform: translate3d(-3px, 1px, 0) rotate(-1.25deg); }
+    40% { transform: translate3d(4px, -1px, 0) rotate(1.25deg); }
+    60% { transform: translate3d(-3px, 0, 0) rotate(-0.8deg); }
+    80% { transform: translate3d(2px, 0, 0) rotate(0.65deg); }
+  }
+  @keyframes tutorial-spotlight {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.28), 0 0 0 0 rgba(115, 210, 22, 0.28); }
+    50% { box-shadow: 0 0 0 1px rgba(255,255,255,0.42), 0 0 0 12px rgba(115, 210, 22, 0.14); }
+  }
   .animate-spin-slow { animation: spin-slow 12s linear infinite; }
   .animate-spin-reverse-slow { animation: spin-reverse-slow 16s linear infinite; }
   .animate-float { animation: float 6s ease-in-out infinite; }
   .animate-fade-in { animation: fade-in 0.45s ease-in-out forwards; }
   .animate-commission-shake { animation: commission-bounce 0.65s ease; }
+  .animate-tutorial-nag { animation: tutorial-nag 1.6s ease-in-out infinite; }
+  .animate-tutorial-spotlight { animation: tutorial-spotlight 2.4s ease-in-out infinite; }
+  .tour-target-emphasis {
+    filter: drop-shadow(0 0 18px rgba(137, 207, 240, 0.45));
+  }
 
   .motion-reduced *,
   .motion-reduced *::before,

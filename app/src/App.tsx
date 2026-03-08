@@ -5,6 +5,10 @@ import BubbleMenu, { type BubbleMenuItem } from "./components/BubbleMenu";
 import { DownloadQueuePanel } from "./components/DownloadQueuePanel";
 import { LoginModal } from "./components/LoginModal";
 import { NavigationPill } from "./components/NavigationPill";
+import {
+  OnboardingTour,
+  type TourStepPresentation,
+} from "./components/OnboardingTour";
 import { ResultsShowcase } from "./components/ResultsShowcase";
 import { SearchWorkspace } from "./components/SearchWorkspace";
 import { StarBackground } from "./components/StarBackground";
@@ -27,6 +31,7 @@ import { GLOBAL_STYLES } from "./styles/globalStyles";
 
 const GUEST_DEFAULT_MAX_DOWNLOADS = 256;
 const RELEASE_UPDATE_TOAST_ID = "release-update-toast";
+const TOUR_STEP_DELAY_MS = 420;
 
 declare global {
   interface Window {
@@ -34,7 +39,10 @@ declare global {
   }
 }
 
-type InkbunnyDebugControls = { showUpdateToast: () => void };
+type InkbunnyDebugControls = {
+  showUpdateToast: () => void;
+  showOnboarding: () => void;
+};
 
 type SearchTabState = {
   id: string;
@@ -49,6 +57,16 @@ type SearchTabState = {
   resultsRefreshToken: number;
 };
 
+type TourStepId =
+  | "tabs-toggle"
+  | "tabs-menu"
+  | "search-words"
+  | "artist-name"
+  | "run-search"
+  | "select-images"
+  | "queue-images"
+  | "queue-panel";
+
 export default function App() {
   const initialTabRef = useRef<SearchTabState | null>(null);
   if (!initialTabRef.current) {
@@ -60,6 +78,7 @@ export default function App() {
   const [loginOpen, setLoginOpen] = useState(true);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [loginTeachMe, setLoginTeachMe] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [tabMenuOpen, setTabMenuOpen] = useState(false);
@@ -74,6 +93,10 @@ export default function App() {
   const [queueMessage, setQueueMessage] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [apiCooldownUntil, setApiCooldownUntil] = useState(0);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStepId, setTourStepId] = useState<TourStepId>("tabs-toggle");
+  const [tourSearchAttempted, setTourSearchAttempted] = useState(false);
+  const [tourAdvancing, setTourAdvancing] = useState(false);
 
   const lagTextRef = useRef<HTMLHeadingElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +115,8 @@ export default function App() {
   const activeTabIdRef = useRef(activeTabId);
   const sessionRef = useRef(session);
   const settingsRef = useRef(settings);
+  const tourAdvanceTimeoutRef = useRef<number | null>(null);
+  const scheduledTourAdvanceRef = useRef("");
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
@@ -132,6 +157,28 @@ export default function App() {
   const activeSearchCollapsed = activeTab?.searchCollapsed ?? false;
   const activeSearchError = activeTab?.searchError ?? "";
   const activeResultsRefreshToken = activeTab?.resultsRefreshToken ?? 0;
+  const hasSelectableActiveResult = activeResults.some(
+    (item) => !downloadedSubmissionIds.has(item.submissionId),
+  );
+  const queueReadyForTour =
+    pendingDownloadSubmissionIds.length > 0 || queue.jobs.length > 0;
+  const currentTourStep = getTourStepPresentation(tourStepId, {
+    tabMenuOpen,
+    hasSelectableActiveResult,
+    searchAttempted: tourSearchAttempted,
+    selectedCount: activeSelectedSubmissionIds.length,
+    queueReady: queueReadyForTour,
+  });
+  const tourAnchorRefreshKey = [
+    tourOpen ? "open" : "closed",
+    tourStepId,
+    tabMenuOpen ? "tabs-open" : "tabs-closed",
+    activeSearchCollapsed ? "search-collapsed" : "search-open",
+    activeResults.length,
+    activeSelectedSubmissionIds.length,
+    queue.jobs.length,
+    pendingDownloadSubmissionIds.length,
+  ].join(":");
   const allResultsSelected =
     activeResults.some((item) => !downloadedSubmissionIds.has(item.submissionId)) &&
     activeResults
@@ -319,6 +366,77 @@ export default function App() {
       setActiveTabId(tabs[0].id);
     }
   }, [activeTab, tabs]);
+  useEffect(() => {
+    if (!loginOpen) {
+      return;
+    }
+    if (tourOpen) {
+      clearScheduledTourAdvance();
+      setTourOpen(false);
+      setTourStepId("tabs-toggle");
+      setTourSearchAttempted(false);
+      setTourAdvancing(false);
+      setTabMenuOpen(false);
+    }
+    setLoginTeachMe(!settings.hasLoggedInBefore);
+  }, [loginOpen, settings.hasLoggedInBefore, tourOpen]);
+
+  useEffect(() => {
+    if (!tourOpen) {
+      return;
+    }
+    if (
+      activeTab &&
+      activeSearchCollapsed &&
+      (tourStepId === "search-words" ||
+        tourStepId === "artist-name" ||
+        tourStepId === "run-search")
+    ) {
+      updateTab(activeTab.id, (currentTab) => ({
+        ...currentTab,
+        searchCollapsed: false,
+      }));
+    }
+  }, [activeSearchCollapsed, activeTab, tourOpen, tourStepId]);
+
+  useEffect(() => {
+    if (!tourOpen || tourAdvancing) {
+      return;
+    }
+
+    if (tourStepId === "tabs-toggle" && tabMenuOpen) {
+      scheduleTourAdvance("tabs-menu");
+      return;
+    }
+    if (tourStepId === "tabs-menu" && !tabMenuOpen) {
+      scheduleTourAdvance("search-words");
+      return;
+    }
+    if (
+      tourStepId === "run-search" &&
+      hasSelectableActiveResult &&
+      !activeSearchLoading
+    ) {
+      scheduleTourAdvance("select-images");
+      return;
+    }
+    if (tourStepId === "select-images" && activeSelectedSubmissionIds.length > 0) {
+      scheduleTourAdvance("queue-images");
+      return;
+    }
+    if (tourStepId === "queue-images" && queueReadyForTour) {
+      scheduleTourAdvance("queue-panel");
+    }
+  }, [
+    activeSearchLoading,
+    activeSelectedSubmissionIds.length,
+    hasSelectableActiveResult,
+    queueReadyForTour,
+    tabMenuOpen,
+    tourAdvancing,
+    tourOpen,
+    tourStepId,
+  ]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) {
@@ -337,6 +455,11 @@ export default function App() {
           settings,
         );
       }
+
+      showOnboarding() {
+        setLoginOpen(false);
+        startTutorial();
+      }
     }
     window.__inkbunnyDebug = new DevDebugControls();
     return () => {
@@ -353,6 +476,7 @@ export default function App() {
       if (autoClearTimeoutRef.current !== null) {
         window.clearTimeout(autoClearTimeoutRef.current);
       }
+      clearScheduledTourAdvance();
     },
     [],
   );
@@ -607,6 +731,74 @@ export default function App() {
     }
   }
 
+  function clearScheduledTourAdvance() {
+    if (tourAdvanceTimeoutRef.current !== null) {
+      window.clearTimeout(tourAdvanceTimeoutRef.current);
+      tourAdvanceTimeoutRef.current = null;
+    }
+    scheduledTourAdvanceRef.current = "";
+  }
+
+  function applyTourStep(nextStep: TourStepId | "stop") {
+    if (nextStep === "stop") {
+      clearScheduledTourAdvance();
+      setTourOpen(false);
+      setTourStepId("tabs-toggle");
+      setTourSearchAttempted(false);
+      setTourAdvancing(false);
+      setTabMenuOpen(false);
+      return;
+    }
+    if (nextStep === "search-words") {
+      setTabMenuOpen(false);
+    }
+    if (nextStep === "run-search") {
+      setTourSearchAttempted(false);
+    }
+    setTourStepId(nextStep);
+  }
+
+  function scheduleTourAdvance(nextStep: TourStepId | "stop") {
+    const key = `${tourStepId}:${nextStep}`;
+    if (
+      scheduledTourAdvanceRef.current === key &&
+      tourAdvanceTimeoutRef.current !== null
+    ) {
+      return;
+    }
+
+    clearScheduledTourAdvance();
+    scheduledTourAdvanceRef.current = key;
+    setTourAdvancing(true);
+    tourAdvanceTimeoutRef.current = window.setTimeout(() => {
+      tourAdvanceTimeoutRef.current = null;
+      scheduledTourAdvanceRef.current = "";
+      setTourAdvancing(false);
+      applyTourStep(nextStep);
+    }, TOUR_STEP_DELAY_MS);
+  }
+
+  function startTutorial() {
+    clearScheduledTourAdvance();
+    setTourSearchAttempted(false);
+    setTourAdvancing(false);
+    setTourStepId("tabs-toggle");
+    setTabMenuOpen(false);
+    setTourOpen(true);
+  }
+
+  function stopTutorial() {
+    applyTourStep("stop");
+  }
+
+  function handleTourAdvance() {
+    if (tourAdvancing || !currentTourStep.canAdvance) {
+      return;
+    }
+    const nextStep = getNextTourStep(tourStepId);
+    scheduleTourAdvance(nextStep ?? "stop");
+  }
+
   async function handleClearCompleted(auto = false) {
     try {
       const snapshot = await backend.clearCompletedDownloads();
@@ -624,6 +816,7 @@ export default function App() {
   }
 
   async function handleLogin() {
+    const shouldStartTutorial = loginTeachMe;
     setAuthLoading(true);
     setAuthError("");
     try {
@@ -631,11 +824,15 @@ export default function App() {
       applySession(nextSession);
       setLoginOpen(false);
       setLoginPassword("");
+      setLoginTeachMe(!nextSession.settings.hasLoggedInBefore);
       pushToast({
         level: "success",
         message: `Signed in as ${nextSession.username}.`,
         dedupeKey: "login-success",
       });
+      if (shouldStartTutorial) {
+        window.setTimeout(() => startTutorial(), 120);
+      }
     } catch (error) {
       const message = getErrorMessage(error, "Login failed.");
       setAuthError(message);
@@ -647,6 +844,7 @@ export default function App() {
 
   async function handleLogout() {
     try {
+      stopTutorial();
       applySession(await backend.logout());
       setLoginOpen(true);
       pushToast({ level: "success", message: "Signed out.", dedupeKey: "logout-success" });
@@ -684,6 +882,9 @@ export default function App() {
               maxActive: settingsRef.current.maxActive,
             })
           : await backend.loadMoreResults(tab.searchResponse!.searchId, page);
+      if (tourOpen && tourStepId === "run-search" && page === 1) {
+        setTourSearchAttempted(true);
+      }
       applySession(response.session);
       if (page === 1 && activeTabIdRef.current === targetTabId) {
         shouldScrollToResultsRef.current = true;
@@ -953,6 +1154,15 @@ export default function App() {
           onAdd={handleAddTab}
           onOpenChange={setTabMenuOpen}
         />
+        <OnboardingTour
+          open={tourOpen}
+          step={currentTourStep}
+          motionEnabled={settings.motionEnabled}
+          anchorRefreshKey={tourAnchorRefreshKey}
+          isAdvancing={tourAdvancing}
+          onAdvance={handleTourAdvance}
+          onSkip={stopTutorial}
+        />
         <LoginModal
           open={loginOpen}
           session={session}
@@ -960,8 +1170,10 @@ export default function App() {
           password={loginPassword}
           loading={authLoading}
           error={authError}
+          teachMeChecked={loginTeachMe}
           onChangeUsername={setLoginUsername}
           onChangePassword={setLoginPassword}
+          onChangeTeachMe={setLoginTeachMe}
           onClose={() => setLoginOpen(false)}
           onSubmit={() => void handleLogin()}
         />
@@ -1374,4 +1586,145 @@ function truncateLabel(value: string, maxLength: number) {
   return value.length > maxLength
     ? `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`
     : value;
+}
+
+function getTourStepPresentation(
+  stepId: TourStepId,
+  context: {
+    tabMenuOpen: boolean;
+    hasSelectableActiveResult: boolean;
+    searchAttempted: boolean;
+    selectedCount: number;
+    queueReady: boolean;
+  },
+): TourStepPresentation {
+  if (stepId === "tabs-toggle") {
+    return {
+      id: stepId,
+      anchor: "tabs-toggle",
+      title: "Search tabs",
+      body: "This button opens your search sessions. You can keep multiple searches around and switch between them without losing your place.",
+      helper: context.tabMenuOpen
+        ? "Tabs are open. Continue to see the session menu."
+        : "Open the tabs menu to continue.",
+      nagText: "Open tabs",
+      canAdvance: context.tabMenuOpen,
+      advanceLabel: "Next",
+    };
+  }
+  if (stepId === "tabs-menu") {
+    return {
+      id: stepId,
+      anchor: "tabs-menu",
+      title: "Session menu",
+      body: "Each bubble is a search tab. Pick one to switch context, or use the plus bubble to start a fresh search session.",
+      helper: context.tabMenuOpen
+        ? "Use Next when you are ready to return to the search form."
+        : "Open the tabs menu again to continue.",
+      nagText: "Tabs live here",
+      canAdvance: context.tabMenuOpen,
+      advanceLabel: "Next",
+    };
+  }
+  if (stepId === "search-words") {
+    return {
+      id: stepId,
+      anchor: "search-words",
+      title: "Search words",
+      body: "Type keywords here. Spaces split words, and a leading minus excludes terms, so `wolf -feral` narrows results fast.",
+      nagText: "Type here",
+      canAdvance: true,
+      advanceLabel: "Next",
+    };
+  }
+  if (stepId === "artist-name") {
+    return {
+      id: stepId,
+      anchor: "artist-name",
+      title: "Artist filter",
+      body: "Use this field when you want results from one artist only. Leave it blank for broader searches.",
+      nagText: "Filter here",
+      canAdvance: true,
+      advanceLabel: "Next",
+    };
+  }
+  if (stepId === "run-search") {
+    return {
+      id: stepId,
+      anchor: "search-action",
+      title: "Run the search",
+      body: "Start a search from here. The guide waits for real results so the next steps can show selection and queueing on actual submissions.",
+      helper:
+        context.searchAttempted && !context.hasSelectableActiveResult
+          ? "That search did not produce selectable results. Try broader search words or clear the artist name field, then search again."
+          : "Run a search that returns at least one selectable result to continue.",
+      nagText: "Search now",
+      canAdvance: context.hasSelectableActiveResult,
+      advanceLabel: "Next",
+    };
+  }
+  if (stepId === "select-images") {
+    return {
+      id: stepId,
+      anchor: "select-result",
+      title: "Select images",
+      body: "Use the add button on a result to include it in the current batch. You can select one submission or build a larger download set.",
+      helper:
+        context.selectedCount > 0
+          ? "You have a selection ready. Continue to queue it."
+          : "Select at least one result to continue.",
+      nagText: "Pick one",
+      canAdvance: context.selectedCount > 0,
+      advanceLabel: "Next",
+    };
+  }
+  if (stepId === "queue-images") {
+    return {
+      id: stepId,
+      anchor: "queue-download",
+      title: "Queue downloads",
+      body: "This download action sends the current selection into the queue so the app can fetch files in the background.",
+      helper: context.queueReady
+        ? "The queue has work now. Continue to the queue overview."
+        : "Queue at least one selected submission to continue.",
+      nagText: "Queue this",
+      canAdvance: context.queueReady,
+      advanceLabel: "Next",
+    };
+  }
+  return {
+    id: stepId,
+    anchor: "queue-panel",
+    title: "Watch the queue",
+    body: "The queue panel tracks progress, status, and completion. This is also where you clear finished jobs or stop active downloads.",
+    nagText: "Watch here",
+    canAdvance: true,
+    advanceLabel: "Finish",
+    final: true,
+  };
+}
+
+function getNextTourStep(stepId: TourStepId): TourStepId | null {
+  if (stepId === "tabs-toggle") {
+    return "tabs-menu";
+  }
+  if (stepId === "tabs-menu") {
+    return "search-words";
+  }
+  if (stepId === "search-words") {
+    return "artist-name";
+  }
+  if (stepId === "artist-name") {
+    return "run-search";
+  }
+  if (stepId === "run-search") {
+    return "select-images";
+  }
+  if (stepId === "select-images") {
+    return "queue-images";
+  }
+  if (stepId === "queue-images") {
+    return "queue-panel";
+  }
+  return null;
 }

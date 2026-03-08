@@ -181,6 +181,7 @@ func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 	a.settings.MotionEnabled = settings.MotionEnabled
 	a.settings.AutoClearCompleted = settings.AutoClearCompleted
 	a.settings.SkippedReleaseTag = normalizeReleaseTag(settings.SkippedReleaseTag)
+	a.settings.HasLoggedInBefore = a.settings.HasLoggedInBefore || settings.HasLoggedInBefore
 	current := a.settings
 	a.mu.Unlock()
 
@@ -211,6 +212,7 @@ func (a *App) PickDownloadDirectory() (string, error) {
 		MotionEnabled:      a.settings.MotionEnabled,
 		AutoClearCompleted: a.settings.AutoClearCompleted,
 		SkippedReleaseTag:  a.settings.SkippedReleaseTag,
+		HasLoggedInBefore:  a.settings.HasLoggedInBefore,
 	})
 	return selected, updateErr
 }
@@ -340,6 +342,7 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 		MotionEnabled:      a.settings.MotionEnabled,
 		AutoClearCompleted: a.settings.AutoClearCompleted,
 		SkippedReleaseTag:  a.settings.SkippedReleaseTag,
+		HasLoggedInBefore:  a.settings.HasLoggedInBefore,
 	})
 
 	if len(tasks) == 0 {
@@ -368,6 +371,9 @@ func (a *App) setSession(user *inkbunny.User) {
 	a.mu.Lock()
 	a.user = user
 	a.sessionAvatar = defaultAvatarURL
+	if user != nil && user.SID != "" {
+		a.settings.HasLoggedInBefore = true
+	}
 	if user != nil && user.SID != "" && !strings.EqualFold(user.Username, "guest") {
 		a.sessionAvatar = ""
 	}

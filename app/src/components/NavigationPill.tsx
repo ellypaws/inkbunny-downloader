@@ -67,6 +67,7 @@ export function NavigationPill(props: NavigationPillProps) {
           }`}
           title="Toggle tabs"
           aria-pressed={props.tabsOpen}
+          data-tour-anchor="tabs-toggle"
         >
           <PanelsTopLeft size={22} />
         </button>

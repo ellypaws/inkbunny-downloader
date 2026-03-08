@@ -339,6 +339,7 @@ export default function BubbleMenu({
           }`}
           role="menu"
           aria-label="Search sessions"
+          data-tour-anchor="tabs-menu"
         >
           {menuItems.map((item, index) => {
             const isAddItem = item.kind === "add";

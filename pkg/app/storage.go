@@ -60,6 +60,7 @@ func (s *stateStore) Load() (storedState, error) {
 	if state.Session.AvatarURL == "" {
 		state.Session.AvatarURL = defaultAvatarURL
 	}
+	state.Session.Settings = state.Settings
 	return state, nil
 }
 
@@ -85,6 +86,7 @@ func defaultStoredState() storedState {
 		MotionEnabled:      true,
 		AutoClearCompleted: false,
 		SkippedReleaseTag:  "",
+		HasLoggedInBefore:  false,
 	}
 	return storedState{
 		Settings: settings,

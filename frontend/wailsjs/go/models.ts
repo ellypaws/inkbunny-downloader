@@ -6,6 +6,7 @@ export namespace desktopapp {
 	    darkMode: boolean;
 	    motionEnabled: boolean;
 	    skippedReleaseTag: string;
+	    hasLoggedInBefore: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -18,6 +19,7 @@ export namespace desktopapp {
 	        this.darkMode = source["darkMode"];
 	        this.motionEnabled = source["motionEnabled"];
 	        this.skippedReleaseTag = source["skippedReleaseTag"];
+	        this.hasLoggedInBefore = source["hasLoggedInBefore"];
 	    }
 	}
 	export class DownloadJobSnapshot {

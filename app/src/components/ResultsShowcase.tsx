@@ -100,6 +100,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       ).length,
     [downloadSummaries, props.results],
   );
+  const firstSelectableSubmissionId =
+    props.results.find(
+      (item) =>
+        (downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY)
+          .state !== "downloaded",
+    )?.submissionId ?? "";
   const selectableCount = props.results.length - downloadedCount;
   const selectAllDisabled = props.results.length === 0 || selectableCount === 0;
   const selectAllLabel =
@@ -508,6 +514,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                 ? "bg-[#73D216] text-white"
                                 : "bg-[#D9DDD3]/92 text-[#555753] hover:bg-[#CFE8AE] hover:text-[#4E9A06]"
                           }`}
+                          data-tour-anchor={
+                            item.submissionId === firstSelectableSubmissionId
+                              ? "select-result"
+                              : undefined
+                          }
                         >
                           {downloaded ? (
                             <Check size={14} />

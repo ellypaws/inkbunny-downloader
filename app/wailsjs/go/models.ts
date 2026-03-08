@@ -7,6 +7,7 @@ export namespace desktopapp {
 	    motionEnabled: boolean;
 	    autoClearCompleted: boolean;
 	    skippedReleaseTag: string;
+	    hasLoggedInBefore: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -20,6 +21,7 @@ export namespace desktopapp {
 	        this.motionEnabled = source["motionEnabled"];
 	        this.autoClearCompleted = source["autoClearCompleted"];
 	        this.skippedReleaseTag = source["skippedReleaseTag"];
+	        this.hasLoggedInBefore = source["hasLoggedInBefore"];
 	    }
 	}
 	export class DownloadJobSnapshot {

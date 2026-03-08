@@ -39,7 +39,10 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   });
 
   return (
-    <section className="theme-panel relative overflow-hidden rounded-toy-sm border p-5 shadow-pop backdrop-blur-2xl md:min-h-[95vh] md:p-6">
+    <section
+      className="theme-panel relative overflow-hidden rounded-toy-sm border p-5 shadow-pop backdrop-blur-2xl md:min-h-[95vh] md:p-6"
+      data-tour-anchor="queue-panel"
+    >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,var(--theme-accent-soft),transparent_28%),radial-gradient(circle_at_bottom_left,var(--theme-surface-soft),transparent_24%)] opacity-80" />
 
       <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
@@ -99,6 +102,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             onClick={props.onQueueDownloads}
             disabled={!props.canQueueDownloads}
             className="theme-button-accent flex items-center gap-2 rounded-2xl border-b-8 px-4 py-2.5 text-sm font-black shadow-xl transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-60"
+            data-tour-anchor="queue-download"
           >
             <Download size={16} />
             Download

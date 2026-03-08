@@ -126,6 +126,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       }}
                       placeholder="wolf synthwave -feral"
                       className="theme-input w-full rounded-2xl border px-4 py-3 text-[15px] shadow-inner outline-none backdrop-blur-md"
+                      data-tour-anchor="search-words"
                     />
                     <KeywordSuggestionList
                       open={
@@ -151,6 +152,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     className={`theme-button-accent flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-5 py-3.5 text-sm font-black shadow-xl transition-all sm:w-32 ${
                       props.loading ? "opacity-70" : ""
                     }`}
+                    data-tour-anchor="search-action"
                   >
                     {props.loading ? (
                       <LoaderCircle className="animate-spin" size={18} />
@@ -271,6 +273,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       artistName: value,
                     }))
                   }
+                  inputTourAnchor="artist-name"
                   onUseMyName={() =>
                     props.onChange((previous) => ({
                       ...previous,
@@ -645,6 +648,7 @@ type SuggestionFieldBlockProps = {
   suggestions: UsernameSuggestion[];
   useMyNameLabel: string;
   allowUseMyName: boolean;
+  inputTourAnchor?: string;
   focused: boolean;
   onFocus: () => void;
   onBlur: () => void;
@@ -672,6 +676,7 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
           onChange={(event) => props.onChange(event.target.value)}
           placeholder="username"
           className="theme-input w-full rounded-xl border px-4 py-3 text-[15px] outline-none backdrop-blur-md"
+          data-tour-anchor={props.inputTourAnchor}
         />
         <UsernameSuggestionList
           open={props.focused && props.suggestions.length > 0}

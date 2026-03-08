@@ -9,8 +9,10 @@ type LoginModalProps = {
   password: string;
   loading: boolean;
   error: string;
+  teachMeChecked: boolean;
   onChangeUsername: (value: string) => void;
   onChangePassword: (value: string) => void;
+  onChangeTeachMe: (checked: boolean) => void;
   onClose: () => void;
   onSubmit: () => void;
 };
@@ -77,6 +79,17 @@ export function LoginModal(props: LoginModalProps) {
               className="theme-input mt-2 w-full rounded-2xl border px-4 py-3 shadow-inner outline-none"
               placeholder="password"
             />
+          </label>
+          <label className="theme-panel-soft grid grid-cols-[1.2rem_minmax(0,1fr)] items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold">
+            <input
+              type="checkbox"
+              checked={props.teachMeChecked}
+              onChange={(event) => props.onChangeTeachMe(event.target.checked)}
+              className="mt-0.5 h-[1.05rem] w-[1.05rem] accent-[#73D216]"
+            />
+            <span className="min-w-0 leading-5">
+              Teach me how to use
+            </span>
           </label>
         </div>
 

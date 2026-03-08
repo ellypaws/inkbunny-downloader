@@ -91,6 +91,7 @@ export const EMPTY_SESSION: SessionInfo = {
     motionEnabled: true,
     autoClearCompleted: false,
     skippedReleaseTag: '',
+    hasLoggedInBefore: false,
   },
 }
 

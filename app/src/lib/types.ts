@@ -5,6 +5,7 @@ export type AppSettings = {
   motionEnabled: boolean
   autoClearCompleted: boolean
   skippedReleaseTag: string
+  hasLoggedInBefore: boolean
 }
 
 export type SessionInfo = {

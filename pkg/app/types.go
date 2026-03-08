@@ -25,6 +25,7 @@ type AppSettings struct {
 	MotionEnabled      bool   `json:"motionEnabled"`
 	AutoClearCompleted bool   `json:"autoClearCompleted"`
 	SkippedReleaseTag  string `json:"skippedReleaseTag"`
+	HasLoggedInBefore  bool   `json:"hasLoggedInBefore"`
 }
 
 type SearchParams struct {
