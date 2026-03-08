@@ -310,9 +310,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
                       downloaded
                         ? "pointer-events-none w-0 scale-75 opacity-0"
-                        : selected
+                      : selected
                           ? "bg-[#73D216] text-white"
-                          : "bg-white/85 text-[#2D2D44]"
+                          : "bg-[#D9DDD3]/92 text-[#555753] hover:bg-[#CFE8AE] hover:text-[#4E9A06]"
                     }`}
                   >
                     {downloaded ? (
@@ -502,9 +502,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                           className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${
                             downloaded
                               ? "pointer-events-none w-0 scale-75 opacity-0"
-                              : selected
+                            : selected
                                 ? "bg-[#73D216] text-white"
-                                : "bg-[var(--theme-accent-strong)] text-white"
+                                : "bg-[#D9DDD3]/92 text-[#555753] hover:bg-[#CFE8AE] hover:text-[#4E9A06]"
                           }`}
                         >
                           {downloaded ? (

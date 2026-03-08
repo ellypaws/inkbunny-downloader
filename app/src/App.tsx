@@ -662,12 +662,14 @@ export default function App() {
     }
   }
 
-  async function handleRefreshSearch(targetTabId = activeTabIdRef.current) {
-    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+  async function handleRefreshSearch(targetTabId?: string) {
+    const resolvedTabId =
+      typeof targetTabId === "string" ? targetTabId : activeTabIdRef.current;
+    const tab = tabsRef.current.find((item) => item.id === resolvedTabId);
     if (!tab?.searchResponse) {
       return;
     }
-    updateTab(targetTabId, (currentTab) => ({
+    updateTab(resolvedTabId, (currentTab) => ({
       ...currentTab,
       searchLoading: true,
       searchError: "",
@@ -677,9 +679,9 @@ export default function App() {
       applySession(response.session);
       startTransition(() => {
         setTabs((previous) =>
-          previous.map((currentTab) =>
-            currentTab.id === targetTabId
-              ? {
+            previous.map((currentTab) =>
+              currentTab.id === resolvedTabId
+                ? {
                   ...currentTab,
                   searchResponse: response,
                   results: response.results,
@@ -696,10 +698,10 @@ export default function App() {
       });
     } catch (error) {
       const message = getErrorMessage(error, "Refresh failed.");
-      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchError: message }));
       pushErrorToast(message, "refresh-search-error");
     } finally {
-      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+      updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
     }
   }
 
@@ -820,8 +822,10 @@ export default function App() {
     }, 350);
   }
 
-  function handleToggleSelectAll(targetTabId = activeTabIdRef.current) {
-    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+  function handleToggleSelectAll(targetTabId?: string) {
+    const resolvedTabId =
+      typeof targetTabId === "string" ? targetTabId : activeTabIdRef.current;
+    const tab = tabsRef.current.find((item) => item.id === resolvedTabId);
     if (!tab || tab.results.length === 0) {
       return;
     }
@@ -831,7 +835,7 @@ export default function App() {
     const allSelected =
       selectableResultIds.length > 0 &&
       selectableResultIds.every((submissionId) => tab.selectedSubmissionIds.includes(submissionId));
-    updateTab(targetTabId, (currentTab) => ({
+    updateTab(resolvedTabId, (currentTab) => ({
       ...currentTab,
       selectedSubmissionIds: allSelected ? [] : selectableResultIds,
     }));
