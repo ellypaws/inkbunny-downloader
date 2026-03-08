@@ -10,10 +10,7 @@
     <img alt="Latest Release" src="https://img.shields.io/github/v/release/ellypaws/inkbunny-downloader?display_name=tag">
   </a>
   <a href="https://github.com/ellypaws/inkbunny-downloader/actions/workflows/release.yml">
-    <img alt="Build And Release" src="https://img.shields.io/github/actions/workflow/status/ellypaws/inkbunny-downloader/release.yml?branch=main">
-  </a>
-  <a href="https://github.com/ellypaws/inkbunny-downloader/releases">
-    <img alt="Download From Releases" src="https://img.shields.io/badge/download-releases-2ea44f">
+    <img alt="Build And Release" src="https://img.shields.io/github/actions/workflow/status/ellypaws/inkbunny-downloader/release.yml">
   </a>
   <a href="https://github.com/ellypaws/inkbunny-downloader/releases/latest/download/inkbunny-downloader-windows.exe">
     <img alt="Download Windows EXE" src="https://img.shields.io/badge/windows-download%20exe-0078d6?logo=windows&logoColor=white">
@@ -25,9 +22,6 @@
     <img alt="Repo Stars" src="https://img.shields.io/github/stars/ellypaws/inkbunny-downloader?style=social">
   </a>
   <br>
-  <a href="https://inkbunny.net/">
-    <img alt="Inkbunny" src="https://img.shields.io/badge/website-inkbunny.net-blue">
-  </a>
   <a href="https://wiki.inkbunny.net/wiki/API">
     <img alt="Inkbunny API" src="https://img.shields.io/badge/api-inkbunny.net-blue">
   </a>
