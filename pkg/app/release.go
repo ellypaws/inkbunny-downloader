@@ -11,7 +11,7 @@ import (
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo"
 )
 
-const defaultReleaseURL = "https://github.com/ellypaws/inkbunny-downloader/releases"
+const defaultReleaseURL = "https://github.com/ellypaws/inkbunny-downloader/releases/latest"
 
 var (
 	appVersion              = buildinfo.Version
@@ -63,10 +63,7 @@ func (a *App) GetReleaseStatus() ReleaseStatus {
 	}
 
 	status.LatestTag = releaseTagFromVersion(latestVersion)
-	status.ReleaseURL = strings.TrimSpace(payload.HTMLURL)
-	if status.ReleaseURL == "" {
-		status.ReleaseURL = defaultReleaseURL
-	}
+	status.ReleaseURL = defaultReleaseURL
 	status.UpdateAvailable = compareReleaseVersions(currentVersion, latestVersion) < 0
 	return status
 }

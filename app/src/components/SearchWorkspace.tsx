@@ -581,11 +581,11 @@ function ChoiceCard(props: {
         ? "border-[#DA8642]/70 bg-[#DA8642]/10 text-[#333333] dark:border-[#DA8642] dark:bg-[#DA8642]/12 dark:text-white"
         : tone === "matureViolence"
           ? "border-[#B98A63]/70 bg-[#B98A63]/10 text-[#333333] dark:border-[#B98A63] dark:bg-[#B98A63]/12 dark:text-white"
-        : tone === "adult"
-          ? "border-[#B20047]/70 bg-[#B20047]/10 text-[#333333] dark:border-[#B20047] dark:bg-[#B20047]/12 dark:text-white"
-          : tone === "adultViolence"
-            ? "border-[#8F3E5F]/70 bg-[#8F3E5F]/10 text-[#333333] dark:border-[#8F3E5F] dark:bg-[#8F3E5F]/12 dark:text-white"
-          : "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white";
+          : tone === "adult"
+            ? "border-[#B20047]/70 bg-[#B20047]/10 text-[#333333] dark:border-[#B20047] dark:bg-[#B20047]/12 dark:text-white"
+            : tone === "adultViolence"
+              ? "border-[#8F3E5F]/70 bg-[#8F3E5F]/10 text-[#333333] dark:border-[#8F3E5F] dark:bg-[#8F3E5F]/12 dark:text-white"
+              : "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white";
   const indicatorClass =
     tone === "general"
       ? "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]"
@@ -593,11 +593,11 @@ function ChoiceCard(props: {
         ? "border-[#DA8642] bg-[#DA8642]"
         : tone === "matureViolence"
           ? "border-[#B98A63] bg-[#B98A63]"
-        : tone === "adult"
-          ? "border-[#B20047] bg-[#B20047]"
-          : tone === "adultViolence"
-            ? "border-[#8F3E5F] bg-[#8F3E5F]"
-          : "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]";
+          : tone === "adult"
+            ? "border-[#B20047] bg-[#B20047]"
+            : tone === "adultViolence"
+              ? "border-[#8F3E5F] bg-[#8F3E5F]"
+              : "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]";
 
   return (
     <button

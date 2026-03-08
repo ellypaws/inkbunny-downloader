@@ -48,7 +48,7 @@ export function ToastHost(props: ToastHostProps) {
                 </div>
               ) : null}
               {toast.primaryAction || toast.secondaryAction ? (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   {toast.primaryAction ? (
                     <button
                       type="button"
@@ -62,7 +62,7 @@ export function ToastHost(props: ToastHostProps) {
                     <button
                       type="button"
                       onClick={toast.secondaryAction.onClick}
-                      className={toastActionClass(toast.secondaryAction.variant ?? "secondary")}
+                      className={`${toastActionClass(toast.secondaryAction.variant ?? "secondary")} ml-auto`}
                     >
                       {toast.secondaryAction.label}
                     </button>
@@ -87,9 +87,9 @@ export function ToastHost(props: ToastHostProps) {
 
 function toastActionClass(variant: "primary" | "secondary") {
   if (variant === "secondary") {
-    return "rounded-full border border-current/20 px-3 py-1.5 text-xs font-black opacity-85 transition-opacity hover:opacity-100";
+    return "rounded-full px-3 py-1.5 text-xs font-black text-slate-500 transition-colors hover:text-[#c4495f]";
   }
-  return "rounded-full bg-current px-3 py-1.5 text-xs font-black text-white shadow-md transition-transform hover:-translate-y-0.5";
+  return "rounded-full bg-[#f3f7fb] px-4 py-1.5 text-xs font-black text-[#12384d] shadow-md transition-[transform,background-color,color] hover:-translate-y-0.5 hover:bg-white";
 }
 
 function toastContainerClass(level: ToastLevel) {

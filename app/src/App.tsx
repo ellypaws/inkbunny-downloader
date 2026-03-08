@@ -27,6 +27,16 @@ import { GLOBAL_STYLES } from "./styles/globalStyles";
 const GUEST_DEFAULT_MAX_DOWNLOADS = 256;
 const RELEASE_UPDATE_TOAST_ID = "release-update-toast";
 
+declare global {
+  interface Window {
+    __inkbunnyDebug?: InkbunnyDebugControls;
+  }
+}
+
+type InkbunnyDebugControls = {
+  showUpdateToast: () => void;
+};
+
 export default function App() {
   const [session, setSession] = useState<SessionInfo>(EMPTY_SESSION);
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SESSION.settings);
@@ -35,20 +45,30 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [searchParams, setSearchParams] = useState<SearchParams>(DEFAULT_SEARCH);
-  const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
+  const [searchParams, setSearchParams] =
+    useState<SearchParams>(DEFAULT_SEARCH);
+  const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(
+    null,
+  );
   const [results, setResults] = useState<SubmissionCard[]>([]);
   const [activeSubmissionId, setActiveSubmissionId] = useState("");
-  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>(
+    [],
+  );
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [ratingUpdating, setRatingUpdating] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [keywordSuggestions, setKeywordSuggestions] = useState<string[]>([]);
-  const [artistSuggestions, setArtistSuggestions] = useState<UsernameSuggestion[]>([]);
-  const [favoriteSuggestions, setFavoriteSuggestions] = useState<UsernameSuggestion[]>([]);
+  const [artistSuggestions, setArtistSuggestions] = useState<
+    UsernameSuggestion[]
+  >([]);
+  const [favoriteSuggestions, setFavoriteSuggestions] = useState<
+    UsernameSuggestion[]
+  >([]);
   const [queue, setQueue] = useState<QueueSnapshot>(EMPTY_QUEUE);
-  const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] = useState<string[]>([]);
+  const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] =
+    useState<string[]>([]);
   const [queueMessage, setQueueMessage] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [apiCooldownUntil, setApiCooldownUntil] = useState(0);
@@ -65,7 +85,10 @@ export default function App() {
   const keywordRequestRef = useRef(0);
   const artistRequestRef = useRef(0);
   const favoritesRequestRef = useRef(0);
-  const downloadedSubmissionIds = useMemo(() => getDownloadedSubmissionIds(queue), [queue]);
+  const downloadedSubmissionIds = useMemo(
+    () => getDownloadedSubmissionIds(queue),
+    [queue],
+  );
   const unavailableSubmissionIds = useMemo(
     () => getUnavailableSubmissionIds(queue, pendingDownloadSubmissionIds),
     [pendingDownloadSubmissionIds, queue],
@@ -84,7 +107,10 @@ export default function App() {
     const existing = toast.dedupeKey
       ? toastsRef.current.find((item) => item.dedupeKey === toast.dedupeKey)
       : undefined;
-    const id = existing?.id ?? toast.id ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id =
+      existing?.id ??
+      toast.id ??
+      `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     setToasts((previous) => {
       if (existing) {
@@ -119,7 +145,11 @@ export default function App() {
     pushToast({ level: "error", message, dedupeKey });
   }
 
-  function updateQueueMessage(message: string, level?: ToastItem["level"], dedupeKey?: string) {
+  function updateQueueMessage(
+    message: string,
+    level?: ToastItem["level"],
+    dedupeKey?: string,
+  ) {
     setQueueMessage(message);
     if (level) {
       pushToast({ level, message, dedupeKey });
@@ -135,8 +165,15 @@ export default function App() {
     }));
   }
 
-  function showReleaseUpdateToast(status: ReleaseStatus, currentSettings: AppSettings) {
-    if (!status.updateAvailable || !status.latestTag || status.latestTag === currentSettings.skippedReleaseTag) {
+  function showReleaseUpdateToast(
+    status: ReleaseStatus,
+    currentSettings: AppSettings,
+  ) {
+    if (
+      !status.updateAvailable ||
+      !status.latestTag ||
+      status.latestTag === currentSettings.skippedReleaseTag
+    ) {
       return;
     }
 
@@ -144,10 +181,10 @@ export default function App() {
       id: RELEASE_UPDATE_TOAST_ID,
       dedupeKey: RELEASE_UPDATE_TOAST_ID,
       level: "info",
-      message: `Update available: ${status.latestTag} is ready.`,
+      message: "New version is available.",
       sticky: true,
       primaryAction: {
-        label: "View release notes",
+        label: `Update to ${status.latestTag}`,
         onClick: () => {
           void backend
             .openExternalURL(status.releaseURL)
@@ -161,7 +198,7 @@ export default function App() {
         },
       },
       secondaryAction: {
-        label: `Don't show ${status.latestTag} again`,
+        label: "Defer update",
         variant: "secondary",
         onClick: () => {
           void backend
@@ -172,7 +209,10 @@ export default function App() {
             })
             .catch((error: unknown) => {
               pushErrorToast(
-                getErrorMessage(error, "Could not save the release preference."),
+                getErrorMessage(
+                  error,
+                  "Could not save the release preference.",
+                ),
                 "release-skip-error",
               );
             });
@@ -184,6 +224,34 @@ export default function App() {
   useEffect(() => {
     toastsRef.current = toasts;
   }, [toasts]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    class DevDebugControls implements InkbunnyDebugControls {
+      showUpdateToast() {
+        showReleaseUpdateToast(
+          {
+            currentVersion: "0.1.2",
+            currentTag: "v0.1.2",
+            latestTag: "v0.1.3",
+            releaseURL:
+              "https://github.com/ellypaws/inkbunny-downloader/releases/latest",
+            updateAvailable: true,
+          },
+          settings,
+        );
+      }
+    }
+
+    window.__inkbunnyDebug = new DevDebugControls();
+
+    return () => {
+      delete window.__inkbunnyDebug;
+    };
+  }, [settings]);
 
   useEffect(() => {
     return () => {
@@ -198,7 +266,10 @@ export default function App() {
     if (apiCooldownUntil <= Date.now()) {
       return;
     }
-    const timeout = window.setTimeout(() => setApiCooldownUntil(0), apiCooldownUntil - Date.now());
+    const timeout = window.setTimeout(
+      () => setApiCooldownUntil(0),
+      apiCooldownUntil - Date.now(),
+    );
     return () => window.clearTimeout(timeout);
   }, [apiCooldownUntil]);
 
@@ -310,7 +381,9 @@ export default function App() {
   }, [settings.motionEnabled]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
+    document.documentElement.dataset.theme = settings.darkMode
+      ? "dark"
+      : "light";
   }, [settings.darkMode]);
 
   useEffect(() => {
@@ -318,7 +391,11 @@ export default function App() {
   }, [session.ratingsMask]);
 
   useEffect(() => {
-    if (!session.hasSession || !session.isGuest || searchParams.maxDownloads > 0) {
+    if (
+      !session.hasSession ||
+      !session.isGuest ||
+      searchParams.maxDownloads > 0
+    ) {
       return;
     }
     setSearchParams((previous) =>
@@ -353,7 +430,9 @@ export default function App() {
       return;
     }
     setSelectedSubmissionIds((previous) =>
-      previous.filter((submissionId) => !downloadedSubmissionIds.has(submissionId)),
+      previous.filter(
+        (submissionId) => !downloadedSubmissionIds.has(submissionId),
+      ),
     );
   }, [downloadedSubmissionIds]);
 
@@ -474,7 +553,11 @@ export default function App() {
       }));
       setLoginOpen(false);
       setLoginPassword("");
-      pushToast({ level: "success", message: `Signed in as ${nextSession.username}.`, dedupeKey: "login-success" });
+      pushToast({
+        level: "success",
+        message: `Signed in as ${nextSession.username}.`,
+        dedupeKey: "login-success",
+      });
     } catch (error) {
       const message = getErrorMessage(error, "Login failed.");
       setAuthError(message);
@@ -490,7 +573,11 @@ export default function App() {
       setSession(nextSession);
       setSettings(nextSession.settings);
       setLoginOpen(true);
-      pushToast({ level: "success", message: "Signed out.", dedupeKey: "logout-success" });
+      pushToast({
+        level: "success",
+        message: "Signed out.",
+        dedupeKey: "logout-success",
+      });
     } catch (error) {
       const message = getErrorMessage(error, "Logout failed.");
       updateQueueMessage(message, "error", "logout-error");
@@ -529,7 +616,9 @@ export default function App() {
           setSelectedSubmissionIds(
             response.results
               .map((item) => item.submissionId)
-              .filter((submissionId) => !downloadedSubmissionIds.has(submissionId)),
+              .filter(
+                (submissionId) => !downloadedSubmissionIds.has(submissionId),
+              ),
           );
           setActiveSubmissionId(response.results[0]?.submissionId ?? "");
         } else {
@@ -538,7 +627,9 @@ export default function App() {
             ...previous,
             ...response.results
               .map((item) => item.submissionId)
-              .filter((submissionId) => !downloadedSubmissionIds.has(submissionId))
+              .filter(
+                (submissionId) => !downloadedSubmissionIds.has(submissionId),
+              )
               .filter((id) => !previous.includes(id)),
           ]);
           if (!activeSubmissionId && response.results[0]) {
@@ -604,7 +695,9 @@ export default function App() {
       pushErrorToast(message, "queue-downloads-error");
     } finally {
       setPendingDownloadSubmissionIds((previous) =>
-        previous.filter((submissionId) => !eligibleSubmissionIds.includes(submissionId)),
+        previous.filter(
+          (submissionId) => !eligibleSubmissionIds.includes(submissionId),
+        ),
       );
     }
   }
@@ -712,8 +805,12 @@ export default function App() {
           darkMode={settings.darkMode}
           motionEnabled={settings.motionEnabled}
           session={session}
-          onToggleDarkMode={() => void persistSettings({ darkMode: !settings.darkMode })}
-          onToggleMotion={() => void persistSettings({ motionEnabled: !settings.motionEnabled })}
+          onToggleDarkMode={() =>
+            void persistSettings({ darkMode: !settings.darkMode })
+          }
+          onToggleMotion={() =>
+            void persistSettings({ motionEnabled: !settings.motionEnabled })
+          }
           onOpenLogin={() => setLoginOpen(true)}
           onLogout={() => void handleLogout()}
         />
@@ -743,7 +840,9 @@ export default function App() {
               ratingUpdating={ratingUpdating}
               collapsed={searchCollapsed}
               error={searchError}
-              onChange={(updater) => setSearchParams((previous) => updater(previous))}
+              onChange={(updater) =>
+                setSearchParams((previous) => updater(previous))
+              }
               onSearch={() => void handleSearch(1)}
               onToggleCollapse={() => setSearchCollapsed((current) => !current)}
               onToggleRating={(index) => void handleToggleRating(index)}
@@ -828,7 +927,9 @@ export default function App() {
                 void handleDownloadSubmissions([submissionId])
               }
               onQueueDownloads={() => void handleQueueDownloads()}
-              onLoadMore={() => void handleSearch((searchResponse?.page ?? 1) + 1)}
+              onLoadMore={() =>
+                void handleSearch((searchResponse?.page ?? 1) + 1)
+              }
             />
           </div>
 
@@ -836,19 +937,19 @@ export default function App() {
             queue={queue}
             message={queueMessage}
             selectedCount={selectedSubmissionIds.length}
-            canQueueDownloads={Boolean(searchResponse) && selectedSubmissionIds.length > 0}
+            canQueueDownloads={
+              Boolean(searchResponse) && selectedSubmissionIds.length > 0
+            }
             allSelected={allResultsSelected}
             onOpenDownloadFolder={() => {
-              backend
-                .openDownloadDirectory()
-                .catch((error: unknown) => {
-                  const message = getErrorMessage(
-                    error,
-                    "Could not open the download folder.",
-                  );
-                  updateQueueMessage(message);
-                  pushErrorToast(message, "open-download-folder-error");
-                });
+              backend.openDownloadDirectory().catch((error: unknown) => {
+                const message = getErrorMessage(
+                  error,
+                  "Could not open the download folder.",
+                );
+                updateQueueMessage(message);
+                pushErrorToast(message, "open-download-folder-error");
+              });
             }}
             onClearQueue={() => {
               backend
@@ -856,10 +957,17 @@ export default function App() {
                 .then((snapshot) => {
                   setQueue(snapshot);
                   setPendingDownloadSubmissionIds([]);
-                  updateQueueMessage("Queue cleared.", "success", "queue-cleared");
+                  updateQueueMessage(
+                    "Queue cleared.",
+                    "success",
+                    "queue-cleared",
+                  );
                 })
                 .catch((error: unknown) => {
-                  const message = getErrorMessage(error, "Could not clear the queue.");
+                  const message = getErrorMessage(
+                    error,
+                    "Could not clear the queue.",
+                  );
                   updateQueueMessage(message);
                   pushErrorToast(message, "queue-clear-error");
                 });
@@ -924,7 +1032,10 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function isRateLimitMessage(message: string) {
   const value = message.toLowerCase();
-  return value.includes("rate limiting") || (value.includes("429") && value.includes("inkbunny"));
+  return (
+    value.includes("rate limiting") ||
+    (value.includes("429") && value.includes("inkbunny"))
+  );
 }
 
 function getSuggestionQuery(query: string) {
