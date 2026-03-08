@@ -306,6 +306,39 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	return req, nil
 }
 
+func unmarshalSearchRequest(data []byte) (inkbunny.SubmissionSearchRequest, error) {
+	var req inkbunny.SubmissionSearchRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		return inkbunny.SubmissionSearchRequest{}, err
+	}
+
+	var raw struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return inkbunny.SubmissionSearchRequest{}, err
+	}
+	if strings.TrimSpace(raw.Type) == "" {
+		return req, nil
+	}
+
+	parts := strings.Split(raw.Type, ",")
+	req.Type = make(inkbunny.SubmissionTypes, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		number, err := strconv.Atoi(value)
+		if err != nil {
+			return inkbunny.SubmissionSearchRequest{}, fmt.Errorf("parse submission type %q: %w", value, err)
+		}
+		req.Type = append(req.Type, inkbunny.SubmissionType(number))
+	}
+
+	return req, nil
+}
+
 func normalizeScrapsMode(value string) inkbunny.Scraps {
 	switch inkbunny.Scraps(strings.ToLower(strings.TrimSpace(value))) {
 	case inkbunny.ScrapsNo:
@@ -655,8 +688,8 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 	if a.searchCache == nil {
 		cache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
 			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
-				var req inkbunny.SubmissionSearchRequest
-				if err := json.Unmarshal([]byte(key.RequestJSON), &req); err != nil {
+				req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
+				if err != nil {
 					return cachedSearchResult{}, err
 				}
 				current, err := a.ensureSearchSession()
@@ -754,8 +787,8 @@ func (a *App) resetCaches(user *inkbunny.User) {
 	})
 	searchCache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
 		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
-			var req inkbunny.SubmissionSearchRequest
-			if err := json.Unmarshal([]byte(key.RequestJSON), &req); err != nil {
+			req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
+			if err != nil {
 				return cachedSearchResult{}, err
 			}
 			current, err := a.ensureSearchSession()
