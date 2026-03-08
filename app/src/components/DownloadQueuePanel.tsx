@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Download, FileImage, FolderOpen } from "lucide-react";
+import { Download, FileImage, FolderOpen, Square, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import type { QueueSnapshot } from "../lib/types";
@@ -16,6 +16,7 @@ type DownloadQueuePanelProps = {
   onQueueDownloads: () => void;
   onToggleSelectAll: () => void;
   onCancel: (jobId: string) => void;
+  onCancelSubmission: (submissionId: string) => void;
 };
 
 export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
@@ -124,7 +125,11 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                     className="absolute left-0 top-0 w-full"
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    <QueueRow job={job} onCancel={props.onCancel} />
+                    <QueueRow
+                      job={job}
+                      onCancel={props.onCancel}
+                      onCancelSubmission={props.onCancelSubmission}
+                    />
                   </div>
                 );
               })}
@@ -139,6 +144,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
 function QueueRow(props: {
   job: QueueSnapshot["jobs"][number];
   onCancel: (jobId: string) => void;
+  onCancelSubmission: (submissionId: string) => void;
 }) {
   const { job } = props;
 
@@ -176,12 +182,24 @@ function QueueRow(props: {
                 {job.status}
               </span>
               {job.status === "queued" || job.status === "active" ? (
-                <button
-                  onClick={() => props.onCancel(job.id)}
-                  className="rounded-full bg-[#14112C] px-3 py-2 text-xs font-black text-white"
-                >
-                  Cancel
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => props.onCancelSubmission(job.submissionId)}
+                    className="flex items-center gap-1 rounded-full bg-[#14112C] px-3 py-2 text-xs font-black text-white transition-colors hover:bg-[#CC5E00]"
+                  >
+                    <Square size={12} className="fill-current" strokeWidth={2.5} />
+                    Stop all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onCancel(job.id)}
+                    className="flex items-center gap-1 rounded-full border border-[#c2c7bc] bg-[#f7f8f2]/92 px-3 py-2 text-xs font-black text-[#333333] transition-colors hover:bg-[#e8eddc] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white dark:hover:bg-[#2f353a]"
+                  >
+                    <X size={12} strokeWidth={2.5} />
+                    File
+                  </button>
+                </div>
               ) : null}
             </div>
           </div>

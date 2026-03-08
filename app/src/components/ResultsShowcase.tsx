@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Search as SearchIcon,
+  Square,
 } from "lucide-react";
 import {
   useEffect,
@@ -41,6 +42,7 @@ type ResultsShowcaseProps = {
   onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
   onDownloadSubmission: (submissionId: string) => void;
+  onCancelSubmission: (submissionId: string) => void;
   onRefresh: () => void;
   onQueueDownloads: () => void;
   onLoadMore: () => void;
@@ -218,6 +220,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             const downloadSummary =
               downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY;
             const downloaded = downloadSummary.state === "downloaded";
+            const cancellable = isSubmissionCancellable(downloadSummary.state);
 
             return (
               <div
@@ -257,20 +260,42 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
+                      if (cancellable) {
+                        props.onCancelSubmission(item.submissionId);
+                        return;
+                      }
                       props.onDownloadSubmission(item.submissionId);
                     }}
-                    aria-label={`Download ${item.title}`}
-                    disabled={downloadSummary.state !== "idle"}
-                    className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
+                    aria-label={
+                      cancellable
+                        ? `Cancel download for ${item.title}`
+                        : `Download ${item.title}`
+                    }
+                    disabled={downloaded}
+                    className={`group/download-action flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
                       downloadSummary.state === "downloaded"
                         ? "translate-x-[3.25rem] bg-[#73D216]/85 text-white"
-                        : downloadSummary.state === "queued" ||
-                            downloadSummary.state === "downloading"
-                          ? "bg-[#2A7FA6] text-white"
+                        : cancellable
+                          ? "bg-[#2A7FA6] text-white hover:bg-[#CC5E00]"
                           : "bg-[#14112C]/72 text-white hover:scale-105"
                     } disabled:cursor-default disabled:hover:scale-100`}
                   >
-                    {renderDownloadIcon(downloadSummary.state, 18)}
+                    {cancellable ? (
+                      <span className="relative flex h-5 w-5 items-center justify-center">
+                        <span className="transition-opacity duration-150 group-hover/download-action:opacity-0">
+                          {renderDownloadIcon(downloadSummary.state, 18)}
+                        </span>
+                        <span className="pointer-events-none absolute opacity-0 transition-opacity duration-150 group-hover/download-action:opacity-100">
+                          <Square
+                            size={15}
+                            className="fill-current"
+                            strokeWidth={2.5}
+                          />
+                        </span>
+                      </span>
+                    ) : (
+                      renderDownloadIcon(downloadSummary.state, 18)
+                    )}
                   </button>
                   <button
                     type="button"
@@ -401,6 +426,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 const downloadSummary =
                   downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY;
                 const downloaded = downloadSummary.state === "downloaded";
+                const cancellable = isSubmissionCancellable(
+                  downloadSummary.state,
+                );
 
                 return (
                   <article
@@ -455,8 +483,13 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                           <GridDownloadButton
                             title={item.title}
                             summary={downloadSummary}
+                            cancellable={cancellable}
                             onClick={(event) => {
                               event.stopPropagation();
+                              if (cancellable) {
+                                props.onCancelSubmission(item.submissionId);
+                                return;
+                              }
                               props.onDownloadSubmission(item.submissionId);
                             }}
                           />
@@ -700,6 +733,8 @@ function buildSubmissionDownloadSummaries(
 
   for (const submissionId of submissionIds) {
     const jobs = jobsBySubmission.get(submissionId) ?? [];
+    const relevantJobs = jobs.filter((job) => job.status !== "cancelled");
+
     if (jobs.length === 0) {
       summaries.set(submissionId, {
         state: "queued",
@@ -708,7 +743,12 @@ function buildSubmissionDownloadSummaries(
       continue;
     }
 
-    if (jobs.every((job) => job.status === "completed")) {
+    if (relevantJobs.length === 0) {
+      summaries.set(submissionId, IDLE_DOWNLOAD_SUMMARY);
+      continue;
+    }
+
+    if (relevantJobs.every((job) => job.status === "completed")) {
       summaries.set(submissionId, {
         state: "downloaded",
         progress: 1,
@@ -716,8 +756,8 @@ function buildSubmissionDownloadSummaries(
       continue;
     }
 
-    const anyActive = jobs.some((job) => job.status === "active");
-    const anyQueued = jobs.some((job) => job.status === "queued");
+    const anyActive = relevantJobs.some((job) => job.status === "active");
+    const anyQueued = relevantJobs.some((job) => job.status === "queued");
     const state =
       anyActive
         ? "downloading"
@@ -727,7 +767,7 @@ function buildSubmissionDownloadSummaries(
 
     summaries.set(submissionId, {
       state,
-      progress: getSubmissionProgress(jobs),
+      progress: getSubmissionProgress(relevantJobs),
     });
   }
 
@@ -786,6 +826,10 @@ function renderDownloadIcon(state: SubmissionDownloadState, size: number) {
   return <Download size={size} />;
 }
 
+function isSubmissionCancellable(state: SubmissionDownloadState) {
+  return state === "queued" || state === "downloading";
+}
+
 function clampProgress(value: number) {
   if (!Number.isFinite(value)) {
     return 0;
@@ -796,6 +840,7 @@ function clampProgress(value: number) {
 function GridDownloadButton(props: {
   title: string;
   summary: SubmissionDownloadSummary;
+  cancellable: boolean;
   onClick: MouseEventHandler<HTMLButtonElement>;
 }) {
   const progress =
@@ -811,19 +856,29 @@ function GridDownloadButton(props: {
     <button
       type="button"
       onClick={props.onClick}
-      aria-label={`Download ${props.title}`}
-      disabled={props.summary.state !== "idle"}
-      className={`relative flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ${
+      aria-label={
+        props.cancellable
+          ? `Cancel download for ${props.title}`
+          : `Download ${props.title}`
+      }
+      disabled={props.summary.state === "downloaded"}
+      className={`group/grid-download relative flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ${
         props.summary.state === "downloaded"
           ? "translate-x-10 bg-[#73D216]/85 text-white"
-          : props.summary.state === "queued" ||
-              props.summary.state === "downloading"
-            ? "bg-[#2A7FA6] text-white"
+          : props.cancellable
+            ? "bg-[#2A7FA6] text-white hover:bg-[#CC5E00]"
             : "bg-[#2A7FA6] text-white hover:scale-105"
       } disabled:cursor-default disabled:hover:scale-100`}
     >
-      {props.summary.state === "queued" || props.summary.state === "downloading" ? (
-        <CircularProgressIcon progress={progress} />
+      {props.cancellable ? (
+        <>
+          <span className="transition-opacity duration-150 group-hover/grid-download:opacity-0">
+            <CircularProgressIcon progress={progress} />
+          </span>
+          <span className="pointer-events-none absolute opacity-0 transition-opacity duration-150 group-hover/grid-download:opacity-100">
+            <Square size={12} className="fill-current" strokeWidth={2.5} />
+          </span>
+        </>
       ) : props.summary.state === "downloaded" ? (
         <Check size={14} />
       ) : (

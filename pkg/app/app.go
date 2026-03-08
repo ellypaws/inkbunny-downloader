@@ -227,6 +227,13 @@ func (a *App) CancelDownload(jobID string) QueueSnapshot {
 	return a.downloadManager.Cancel(jobID)
 }
 
+func (a *App) CancelSubmission(submissionID string) QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.CancelSubmission(submissionID)
+}
+
 func (a *App) ClearQueue() QueueSnapshot {
 	if a.downloadManager == nil {
 		return QueueSnapshot{}

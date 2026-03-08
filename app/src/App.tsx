@@ -719,6 +719,25 @@ export default function App() {
     }
   }
 
+  async function handleCancelSubmission(submissionId: string) {
+    if (!submissionId) {
+      return;
+    }
+
+    setPendingDownloadSubmissionIds((previous) =>
+      previous.filter((value) => value !== submissionId),
+    );
+
+    try {
+      const snapshot = await backend.cancelSubmission(submissionId);
+      setQueue(snapshot);
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to cancel download.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "cancel-submission-error");
+    }
+  }
+
   function handleToggleRating(index: number) {
     if (!session.hasSession) {
       return;
@@ -944,6 +963,9 @@ export default function App() {
               onDownloadSubmission={(submissionId) =>
                 void handleDownloadSubmissions([submissionId])
               }
+              onCancelSubmission={(submissionId) =>
+                void handleCancelSubmission(submissionId)
+              }
               onRefresh={() => void handleRefreshSearch()}
               onQueueDownloads={() => void handleQueueDownloads()}
               onLoadMore={() =>
@@ -999,6 +1021,9 @@ export default function App() {
                 .then(setQueue)
                 .catch(() => undefined);
             }}
+            onCancelSubmission={(submissionId) =>
+              void handleCancelSubmission(submissionId)
+            }
           />
         </main>
       </div>
