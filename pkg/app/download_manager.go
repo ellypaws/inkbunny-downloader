@@ -192,6 +192,22 @@ func (m *DownloadManager) Clear() QueueSnapshot {
 	return snapshot
 }
 
+func (m *DownloadManager) ClearCompleted() QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for jobID, job := range m.jobs {
+		if job == nil || job.snapshot.Status != "completed" {
+			continue
+		}
+		delete(m.jobs, jobID)
+	}
+
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	return snapshot
+}
+
 func (m *DownloadManager) maybeStartLocked() {
 	for m.active < m.maxActive && len(m.pending) > 0 {
 		jobID := m.pending[0]

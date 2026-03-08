@@ -19,11 +19,12 @@ type UsernameSuggestion struct {
 }
 
 type AppSettings struct {
-	DownloadDirectory string `json:"downloadDirectory"`
-	MaxActive         int    `json:"maxActive"`
-	DarkMode          bool   `json:"darkMode"`
-	MotionEnabled     bool   `json:"motionEnabled"`
-	SkippedReleaseTag string `json:"skippedReleaseTag"`
+	DownloadDirectory  string `json:"downloadDirectory"`
+	MaxActive          int    `json:"maxActive"`
+	DarkMode           bool   `json:"darkMode"`
+	MotionEnabled      bool   `json:"motionEnabled"`
+	AutoClearCompleted bool   `json:"autoClearCompleted"`
+	SkippedReleaseTag  string `json:"skippedReleaseTag"`
 }
 
 type SearchParams struct {

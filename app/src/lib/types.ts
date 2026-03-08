@@ -3,6 +3,7 @@ export type AppSettings = {
   maxActive: number
   darkMode: boolean
   motionEnabled: boolean
+  autoClearCompleted: boolean
   skippedReleaseTag: string
 }
 

@@ -5,6 +5,7 @@ export namespace desktopapp {
 	    maxActive: number;
 	    darkMode: boolean;
 	    motionEnabled: boolean;
+	    autoClearCompleted: boolean;
 	    skippedReleaseTag: string;
 	
 	    static createFrom(source: any = {}) {
@@ -17,6 +18,7 @@ export namespace desktopapp {
 	        this.maxActive = source["maxActive"];
 	        this.darkMode = source["darkMode"];
 	        this.motionEnabled = source["motionEnabled"];
+	        this.autoClearCompleted = source["autoClearCompleted"];
 	        this.skippedReleaseTag = source["skippedReleaseTag"];
 	    }
 	}

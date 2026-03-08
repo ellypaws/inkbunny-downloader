@@ -79,11 +79,12 @@ func (s *stateStore) Save(state storedState) error {
 
 func defaultStoredState() storedState {
 	settings := AppSettings{
-		DownloadDirectory: defaultDownloadDirectory(),
-		MaxActive:         defaultMaxActive(),
-		DarkMode:          false,
-		MotionEnabled:     true,
-		SkippedReleaseTag: "",
+		DownloadDirectory:  defaultDownloadDirectory(),
+		MaxActive:          defaultMaxActive(),
+		DarkMode:           false,
+		MotionEnabled:      true,
+		AutoClearCompleted: false,
+		SkippedReleaseTag:  "",
 	}
 	return storedState{
 		Settings: settings,

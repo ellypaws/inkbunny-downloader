@@ -179,6 +179,7 @@ func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 	}
 	a.settings.DarkMode = settings.DarkMode
 	a.settings.MotionEnabled = settings.MotionEnabled
+	a.settings.AutoClearCompleted = settings.AutoClearCompleted
 	a.settings.SkippedReleaseTag = normalizeReleaseTag(settings.SkippedReleaseTag)
 	current := a.settings
 	a.mu.Unlock()
@@ -204,11 +205,12 @@ func (a *App) PickDownloadDirectory() (string, error) {
 		return "", err
 	}
 	_, updateErr := a.UpdateSettings(AppSettings{
-		DownloadDirectory: selected,
-		MaxActive:         a.settings.MaxActive,
-		DarkMode:          a.settings.DarkMode,
-		MotionEnabled:     a.settings.MotionEnabled,
-		SkippedReleaseTag: a.settings.SkippedReleaseTag,
+		DownloadDirectory:  selected,
+		MaxActive:          a.settings.MaxActive,
+		DarkMode:           a.settings.DarkMode,
+		MotionEnabled:      a.settings.MotionEnabled,
+		AutoClearCompleted: a.settings.AutoClearCompleted,
+		SkippedReleaseTag:  a.settings.SkippedReleaseTag,
 	})
 	return selected, updateErr
 }
@@ -239,6 +241,13 @@ func (a *App) ClearQueue() QueueSnapshot {
 		return QueueSnapshot{}
 	}
 	return a.downloadManager.Clear()
+}
+
+func (a *App) ClearCompletedDownloads() QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.ClearCompleted()
 }
 
 func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, options DownloadOptions) (QueueSnapshot, error) {
@@ -325,11 +334,12 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 	}
 
 	_, _ = a.UpdateSettings(AppSettings{
-		DownloadDirectory: downloadRoot,
-		MaxActive:         maxActive,
-		DarkMode:          a.settings.DarkMode,
-		MotionEnabled:     a.settings.MotionEnabled,
-		SkippedReleaseTag: a.settings.SkippedReleaseTag,
+		DownloadDirectory:  downloadRoot,
+		MaxActive:          maxActive,
+		DarkMode:           a.settings.DarkMode,
+		MotionEnabled:      a.settings.MotionEnabled,
+		AutoClearCompleted: a.settings.AutoClearCompleted,
+		SkippedReleaseTag:  a.settings.SkippedReleaseTag,
 	})
 
 	if len(tasks) == 0 {

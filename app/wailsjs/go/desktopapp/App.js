@@ -10,6 +10,10 @@ export function CancelSubmission(arg1) {
   return window['go']['desktopapp']['App']['CancelSubmission'](arg1);
 }
 
+export function ClearCompletedDownloads() {
+  return window['go']['desktopapp']['App']['ClearCompletedDownloads']();
+}
+
 export function ClearQueue() {
   return window['go']['desktopapp']['App']['ClearQueue']();
 }

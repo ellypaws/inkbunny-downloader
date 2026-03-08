@@ -89,6 +89,7 @@ export const EMPTY_SESSION: SessionInfo = {
     maxActive: 4,
     darkMode: false,
     motionEnabled: true,
+    autoClearCompleted: false,
     skippedReleaseTag: '',
   },
 }

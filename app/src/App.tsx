@@ -80,6 +80,7 @@ export default function App() {
   const requestRef = useRef<number | null>(null);
   const shouldScrollToResultsRef = useRef(false);
   const ratingDebounceRef = useRef<number | null>(null);
+  const autoClearTimeoutRef = useRef<number | null>(null);
   const pendingRatingsMaskRef = useRef("");
   const currentY = useRef(0);
   const toastTimeoutsRef = useRef<Map<string, number>>(new Map());
@@ -97,6 +98,14 @@ export default function App() {
     [activeTabId, tabs],
   );
   const downloadedSubmissionIds = useMemo(() => getDownloadedSubmissionIds(queue), [queue]);
+  const completedJobIds = useMemo(
+    () =>
+      queue.jobs
+        .filter((job) => job.status === "completed")
+        .map((job) => job.id)
+        .join(","),
+    [queue.jobs],
+  );
   const downloadedSubmissionIdsRef = useRef(downloadedSubmissionIds);
   const unavailableSubmissionIds = useMemo(
     () => getUnavailableSubmissionIds(queue, pendingDownloadSubmissionIds),
@@ -329,6 +338,9 @@ export default function App() {
         window.clearTimeout(timeoutId);
       }
       toastTimeoutsRef.current.clear();
+      if (autoClearTimeoutRef.current !== null) {
+        window.clearTimeout(autoClearTimeoutRef.current);
+      }
     },
     [],
   );
@@ -427,6 +439,26 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
   }, [settings.darkMode]);
+
+  useEffect(() => {
+    if (autoClearTimeoutRef.current !== null) {
+      window.clearTimeout(autoClearTimeoutRef.current);
+      autoClearTimeoutRef.current = null;
+    }
+    if (!settings.autoClearCompleted || !completedJobIds) {
+      return;
+    }
+    autoClearTimeoutRef.current = window.setTimeout(() => {
+      autoClearTimeoutRef.current = null;
+      void handleClearCompleted(true);
+    }, 3000);
+    return () => {
+      if (autoClearTimeoutRef.current !== null) {
+        window.clearTimeout(autoClearTimeoutRef.current);
+        autoClearTimeoutRef.current = null;
+      }
+    };
+  }, [completedJobIds, settings.autoClearCompleted]);
 
   useEffect(() => {
     pendingRatingsMaskRef.current = session.ratingsMask;
@@ -555,6 +587,22 @@ export default function App() {
       syncSettings(await backend.updateSettings(next));
     } catch (error) {
       updateQueueMessage(getErrorMessage(error, "Unable to save settings."), "error", "save-settings-error");
+    }
+  }
+
+  async function handleClearCompleted(auto = false) {
+    try {
+      const snapshot = await backend.clearCompletedDownloads();
+      setQueue(snapshot);
+      if (auto) {
+        updateQueueMessage("Completed downloads cleared automatically.", "success", "queue-auto-clear-completed");
+        return;
+      }
+      updateQueueMessage("Completed downloads cleared.", "success", "queue-clear-completed");
+    } catch (error) {
+      const message = getErrorMessage(error, "Could not clear completed downloads.");
+      updateQueueMessage(message);
+      pushErrorToast(message, auto ? "queue-auto-clear-completed-error" : "queue-clear-completed-error");
     }
   }
 
@@ -1015,6 +1063,7 @@ export default function App() {
             selectedCount={activeSelectedSubmissionIds.length}
             canQueueDownloads={Boolean(activeSearchResponse) && activeSelectedSubmissionIds.length > 0}
             allSelected={allResultsSelected}
+            autoClearCompleted={settings.autoClearCompleted}
             onOpenDownloadFolder={() => {
               backend.openDownloadDirectory().catch((error: unknown) => {
                 const message = getErrorMessage(error, "Could not open the download folder.");
@@ -1036,8 +1085,12 @@ export default function App() {
                   pushErrorToast(message, "queue-clear-error");
                 });
             }}
+            onClearCompleted={() => void handleClearCompleted()}
             onQueueDownloads={() => void handleQueueDownloads()}
             onToggleSelectAll={handleToggleSelectAll}
+            onToggleAutoClearCompleted={(enabled) =>
+              void persistSettings({ autoClearCompleted: enabled })
+            }
             onCancel={(jobId) => {
               backend.cancelDownload(jobId).then(setQueue).catch(() => undefined);
             }}
