@@ -16,6 +16,8 @@ export function GetKeywordSuggestions(arg1:string):Promise<Array<string>>;
 
 export function GetQueueSnapshot():Promise<desktopapp.QueueSnapshot>;
 
+export function GetReleaseStatus():Promise<desktopapp.ReleaseStatus>;
+
 export function GetSession():Promise<desktopapp.SessionInfo>;
 
 export function GetUsernameSuggestions(arg1:string):Promise<Array<desktopapp.UsernameSuggestion>>;
@@ -28,9 +30,13 @@ export function Logout():Promise<desktopapp.SessionInfo>;
 
 export function OpenDownloadDirectory():Promise<void>;
 
+export function OpenExternalURL(arg1:string):Promise<void>;
+
 export function PickDownloadDirectory():Promise<string>;
 
 export function Search(arg1:desktopapp.SearchParams):Promise<desktopapp.SearchResponse>;
+
+export function SkipReleaseTag(arg1:string):Promise<desktopapp.AppSettings>;
 
 export function UpdateRatings(arg1:string):Promise<desktopapp.SessionInfo>;
 

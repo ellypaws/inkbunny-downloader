@@ -5,6 +5,7 @@ export namespace desktopapp {
 	    maxActive: number;
 	    darkMode: boolean;
 	    motionEnabled: boolean;
+	    skippedReleaseTag: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -16,6 +17,7 @@ export namespace desktopapp {
 	        this.maxActive = source["maxActive"];
 	        this.darkMode = source["darkMode"];
 	        this.motionEnabled = source["motionEnabled"];
+	        this.skippedReleaseTag = source["skippedReleaseTag"];
 	    }
 	}
 	export class DownloadJobSnapshot {
@@ -157,6 +159,26 @@ export namespace desktopapp {
 		    }
 		    return a;
 		}
+	}
+	export class ReleaseStatus {
+	    currentVersion: string;
+	    currentTag: string;
+	    latestTag?: string;
+	    releaseURL?: string;
+	    updateAvailable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReleaseStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currentVersion = source["currentVersion"];
+	        this.currentTag = source["currentTag"];
+	        this.latestTag = source["latestTag"];
+	        this.releaseURL = source["releaseURL"];
+	        this.updateAvailable = source["updateAvailable"];
+	    }
 	}
 	export class SearchParams {
 	    query: string;

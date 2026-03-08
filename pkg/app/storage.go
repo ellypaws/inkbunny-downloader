@@ -83,6 +83,7 @@ func defaultStoredState() storedState {
 		MaxActive:         defaultMaxActive(),
 		DarkMode:          true,
 		MotionEnabled:     true,
+		SkippedReleaseTag: "",
 	}
 	return storedState{
 		Settings: settings,

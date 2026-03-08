@@ -2,12 +2,21 @@ import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from "lucide-react"
 
 type ToastLevel = "info" | "success" | "warning" | "error";
 
+export type ToastAction = {
+  label: string;
+  onClick: () => void;
+  variant?: "primary" | "secondary";
+};
+
 export type ToastItem = {
   id: string;
   level: ToastLevel;
   message: string;
   dedupeKey?: string;
   retryAfterMs?: number;
+  sticky?: boolean;
+  primaryAction?: ToastAction;
+  secondaryAction?: ToastAction;
 };
 
 type ToastHostProps = {
@@ -38,6 +47,28 @@ export function ToastHost(props: ToastHostProps) {
                   Retrying in {formatRetryAfter(toast.retryAfterMs)}
                 </div>
               ) : null}
+              {toast.primaryAction || toast.secondaryAction ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {toast.primaryAction ? (
+                    <button
+                      type="button"
+                      onClick={toast.primaryAction.onClick}
+                      className={toastActionClass(toast.primaryAction.variant ?? "primary")}
+                    >
+                      {toast.primaryAction.label}
+                    </button>
+                  ) : null}
+                  {toast.secondaryAction ? (
+                    <button
+                      type="button"
+                      onClick={toast.secondaryAction.onClick}
+                      className={toastActionClass(toast.secondaryAction.variant ?? "secondary")}
+                    >
+                      {toast.secondaryAction.label}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <button
               type="button"
@@ -52,6 +83,13 @@ export function ToastHost(props: ToastHostProps) {
       ))}
     </div>
   );
+}
+
+function toastActionClass(variant: "primary" | "secondary") {
+  if (variant === "secondary") {
+    return "rounded-full border border-current/20 px-3 py-1.5 text-xs font-black opacity-85 transition-opacity hover:opacity-100";
+  }
+  return "rounded-full bg-current px-3 py-1.5 text-xs font-black text-white shadow-md transition-transform hover:-translate-y-0.5";
 }
 
 function toastContainerClass(level: ToastLevel) {

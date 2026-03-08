@@ -23,6 +23,7 @@ type AppSettings struct {
 	MaxActive         int    `json:"maxActive"`
 	DarkMode          bool   `json:"darkMode"`
 	MotionEnabled     bool   `json:"motionEnabled"`
+	SkippedReleaseTag string `json:"skippedReleaseTag"`
 }
 
 type SearchParams struct {
@@ -134,6 +135,14 @@ type AppNotification struct {
 	Scope        string `json:"scope"`
 	DedupeKey    string `json:"dedupeKey,omitempty"`
 	RetryAfterMS int64  `json:"retryAfterMs,omitempty"`
+}
+
+type ReleaseStatus struct {
+	CurrentVersion  string `json:"currentVersion"`
+	CurrentTag      string `json:"currentTag"`
+	LatestTag       string `json:"latestTag,omitempty"`
+	ReleaseURL      string `json:"releaseURL,omitempty"`
+	UpdateAvailable bool   `json:"updateAvailable"`
 }
 
 type storedState struct {

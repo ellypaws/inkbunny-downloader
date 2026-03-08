@@ -52,12 +52,17 @@ jobs:
           export CGO_ENABLED=0
           export GOOS="${{ matrix.goos }}"
           export GOARCH="${{ matrix.goarch }}"
+          release_version="dev"
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            release_version="${GITHUB_REF_NAME#v}"
+          fi
+          ldflags="-s -w -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo.Version=${release_version}"
 
           output="${APP_NAME}-tui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             output="${APP_NAME}-tui-windows${{ matrix.ext }}"
           fi
-          go build -trimpath -ldflags="-s -w" -o "$output" ./cmd/tui
+          go build -trimpath -ldflags="$ldflags" -o "$output" ./cmd/tui
         shell: bash
 
       - name: Upload TUI artifact
@@ -143,6 +148,10 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$(go env GOPATH)/bin:$PATH"
+          release_version="dev"
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            release_version="${GITHUB_REF_NAME#v}"
+          fi
 
           output="${APP_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
@@ -160,6 +169,7 @@ jobs:
           wails build \
             -clean \
             -trimpath \
+            -ldflags "-X github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo.Version=${release_version}" \
             -m \
             $nopackage_flag \
             -s \

@@ -15,6 +15,7 @@ import type {
   AppSettings,
   DownloadProgressEvent,
   QueueSnapshot,
+  ReleaseStatus,
   SearchParams,
   SearchResponse,
   SessionInfo,
@@ -24,6 +25,7 @@ import type {
 import { GLOBAL_STYLES } from "./styles/globalStyles";
 
 const GUEST_DEFAULT_MAX_DOWNLOADS = 256;
+const RELEASE_UPDATE_TOAST_ID = "release-update-toast";
 
 export default function App() {
   const [session, setSession] = useState<SessionInfo>(EMPTY_SESSION);
@@ -83,7 +85,6 @@ export default function App() {
       ? toastsRef.current.find((item) => item.dedupeKey === toast.dedupeKey)
       : undefined;
     const id = existing?.id ?? toast.id ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const duration = getToastDuration(toast.level, toast.retryAfterMs);
 
     setToasts((previous) => {
       if (existing) {
@@ -99,7 +100,12 @@ export default function App() {
     const currentTimeout = toastTimeoutsRef.current.get(id);
     if (currentTimeout !== undefined) {
       window.clearTimeout(currentTimeout);
+      toastTimeoutsRef.current.delete(id);
     }
+    if (toast.sticky) {
+      return;
+    }
+    const duration = getToastDuration(toast.level, toast.retryAfterMs);
     toastTimeoutsRef.current.set(
       id,
       window.setTimeout(() => dismissToast(id), duration),
@@ -118,6 +124,61 @@ export default function App() {
     if (level) {
       pushToast({ level, message, dedupeKey });
     }
+  }
+
+  function syncSettings(nextSettings: AppSettings) {
+    setSettings(nextSettings);
+    setSession((previous) => ({
+      ...previous,
+      settings: nextSettings,
+      effectiveTheme: nextSettings.darkMode ? "dark" : "light",
+    }));
+  }
+
+  function showReleaseUpdateToast(status: ReleaseStatus, currentSettings: AppSettings) {
+    if (!status.updateAvailable || !status.latestTag || status.latestTag === currentSettings.skippedReleaseTag) {
+      return;
+    }
+
+    pushToast({
+      id: RELEASE_UPDATE_TOAST_ID,
+      dedupeKey: RELEASE_UPDATE_TOAST_ID,
+      level: "info",
+      message: `Update available: ${status.latestTag} is ready.`,
+      sticky: true,
+      primaryAction: {
+        label: "View release notes",
+        onClick: () => {
+          void backend
+            .openExternalURL(status.releaseURL)
+            .then(() => dismissToast(RELEASE_UPDATE_TOAST_ID))
+            .catch((error: unknown) => {
+              pushErrorToast(
+                getErrorMessage(error, "Could not open the release page."),
+                "release-open-error",
+              );
+            });
+        },
+      },
+      secondaryAction: {
+        label: `Don't show ${status.latestTag} again`,
+        variant: "secondary",
+        onClick: () => {
+          void backend
+            .skipReleaseTag(status.latestTag)
+            .then((savedSettings) => {
+              syncSettings(savedSettings);
+              dismissToast(RELEASE_UPDATE_TOAST_ID);
+            })
+            .catch((error: unknown) => {
+              pushErrorToast(
+                getErrorMessage(error, "Could not save the release preference."),
+                "release-skip-error",
+              );
+            });
+        },
+      },
+    });
   }
 
   useEffect(() => {
@@ -161,6 +222,16 @@ export default function App() {
               : previous.maxDownloads,
         }));
         setLoginOpen(!nextSession.hasSession);
+
+        void backend
+          .getReleaseStatus()
+          .then((status) => {
+            if (!mounted) {
+              return;
+            }
+            showReleaseUpdateToast(status, nextSession.settings);
+          })
+          .catch(() => undefined);
       })
       .catch((error: unknown) => {
         if (!mounted) {
@@ -379,12 +450,7 @@ export default function App() {
     setSettings(next);
     try {
       const saved = await backend.updateSettings(next);
-      setSettings(saved);
-      setSession((previous) => ({
-        ...previous,
-        settings: saved,
-        effectiveTheme: saved.darkMode ? "dark" : "light",
-      }));
+      syncSettings(saved);
     } catch (error) {
       const message = getErrorMessage(error, "Unable to save settings.");
       updateQueueMessage(message, "error", "save-settings-error");

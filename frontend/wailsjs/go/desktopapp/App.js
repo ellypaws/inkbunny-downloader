@@ -26,6 +26,10 @@ export function GetQueueSnapshot() {
   return window['go']['desktopapp']['App']['GetQueueSnapshot']();
 }
 
+export function GetReleaseStatus() {
+  return window['go']['desktopapp']['App']['GetReleaseStatus']();
+}
+
 export function GetSession() {
   return window['go']['desktopapp']['App']['GetSession']();
 }
@@ -42,16 +46,32 @@ export function Login(arg1, arg2) {
   return window['go']['desktopapp']['App']['Login'](arg1, arg2);
 }
 
+export function OpenDownloadDirectory() {
+  return window['go']['desktopapp']['App']['OpenDownloadDirectory']();
+}
+
+export function OpenExternalURL(arg1) {
+  return window['go']['desktopapp']['App']['OpenExternalURL'](arg1);
+}
+
 export function Logout() {
   return window['go']['desktopapp']['App']['Logout']();
 }
 
-export function PickDownloadDirectory() {
-  return window['go']['desktopapp']['App']['PickDownloadDirectory']();
-}
-
 export function Search(arg1) {
   return window['go']['desktopapp']['App']['Search'](arg1);
+}
+
+export function SkipReleaseTag(arg1) {
+  return window['go']['desktopapp']['App']['SkipReleaseTag'](arg1);
+}
+
+export function UpdateRatings(arg1) {
+  return window['go']['desktopapp']['App']['UpdateRatings'](arg1);
+}
+
+export function PickDownloadDirectory() {
+  return window['go']['desktopapp']['App']['PickDownloadDirectory']();
 }
 
 export function UpdateSettings(arg1) {

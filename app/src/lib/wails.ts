@@ -3,6 +3,7 @@ import type {
   DownloadOptions,
   DownloadSelection,
   QueueSnapshot,
+  ReleaseStatus,
   SearchParams,
   SearchResponse,
   SessionInfo,
@@ -16,10 +17,12 @@ type BackendApi = {
   Logout(): Promise<SessionInfo>
   UpdateRatings(mask: string): Promise<SessionInfo>
   OpenDownloadDirectory(): Promise<void>
+  OpenExternalURL(url: string): Promise<void>
   Search(params: SearchParams): Promise<SearchResponse>
   LoadMoreResults(searchId: string, page: number): Promise<SearchResponse>
   GetKeywordSuggestions(query: string): Promise<string[]>
   GetUsernameSuggestions(query: string): Promise<UsernameSuggestion[]>
+  GetReleaseStatus(): Promise<ReleaseStatus>
   EnqueueDownloads(
     searchId: string,
     selection: DownloadSelection,
@@ -29,6 +32,7 @@ type BackendApi = {
   CancelDownload(jobId: string): Promise<QueueSnapshot>
   ClearQueue(): Promise<QueueSnapshot>
   PickDownloadDirectory(): Promise<string>
+  SkipReleaseTag(tag: string): Promise<AppSettings>
   UpdateSettings(settings: AppSettings): Promise<AppSettings>
 }
 
@@ -79,6 +83,9 @@ export const backend = {
   async openDownloadDirectory(): Promise<void> {
     return getBackend().OpenDownloadDirectory()
   },
+  async openExternalURL(url: string): Promise<void> {
+    return getBackend().OpenExternalURL(url)
+  },
   async search(params: SearchParams): Promise<SearchResponse> {
     return getBackend().Search(params)
   },
@@ -93,6 +100,9 @@ export const backend = {
   },
   async getUsernameSuggestions(query: string): Promise<UsernameSuggestion[]> {
     return getBackend().GetUsernameSuggestions(query)
+  },
+  async getReleaseStatus(): Promise<ReleaseStatus> {
+    return getBackend().GetReleaseStatus()
   },
   async enqueueDownloads(
     searchId: string,
@@ -112,6 +122,9 @@ export const backend = {
   },
   async pickDownloadDirectory(): Promise<string> {
     return getBackend().PickDownloadDirectory()
+  },
+  async skipReleaseTag(tag: string): Promise<AppSettings> {
+    return getBackend().SkipReleaseTag(tag)
   },
   async updateSettings(settings: AppSettings): Promise<AppSettings> {
     return getBackend().UpdateSettings(settings)

@@ -2,11 +2,14 @@ package desktopapp
 
 import (
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/pkg/browser"
 )
 
 func (a *App) OpenDownloadDirectory() error {
@@ -25,6 +28,17 @@ func (a *App) OpenDownloadDirectory() error {
 		return err
 	}
 	return openPathInFileManager(target)
+}
+
+func (a *App) OpenExternalURL(target string) error {
+	parsed, err := url.Parse(strings.TrimSpace(target))
+	if err != nil {
+		return err
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("unsupported external url")
+	}
+	return browser.OpenURL(parsed.String())
 }
 
 func openPathInFileManager(target string) error {

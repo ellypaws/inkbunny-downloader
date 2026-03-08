@@ -3,6 +3,7 @@ export type AppSettings = {
   maxActive: number
   darkMode: boolean
   motionEnabled: boolean
+  skippedReleaseTag: string
 }
 
 export type SessionInfo = {
@@ -132,4 +133,12 @@ export type AppNotification = {
   scope: string
   dedupeKey?: string
   retryAfterMs?: number
+}
+
+export type ReleaseStatus = {
+  currentVersion: string
+  currentTag: string
+  latestTag: string
+  releaseURL: string
+  updateAvailable: boolean
 }

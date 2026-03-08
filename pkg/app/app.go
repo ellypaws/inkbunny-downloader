@@ -179,6 +179,7 @@ func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 	}
 	a.settings.DarkMode = settings.DarkMode
 	a.settings.MotionEnabled = settings.MotionEnabled
+	a.settings.SkippedReleaseTag = normalizeReleaseTag(settings.SkippedReleaseTag)
 	current := a.settings
 	a.mu.Unlock()
 
@@ -207,6 +208,7 @@ func (a *App) PickDownloadDirectory() (string, error) {
 		MaxActive:         a.settings.MaxActive,
 		DarkMode:          a.settings.DarkMode,
 		MotionEnabled:     a.settings.MotionEnabled,
+		SkippedReleaseTag: a.settings.SkippedReleaseTag,
 	})
 	return selected, updateErr
 }
@@ -320,6 +322,7 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 		MaxActive:         maxActive,
 		DarkMode:          a.settings.DarkMode,
 		MotionEnabled:     a.settings.MotionEnabled,
+		SkippedReleaseTag: a.settings.SkippedReleaseTag,
 	})
 
 	if len(tasks) == 0 {
