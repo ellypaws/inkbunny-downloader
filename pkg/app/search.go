@@ -38,7 +38,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	if err != nil {
 		return SearchResponse{}, err
 	}
-	ratingsMask := effectiveRatingsMask(user.Ratings.String())
+	ratingsMask := userRatingsMask(user)
 	key, normalizedReq, err := makeSearchCacheKey(user, ratingsMask, req)
 	if err != nil {
 		return SearchResponse{}, err
@@ -50,7 +50,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 			if err != nil {
 				return SearchResponse{}, err
 			}
-			ratingsMask = effectiveRatingsMask(user.Ratings.String())
+			ratingsMask = userRatingsMask(user)
 			key, normalizedReq, err = makeSearchCacheKey(user, ratingsMask, req)
 			if err != nil {
 				return SearchResponse{}, err
@@ -174,11 +174,7 @@ func (a *App) GetKeywordSuggestions(query string) ([]string, error) {
 	}
 	a.ensureCaches(user)
 
-	items, err := a.keywordCache.Get(keywordCacheKey{
-		Query:       query,
-		RatingsMask: user.Ratings.String(),
-		Underscore:  strings.Contains(query, "_"),
-	})
+	items, err := a.keywordCache.Get(keywordSuggestionCacheKey(user, query))
 	if err != nil {
 		return nil, err
 	}
@@ -401,7 +397,7 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 		target = state.PerPage
 	}
 
-	ratingsMask := effectiveRatingsMask(user.Ratings.String())
+	ratingsMask := userRatingsMask(user)
 	visible := make([]inkbunny.SubmissionSearch, 0, target)
 	nextServerPage := state.NextServerPage
 	pagesCount := state.PagesCount
@@ -473,6 +469,22 @@ func searchPageCount(currentPage int, hasMore bool) int {
 		return currentPage
 	}
 	return currentPage + 1
+}
+
+func userRatingsMask(user *inkbunny.User) string {
+	if user == nil {
+		return effectiveRatingsMask("")
+	}
+	return effectiveRatingsMask(user.Ratings.String())
+}
+
+func keywordSuggestionCacheKey(user *inkbunny.User, query string) keywordCacheKey {
+	trimmed := strings.TrimSpace(query)
+	return keywordCacheKey{
+		Query:       trimmed,
+		RatingsMask: userRatingsMask(user),
+		Underscore:  strings.Contains(trimmed, "_"),
+	}
 }
 
 func effectiveRatingsMask(mask string) string {
@@ -871,7 +883,7 @@ func (a *App) refreshSearchStateWithOptions(user *inkbunny.User, state *searchSt
 	if state == nil {
 		return errors.New("search state is missing")
 	}
-	key, normalizedReq, err := makeSearchCacheKey(user, effectiveRatingsMask(user.Ratings.String()), state.Request)
+	key, normalizedReq, err := makeSearchCacheKey(user, userRatingsMask(user), state.Request)
 	if err != nil {
 		return err
 	}

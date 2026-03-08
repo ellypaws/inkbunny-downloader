@@ -162,6 +162,8 @@ func (a *App) UpdateRatings(mask string) (SessionInfo, error) {
 	if a.user != nil && a.user.SID == user.SID {
 		a.user.Ratings = user.Ratings
 	}
+	a.searches = make(map[string]*searchState)
+	a.lastSearchID = ""
 	a.mu.Unlock()
 	a.resetCaches(user)
 	return a.GetSession(), a.persist()
