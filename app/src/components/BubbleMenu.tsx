@@ -66,6 +66,7 @@ export default function BubbleMenu({
   const overlayRef = useRef<HTMLDivElement>(null);
   const bubblesRef = useRef<(HTMLButtonElement | null)[]>([]);
   const labelRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const previousItemIdsRef = useRef<string[]>(items.map((item) => item.id));
 
   const menuItems = useMemo<RenderedBubbleItem[]>(
     () => [
@@ -73,7 +74,8 @@ export default function BubbleMenu({
         ...item,
         kind: "tab" as const,
         closeable: true,
-        rotation: item.rotation ?? DEFAULT_ROTATIONS[index % DEFAULT_ROTATIONS.length],
+        rotation:
+          item.rotation ?? DEFAULT_ROTATIONS[index % DEFAULT_ROTATIONS.length],
         hoverStyles: item.hoverStyles ?? getDefaultHoverStyles(item.active),
       })),
       {
@@ -91,6 +93,7 @@ export default function BubbleMenu({
     ],
     [items],
   );
+  const useCenteredLayout = menuItems.length <= 3;
 
   useEffect(() => {
     if (open) {
@@ -193,6 +196,67 @@ export default function BubbleMenu({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onOpenChange, open]);
 
+  useEffect(() => {
+    const previousIds = previousItemIdsRef.current;
+    previousItemIdsRef.current = items.map((item) => item.id);
+
+    if (!open || !showOverlay) {
+      return;
+    }
+
+    const newItemId = items.find((item) => !previousIds.includes(item.id))?.id;
+    if (!newItemId) {
+      return;
+    }
+
+    const newItemIndex = menuItems.findIndex(
+      (item) => item.kind === "tab" && item.id === newItemId,
+    );
+    const bubble = newItemIndex >= 0 ? bubblesRef.current[newItemIndex] : null;
+    const label = newItemIndex >= 0 ? labelRefs.current[newItemIndex] : null;
+    if (!bubble) {
+      return;
+    }
+
+    gsap.killTweensOf(bubble);
+    if (label) {
+      gsap.killTweensOf(label);
+    }
+
+    const timeline = gsap.timeline({ delay: 0.04 });
+    timeline
+      .set(bubble, { scale: 0.3, autoAlpha: 1, transformOrigin: "50% 50%" })
+      .to(bubble, {
+        scale: 1.14,
+        duration: 0.28,
+        ease: "back.out(2.4)",
+      })
+      .to(
+        bubble,
+        {
+          scale: 1,
+          duration: 0.16,
+          ease: "power2.out",
+        },
+        ">-0.01",
+      );
+
+    if (label) {
+      timeline
+        .set(label, { y: 18, autoAlpha: 0 })
+        .to(
+          label,
+          {
+            y: 0,
+            autoAlpha: 1,
+            duration: 0.22,
+            ease: "power3.out",
+          },
+          0.1,
+        );
+    }
+  }, [items, menuItems, open, showOverlay]);
+
   if (!showOverlay) {
     return null;
   }
@@ -232,6 +296,9 @@ export default function BubbleMenu({
             margin-left: 0 !important;
             overflow: visible;
           }
+          .bubble-menu-items .pill-list .pill-col[data-add-item='true'] {
+            flex: 0 0 auto !important;
+          }
           .bubble-menu-items .pill-link {
             font-size: clamp(1.2rem, 3vw, 4rem);
             padding: clamp(1rem, 2vw, 2rem) 0;
@@ -267,7 +334,9 @@ export default function BubbleMenu({
         />
 
         <ul
-          className="pill-list relative z-10 list-none m-0 w-full max-w-[1600px] px-6 mx-auto flex flex-wrap gap-x-0 gap-y-1 pointer-events-auto"
+          className={`pill-list relative z-10 list-none m-0 w-full max-w-[1600px] px-6 mx-auto flex flex-wrap gap-x-0 gap-y-1 pointer-events-auto ${
+            useCenteredLayout ? "justify-center" : ""
+          }`}
           role="menu"
           aria-label="Search sessions"
         >
@@ -279,9 +348,18 @@ export default function BubbleMenu({
               <li
                 key={item.id}
                 role="none"
-                className="pill-col flex justify-center items-stretch [flex:0_0_calc(100%/3)] box-border"
+                data-add-item={isAddItem ? "true" : "false"}
+                className={`pill-col flex justify-center items-stretch box-border ${
+                  isAddItem
+                    ? "w-[160px] [flex:0_0_160px]"
+                    : useCenteredLayout
+                      ? "w-[min(440px,calc(100vw-4rem))] [flex:0_1_440px]"
+                      : "[flex:0_0_calc(100%/3)]"
+                }`}
               >
-                <div className="group relative w-full">
+                <div
+                  className={`group relative ${isAddItem ? "h-[160px] w-[160px]" : "w-full"}`}
+                >
                   <button
                     ref={(element) => {
                       bubblesRef.current[index] = element;
@@ -293,15 +371,22 @@ export default function BubbleMenu({
                     onClick={() => {
                       if (isAddItem) {
                         onAdd();
+                        window.setTimeout(
+                          () => onOpenChange(false),
+                          ADD_CLOSE_DELAY_MS,
+                        );
                       } else {
                         onSelect(item.id);
+                        onOpenChange(false);
                       }
-                      onOpenChange(false);
                     }}
                     className={[
-                      "pill-link w-full rounded-[999px] border-0 bg-white text-inherit",
+                      "pill-link border-0 bg-white text-inherit",
                       "shadow-[0_4px_14px_rgba(0,0,0,0.10)] flex items-center justify-center relative",
                       "transition-[background,color] duration-300 ease-in-out box-border whitespace-nowrap overflow-hidden",
+                      isAddItem
+                        ? "h-[160px] w-[160px] rounded-full p-0"
+                        : "w-full rounded-[999px]",
                       item.kind === "tab" && item.active
                         ? "ring-2 ring-[#73D216]/55 dark:ring-[#8AE234]/45"
                         : "",
@@ -311,29 +396,42 @@ export default function BubbleMenu({
                     style={
                       {
                         ["--item-rot"]: `${item.rotation ?? 0}deg`,
-                        ["--pill-bg"]: item.kind === "tab" && item.active ? "#eff7d2" : menuBg,
+                        ["--pill-bg"]:
+                          item.kind === "tab" && item.active
+                            ? "#eff7d2"
+                            : menuBg,
                         ["--pill-color"]:
-                          item.kind === "tab" && item.active ? "#21400f" : menuContentColor,
+                          item.kind === "tab" && item.active
+                            ? "#21400f"
+                            : menuContentColor,
                         ["--hover-bg"]: hoverStyles.bgColor || "#f3f4f6",
-                        ["--hover-color"]: hoverStyles.textColor || menuContentColor,
+                        ["--hover-color"]:
+                          hoverStyles.textColor || menuContentColor,
                         background: "var(--pill-bg)",
                         color: "var(--pill-color)",
-                        minHeight: "var(--pill-min-h, 160px)",
-                        padding: "clamp(1.5rem, 3vw, 8rem) 0",
+                        minHeight: isAddItem
+                          ? "160px"
+                          : "var(--pill-min-h, 160px)",
+                        minWidth: isAddItem ? "160px" : undefined,
+                        padding: isAddItem ? 0 : "clamp(1.5rem, 3vw, 8rem) 0",
                         fontSize: "clamp(1.5rem, 4vw, 4rem)",
                         fontWeight: 400,
                         lineHeight: 0,
                         willChange: "transform",
-                        height: 10,
+                        height: isAddItem ? "160px" : 10,
                       } as CSSProperties
                     }
                   >
                     <span
-                      className="pill-label inline-flex flex-col items-center gap-2"
+                      className={`pill-label inline-flex ${
+                        isAddItem
+                          ? "h-full w-full items-center justify-center"
+                          : "flex-col items-center gap-2"
+                      }`}
                       style={{
                         willChange: "transform, opacity",
-                        minHeight: "1.2em",
-                        lineHeight: 1.2,
+                        minHeight: isAddItem ? "100%" : "1.2em",
+                        lineHeight: isAddItem ? 1 : 1.2,
                       }}
                       ref={(element) => {
                         labelRefs.current[index] = element;
@@ -343,7 +441,9 @@ export default function BubbleMenu({
                         <Plus size={36} strokeWidth={2.4} />
                       ) : (
                         <>
-                          <span className="block truncate px-10">{item.label}</span>
+                          <span className="block truncate px-10">
+                            {item.label}
+                          </span>
                           <span className="block max-w-[80%] truncate text-[0.22em] font-black uppercase tracking-[0.28em] opacity-55">
                             {item.subtitle || "new search"}
                           </span>
@@ -376,6 +476,7 @@ export default function BubbleMenu({
 }
 
 const DEFAULT_ROTATIONS = [-8, 8, 6, -7, 9, -6];
+const ADD_CLOSE_DELAY_MS = 320;
 
 function getDefaultHoverStyles(active?: boolean) {
   if (active) {

@@ -259,7 +259,6 @@ export default function App() {
     const nextTab = createSearchTab(sessionRef.current, settingsRef.current);
     setTabs((previous) => [...previous, nextTab]);
     setActiveTabId(nextTab.id);
-    setTabMenuOpen(false);
   }
 
   function handleCloseTab(tabId: string) {
