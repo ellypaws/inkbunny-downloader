@@ -87,7 +87,7 @@ export const EMPTY_SESSION: SessionInfo = {
   settings: {
     downloadDirectory: '',
     maxActive: 4,
-    darkMode: true,
+    darkMode: false,
     motionEnabled: true,
     skippedReleaseTag: '',
   },

@@ -87,9 +87,9 @@ export function ToastHost(props: ToastHostProps) {
 
 function toastActionClass(variant: "primary" | "secondary") {
   if (variant === "secondary") {
-    return "rounded-full px-3 py-1.5 text-xs font-black text-slate-500 transition-colors hover:text-[#c4495f]";
+    return "rounded-full px-3 py-1.5 text-xs font-black text-[var(--theme-muted)] transition-colors hover:text-[var(--theme-danger)]";
   }
-  return "rounded-full bg-[#f3f7fb] px-4 py-1.5 text-xs font-black text-[#12384d] shadow-md transition-[transform,background-color,color] hover:-translate-y-0.5 hover:bg-white";
+  return "rounded-full bg-[var(--theme-surface-strong)] px-4 py-1.5 text-xs font-black text-[var(--theme-info-strong)] shadow-md transition-[transform,background-color,color] hover:-translate-y-0.5";
 }
 
 function toastContainerClass(level: ToastLevel) {

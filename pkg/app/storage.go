@@ -81,7 +81,7 @@ func defaultStoredState() storedState {
 	settings := AppSettings{
 		DownloadDirectory: defaultDownloadDirectory(),
 		MaxActive:         defaultMaxActive(),
-		DarkMode:          true,
+		DarkMode:          false,
 		MotionEnabled:     true,
 		SkippedReleaseTag: "",
 	}
@@ -89,7 +89,7 @@ func defaultStoredState() storedState {
 		Settings: settings,
 		Session: SessionInfo{
 			Settings:       settings,
-			EffectiveTheme: "dark",
+			EffectiveTheme: "light",
 			AvatarURL:      defaultAvatarURL,
 		},
 	}

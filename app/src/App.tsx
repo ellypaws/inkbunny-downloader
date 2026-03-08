@@ -842,9 +842,17 @@ export default function App() {
       <style>{GLOBAL_STYLES}</style>
       <ToastHost toasts={toasts} onDismiss={dismissToast} />
       <StarBackground darkMode={settings.darkMode} motionEnabled={settings.motionEnabled} />
-      <div className="min-h-screen overflow-x-hidden font-sans text-[var(--theme-text)] selection:bg-[#76B900] selection:text-white transition-colors duration-300">
+      <div className="theme-shell min-h-screen overflow-x-hidden font-sans text-[var(--theme-text)] selection:bg-[var(--theme-accent)] selection:text-white transition-colors duration-300">
         <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none select-none z-0">
-          <h1 ref={lagTextRef} className="font-teko text-[12rem] md:text-[20rem] leading-none opacity-12 dark:opacity-[0.07] text-[#FFB7B2] dark:text-[#73D216] transform translate-x-[-2rem] tracking-tight will-change-transform" style={{ transform: "translateY(0) translateX(-2rem)" }}>
+          <h1
+            ref={lagTextRef}
+            className="font-teko text-[12rem] md:text-[20rem] leading-none transform translate-x-[-2rem] tracking-tight will-change-transform"
+            style={{
+              transform: "translateY(0) translateX(-2rem)",
+              opacity: settings.darkMode ? 0.07 : 0.12,
+              color: settings.darkMode ? "var(--theme-accent-strong)" : "var(--theme-border)",
+            }}
+          >
             BUNNY
           </h1>
         </div>

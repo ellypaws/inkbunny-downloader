@@ -65,21 +65,21 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
 
   return (
     <section className="relative overflow-hidden rounded-toy-sm bg-transparent backdrop-blur-xl">
-      <div className="pointer-events-none absolute inset-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay bg-[radial-gradient(circle_at_top_right,rgba(115,210,22,0.8),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(255,183,178,0.8),transparent_22%)]" />
-      <div className="relative z-10 overflow-hidden rounded-toy-sm border border-[#bcc1b5]/90 bg-[#eff1ea]/92 shadow-pop backdrop-blur-xl dark:border-[#4a5360]/90 dark:bg-[#252a31]/88">
+      <div className="pointer-events-none absolute inset-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay bg-[radial-gradient(circle_at_top_right,var(--theme-accent-soft),transparent_30%),radial-gradient(circle_at_bottom_left,var(--theme-border-soft),transparent_22%)]" />
+      <div className="theme-panel relative z-10 overflow-hidden rounded-toy-sm border shadow-pop backdrop-blur-xl">
         <button
           type="button"
           onClick={props.onToggleCollapse}
-          className="group flex w-full items-center justify-between border-b border-[#c2c7bc] px-5 py-4 text-left transition-colors hover:bg-white/35 dark:border-[#4a5360] dark:hover:bg-white/4 sm:px-6"
+          className="theme-divider theme-hover group flex w-full items-center justify-between border-b px-5 py-4 text-left transition-colors sm:px-6"
           aria-expanded={!props.collapsed}
         >
           <div>
-            <h2 className="font-display text-3xl font-black text-[#4E9A06] dark:text-[#8AE234] sm:text-[2.1rem]">
+            <h2 className="font-display text-3xl font-black text-[var(--theme-accent-strong)] sm:text-[2.1rem]">
               Search
             </h2>
           </div>
           <span
-            className={`flex h-11 w-11 items-center justify-center rounded-full border border-[#c2c7bc] bg-[#f7f8f2]/92 text-[#3465A4] shadow-sm backdrop-blur-md transition-all duration-300 group-hover:scale-105 group-hover:bg-white dark:border-[#4a5360] dark:bg-[#1f252b]/88 dark:text-[#89CFF0] ${
+            className={`theme-panel-strong flex h-11 w-11 items-center justify-center rounded-full border text-[var(--theme-info)] shadow-sm backdrop-blur-md transition-all duration-300 group-hover:scale-105 ${
               props.collapsed ? "-rotate-90" : "rotate-0"
             }`}
           >
@@ -125,7 +125,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                         }
                       }}
                       placeholder="wolf synthwave -feral"
-                      className="w-full rounded-2xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-3 text-[15px] text-[#333333] shadow-inner outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                      className="theme-input w-full rounded-2xl border px-4 py-3 text-[15px] shadow-inner outline-none backdrop-blur-md"
                     />
                     <KeywordSuggestionList
                       open={
@@ -148,7 +148,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     type="button"
                     onClick={props.onSearch}
                     disabled={props.loading}
-                    className={`flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 border-[#1a516b] bg-[#2A7FA6] px-5 py-3.5 text-sm font-black text-white shadow-xl transition-all hover:bg-[#1e5f7e] sm:w-32 ${
+                    className={`theme-button-accent flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-5 py-3.5 text-sm font-black shadow-xl transition-all sm:w-32 ${
                       props.loading ? "opacity-70" : ""
                     }`}
                   >
@@ -159,7 +159,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     )}
                     Search
                   </button>
-                  <div className="text-sm leading-6 text-[#555753] dark:text-white/70 sm:col-span-2">
+                  <div className="theme-muted text-sm leading-6 sm:col-span-2">
                     Separate words with spaces. Use{" "}
                     <span className="font-black">-</span> to exclude a keyword,
                     for example{" "}
@@ -326,7 +326,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                           timeRangeDays: Number(event.target.value),
                         }))
                       }
-                      className="w-full max-w-xs rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                      className="theme-input w-full max-w-xs rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     >
                       {TIME_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -356,7 +356,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                         ))}
                       </div>
                       {props.ratingUpdating ? (
-                        <div className="text-sm font-semibold text-[#555753] dark:text-white/60">
+                        <div className="theme-muted text-sm font-semibold">
                           Updating ratings...
                         </div>
                       ) : null}
@@ -364,7 +364,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   </div>
                 </div>
 
-                <div className="grid gap-4 xl:border-l xl:border-[#c2c7bc] xl:pl-6 xl:dark:border-[#4a5360]">
+                <div className="theme-divider grid gap-4 xl:border-l xl:pl-6">
                   <FieldLabel title="Submission type" />
                   <div className="space-y-3">
                     <ChoiceCard
@@ -419,7 +419,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   <label className="block">
-                    <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
+                    <span className="theme-title text-sm font-bold">
                       Order by
                     </span>
                     <select
@@ -430,7 +430,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                           orderBy: event.target.value,
                         }))
                       }
-                      className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                      className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     >
                       {ORDER_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -440,7 +440,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     </select>
                   </label>
                   <label className="block">
-                    <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
+                    <span className="theme-title text-sm font-bold">
                       Results per page
                     </span>
                     <input
@@ -455,11 +455,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                         }))
                       }
                       placeholder="30"
-                      className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                      className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
+                    <span className="theme-title text-sm font-bold">
                       Maximum files
                     </span>
                     <input
@@ -473,11 +473,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                         }))
                       }
                       placeholder={props.session.isGuest ? "256" : "Unlimited"}
-                      className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                      className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
+                    <span className="theme-title text-sm font-bold">
                       Pool ID
                     </span>
                     <input
@@ -491,11 +491,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                         }))
                       }
                       placeholder="12345"
-                      className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                      className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     />
                   </label>
                   <label className="block 2xl:col-span-2">
-                    <span className="text-sm font-bold text-[#2D2D44] dark:text-white">
+                    <span className="theme-title text-sm font-bold">
                       Scraps
                     </span>
                     <select
@@ -506,7 +506,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                           scraps: event.target.value,
                         }))
                       }
-                      className="mt-2 w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-2.5 text-sm text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+                      className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     >
                       {SCRAPS_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -520,7 +520,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   type="button"
                   onClick={props.onSearch}
                   disabled={props.loading}
-                  className={`flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 border-[#1a516b] bg-[#2A7FA6] px-6 py-3.5 text-sm font-black text-white shadow-xl transition-all hover:bg-[#1e5f7e] xl:w-40 xl:self-end ${
+                  className={`theme-button-accent flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-6 py-3.5 text-sm font-black shadow-xl transition-all xl:w-40 xl:self-end ${
                     props.loading ? "opacity-70" : ""
                   }`}
                 >
@@ -538,7 +538,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
       </div>
 
       {props.error ? (
-        <div className="relative z-10 mt-5 rounded-toy border border-[#dba37d] bg-[#f4d8c6]/92 px-5 py-4 text-sm font-bold text-[#CC5E00] shadow-sm backdrop-blur-md dark:border-[#7b5639] dark:bg-[#4b3226]/92 dark:text-[#ffb07c]">
+        <div className="relative z-10 mt-5 rounded-toy border border-[var(--theme-border)] bg-[var(--theme-danger-soft)] px-5 py-4 text-sm font-bold text-[var(--theme-danger)] shadow-sm backdrop-blur-md">
           {props.error}
         </div>
       ) : null}
@@ -549,11 +549,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
 function FieldLabel(props: { title: string; subtitle?: string }) {
   return (
     <div>
-      <div className="text-sm font-semibold text-[#333333] dark:text-white">
+      <div className="theme-title text-sm font-semibold">
         {props.title}:
       </div>
       {props.subtitle ? (
-        <div className="mt-1 text-xs font-medium text-[#555753] dark:text-white/45">
+        <div className="theme-subtle mt-1 text-xs font-medium">
           {props.subtitle}
         </div>
       ) : null}
@@ -562,7 +562,7 @@ function FieldLabel(props: { title: string; subtitle?: string }) {
 }
 
 function SectionDivider() {
-  return <div className="border-t border-[#c2c7bc] dark:border-[#4a5360]" />;
+  return <div className="theme-divider border-t" />;
 }
 
 function ChoiceCard(props: {
@@ -576,19 +576,19 @@ function ChoiceCard(props: {
   const tone = props.tone ?? "default";
   const checkedClass =
     tone === "general"
-      ? "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white"
+      ? "border-[#76B900]/70 bg-[#76B900]/10 text-[var(--theme-title)]"
       : tone === "mature"
-        ? "border-[#DA8642]/70 bg-[#DA8642]/10 text-[#333333] dark:border-[#DA8642] dark:bg-[#DA8642]/12 dark:text-white"
+        ? "border-[#DA8642]/70 bg-[#DA8642]/10 text-[var(--theme-title)]"
         : tone === "matureViolence"
-          ? "border-[#B98A63]/70 bg-[#B98A63]/10 text-[#333333] dark:border-[#B98A63] dark:bg-[#B98A63]/12 dark:text-white"
+          ? "border-[#B98A63]/70 bg-[#B98A63]/10 text-[var(--theme-title)]"
           : tone === "adult"
-            ? "border-[#B20047]/70 bg-[#B20047]/10 text-[#333333] dark:border-[#B20047] dark:bg-[#B20047]/12 dark:text-white"
+            ? "border-[#B20047]/70 bg-[#B20047]/10 text-[var(--theme-title)]"
             : tone === "adultViolence"
-              ? "border-[#8F3E5F]/70 bg-[#8F3E5F]/10 text-[#333333] dark:border-[#8F3E5F] dark:bg-[#8F3E5F]/12 dark:text-white"
-              : "border-[#76B900]/70 bg-[#76B900]/10 text-[#333333] dark:border-[#8AE234] dark:bg-[#8AE234]/12 dark:text-white";
+              ? "border-[#8F3E5F]/70 bg-[#8F3E5F]/10 text-[var(--theme-title)]"
+              : "border-[#76B900]/70 bg-[#76B900]/10 text-[var(--theme-title)]";
   const indicatorClass =
     tone === "general"
-      ? "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]"
+      ? "border-[#76B900] bg-[#76B900]"
       : tone === "mature"
         ? "border-[#DA8642] bg-[#DA8642]"
         : tone === "matureViolence"
@@ -597,7 +597,7 @@ function ChoiceCard(props: {
             ? "border-[#B20047] bg-[#B20047]"
             : tone === "adultViolence"
               ? "border-[#8F3E5F] bg-[#8F3E5F]"
-              : "border-[#76B900] bg-[#76B900] dark:border-[#8AE234] dark:bg-[#8AE234]";
+              : "border-[#76B900] bg-[#76B900]";
 
   return (
     <button
@@ -607,8 +607,8 @@ function ChoiceCard(props: {
       className={`rounded-2xl border px-3.5 py-3 text-left transition-colors ${
         props.checked
           ? checkedClass
-          : "border-[#c2c7bc] bg-[#f7f8f2]/88 text-[#333333]/85 dark:border-[#4a5360] dark:bg-[#1f252b]/65 dark:text-white/85"
-      } ${props.disabled ? "opacity-60" : "hover:bg-white/80 dark:hover:bg-white/8"}`}
+          : "theme-panel-soft text-[var(--theme-text)]"
+      } ${props.disabled ? "opacity-60" : "theme-hover-strong"}`}
     >
       <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-3">
         <span
@@ -618,18 +618,18 @@ function ChoiceCard(props: {
           } ${
             props.checked
               ? indicatorClass
-              : "border-[#7d8576] bg-transparent dark:border-[#697384]"
+              : "border-[var(--theme-subtle)] bg-transparent"
           }`}
         >
           {props.checked ? (
             props.type === "checkbox" ? (
-              <Check size={11} className="text-white dark:text-[#14112C]" />
+              <Check size={11} className="text-white" />
             ) : (
-              <span className="h-2 w-2 rounded-full bg-white dark:bg-[#14112C]" />
+              <span className="h-2 w-2 rounded-full bg-white" />
             )
           ) : null}
         </span>
-        <span className="min-w-0 text-[13px] font-semibold leading-5">
+        <span className="min-w-0 text-[13px] font-semibold leading-5 text-[var(--theme-title)]">
           {props.label}
         </span>
       </div>
@@ -655,12 +655,12 @@ type SuggestionFieldBlockProps = {
 function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#333333] dark:text-white">
+      <label className="theme-title block text-sm font-semibold">
         {props.title}:
       </label>
-      <div className="mt-1 text-sm leading-5 text-[#555753] dark:text-white/65">
+      <div className="theme-muted mt-1 text-sm leading-5">
         {props.subtitle}{" "}
-        <span className="text-[#555753] dark:text-white/45">
+        <span className="theme-subtle">
           ({props.optionalText})
         </span>
       </div>
@@ -671,7 +671,7 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
           onBlur={props.onBlur}
           onChange={(event) => props.onChange(event.target.value)}
           placeholder="username"
-          className="w-full rounded-xl border border-[#bcc1b5] bg-[#f8f8f4]/92 px-4 py-3 text-[15px] text-[#333333] outline-none backdrop-blur-md focus:border-[#76B900] dark:border-[#4a5360] dark:bg-[#1f252b]/86 dark:text-white"
+          className="theme-input w-full rounded-xl border px-4 py-3 text-[15px] outline-none backdrop-blur-md"
         />
         <UsernameSuggestionList
           open={props.focused && props.suggestions.length > 0}
@@ -688,13 +688,13 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
           disabled={!props.allowUseMyName}
           className={`font-semibold underline underline-offset-2 ${
             props.allowUseMyName
-              ? "text-[#3465A4] hover:text-[#204A87] dark:text-[#89CFF0] dark:hover:text-white"
-              : "cursor-not-allowed text-[#555753]/35 no-underline dark:text-white/30"
+              ? "text-[var(--theme-info)] hover:text-[var(--theme-info-strong)]"
+              : "cursor-not-allowed text-[var(--theme-subtle)] no-underline opacity-60"
           }`}
         >
           Use my name
         </button>
-        <span className="text-[#555753] dark:text-white/65">
+        <span className="theme-muted">
           ({props.useMyNameLabel})
         </span>
       </div>
@@ -712,7 +712,7 @@ function KeywordSuggestionList(props: {
   }
 
   return (
-    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border border-[#bcc1b5] bg-[#f8f8f4]/92 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl dark:border-[#4a5360] dark:bg-[#1f252b]/92">
+    <div className="theme-panel-strong absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
       <div className="grid gap-2 sm:grid-cols-2">
         {props.suggestions.slice(0, 8).map((suggestion) => (
           <button
@@ -722,7 +722,7 @@ function KeywordSuggestionList(props: {
               event.preventDefault();
               props.onPick(suggestion);
             }}
-            className="rounded-xl bg-white/82 px-4 py-3 text-left text-sm font-semibold text-[#333333] transition-colors hover:bg-[#dce8cf] dark:bg-[#20262d]/88 dark:text-white dark:hover:bg-[#2a323a]"
+            className="theme-panel-soft theme-hover rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-colors"
           >
             <span className="block truncate">{suggestion}</span>
           </button>
@@ -742,7 +742,7 @@ function UsernameSuggestionList(props: {
   }
 
   return (
-    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border border-[#bcc1b5] bg-[#f8f8f4]/92 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl dark:border-[#4a5360] dark:bg-[#1f252b]/92">
+    <div className="theme-panel-strong absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
       <div className="grid gap-2 sm:grid-cols-2">
         {props.suggestions.slice(0, 8).map((suggestion) => (
           <button
@@ -752,7 +752,7 @@ function UsernameSuggestionList(props: {
               event.preventDefault();
               props.onPick(suggestion);
             }}
-            className="flex items-center gap-3 rounded-xl bg-white/82 px-4 py-3 text-left transition-colors hover:bg-[#dce8cf] dark:bg-[#20262d]/88 dark:hover:bg-[#2a323a]"
+            className="theme-panel-soft theme-hover flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors"
           >
             <img
               src={suggestion.avatarUrl || DEFAULT_AVATAR_URL}
@@ -763,10 +763,10 @@ function UsernameSuggestionList(props: {
               className="h-10 w-10 shrink-0 rounded-full border border-white/70 bg-white object-cover"
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-black text-[#333333] dark:text-white">
+              <div className="theme-title truncate text-sm font-black">
                 {suggestion.username || suggestion.value}
               </div>
-              <div className="truncate text-xs font-semibold text-[#555753] dark:text-white/60">
+              <div className="theme-muted truncate text-xs font-semibold">
                 {suggestion.value}
               </div>
             </div>

@@ -163,20 +163,20 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   return (
     <section className="relative mt-4">
-      <h1 className="font-teko text-[144px] font-bold text-[#2D2D44] dark:text-white tracking-[-0.02em] leading-[118.8px] -mb-[130px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
+      <h1 className="theme-title font-teko text-[144px] font-bold tracking-[-0.02em] leading-[118.8px] -mb-[130px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
         Preview
       </h1>
 
       <div className="relative z-10 mb-5 flex flex-wrap items-center justify-end gap-4 px-2">
         <div className="flex items-center gap-3">
-          <div className="rounded-full bg-white/72 px-4 py-2 text-sm font-bold text-[#2D2D44] backdrop-blur-md dark:bg-[#1A1733]/80 dark:text-white">
+          <div className="theme-panel-soft rounded-full border px-4 py-2 text-sm font-bold backdrop-blur-md">
             {selectedCount} selected
           </div>
           <button
             type="button"
             onClick={props.onToggleSelectAll}
             disabled={selectAllDisabled}
-            className="rounded-2xl border border-[#2D2D44]/15 bg-white/80 px-5 py-3 text-sm font-black text-[#2D2D44] shadow-sm backdrop-blur-md transition-all hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white"
+            className="theme-button-secondary rounded-2xl border px-5 py-3 text-sm font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50"
           >
             {selectAllLabel}
           </button>
@@ -184,7 +184,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             type="button"
             onClick={props.onRefresh}
             disabled={!props.searchResponse || props.loading}
-            className="flex items-center gap-2 rounded-2xl border border-[#2D2D44]/15 bg-white/80 px-5 py-3 text-sm font-black text-[#2D2D44] shadow-sm backdrop-blur-md transition-all hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white"
+            className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50"
           >
             {props.loading ? (
               <LoaderCircle className="animate-spin" size={16} />
@@ -196,7 +196,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           <button
             onClick={props.onQueueDownloads}
             disabled={!props.searchResponse || selectedCount === 0}
-            className="flex items-center gap-2 rounded-2xl border-b-8 border-[#2f6d05] bg-[#73D216] px-6 py-3 font-black text-white shadow-xl transition-all hover:bg-[#4E9A06] disabled:opacity-60"
+            className="theme-button-accent flex items-center gap-2 rounded-2xl border-b-8 px-6 py-3 font-black shadow-xl transition-all disabled:opacity-60"
           >
             <Download size={18} />
             Download
@@ -204,11 +204,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       </div>
 
-      <div className="flex h-[1020px] w-full flex-col overflow-hidden rounded-toy-sm border-2 border-white/70 bg-white/80 shadow-pop dark:border-gray-700/70 dark:bg-gray-800/90 md:h-[600px] md:flex-row">
+      <div className="theme-panel flex h-[1020px] w-full flex-col overflow-hidden rounded-toy-sm border-2 shadow-pop md:h-[600px] md:flex-row">
         {props.results.length === 0 ? (
-          <div className="flex h-full w-full flex-col items-center justify-center bg-white/35 px-6 text-center dark:bg-[#1A1733]/55">
-            <SearchIcon className="text-[#89CFF0]" size={42} />
-            <p className="mt-4 max-w-md text-lg font-bold text-[#2D2D44] dark:text-white">
+          <div className="theme-panel-soft flex h-full w-full flex-col items-center justify-center px-6 text-center">
+            <SearchIcon className="text-[var(--theme-info)]" size={42} />
+            <p className="theme-title mt-4 max-w-md text-lg font-bold">
               Search results appear here.
             </p>
           </div>
@@ -354,17 +354,14 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       </div>
 
       {props.results.length > 0 ? (
-        <div className="mt-6 rounded-toy-lg border-2 border-[#89CFF0]/30 bg-white/50 p-5 shadow-pop backdrop-blur-2xl dark:bg-gray-800/50">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="text-sm font-bold text-[#2D2D44]/65 dark:text-white/65">
-              Gallery Grid
-            </div>
+        <div className="theme-panel-soft mt-6 rounded-toy-lg border-2 p-5 shadow-pop backdrop-blur-2xl">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={props.onToggleSelectAll}
                 disabled={selectAllDisabled}
-                className="rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md transition-colors hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75 dark:hover:bg-[#241e46]"
+                className="theme-button-secondary rounded-full border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
               >
                 {selectAllLabel}
               </button>
@@ -372,7 +369,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 type="button"
                 onClick={props.onRefresh}
                 disabled={!props.searchResponse || props.loading}
-                className="flex items-center gap-2 rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md transition-colors hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75 dark:hover:bg-[#241e46]"
+                className="theme-button-secondary flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
               >
                 {props.loading ? (
                   <LoaderCircle className="animate-spin" size={14} />
@@ -385,12 +382,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 type="button"
                 onClick={props.onQueueDownloads}
                 disabled={!props.searchResponse || selectedCount === 0}
-                className="flex items-center gap-2 rounded-full bg-[#73D216] px-4 py-2 text-xs font-black text-white shadow-lg transition-all hover:bg-[#4E9A06] disabled:opacity-60"
+                className="theme-button-accent flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black shadow-lg transition-all disabled:opacity-60"
               >
                 <Download size={14} />
                 Download
               </button>
-              <label className="flex items-center gap-3 rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75">
+              <label className="theme-panel-strong flex items-center gap-3 rounded-full border px-4 py-2 text-xs font-black backdrop-blur-md">
                 Grid Size
                 <ElasticSlider
                   value={gridCardWidth}
@@ -409,7 +406,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           </div>
           <div
             ref={scrollRef}
-            className="mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border border-white/40 bg-white/55 p-2.5 dark:border-white/8 dark:bg-[#151129]/55"
+            className="theme-panel-muted mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border p-2.5"
           >
             <div
               className="grid gap-3"
@@ -441,11 +438,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     }}
                     className={`cursor-pointer overflow-hidden rounded-[1.35rem] border transition-colors ${
                       isActive
-                        ? "border-[#73D216]/80 bg-[#73D216]/10"
-                        : "border-[#2D2D44]/10 bg-white/72 hover:bg-[#89CFF0]/10 dark:border-white/10 dark:bg-[#1A1733]/72 dark:hover:bg-white/8"
+                        ? "border-[var(--theme-accent)] bg-[var(--theme-surface-strong)] ring-4 ring-[var(--theme-accent)]/45 shadow-[0_0_0_1px_var(--theme-accent)]"
+                        : "theme-panel-strong theme-hover border"
                     }`}
                   >
-                    <div className="relative aspect-[5/4] overflow-hidden bg-[#2D2D44]/10 dark:bg-white/10">
+                    <div className="relative aspect-[5/4] overflow-hidden bg-[var(--theme-surface-soft)]">
                       <SubmissionPreview
                         submission={item}
                         alt={item.title}
@@ -453,9 +450,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                         refreshToken={props.resultsRefreshToken}
                         className="h-full w-full object-cover"
                       />
-                      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[#14112C]/75 via-[#14112C]/20 to-transparent p-3">
+                      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[rgba(46,52,54,0.78)] via-[rgba(46,52,54,0.22)] to-transparent p-3 dark:from-[#14112C]/75 dark:via-[#14112C]/20">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-black text-[#2D2D44]">
+                          <span className="rounded-full bg-[var(--theme-surface-strong)] px-3 py-1 text-[11px] font-black text-[var(--theme-title)]">
                             {item.typeName || "Submission"}
                           </span>
                           <span className="rounded-full border border-white/45 bg-[#14112C]/40 px-3 py-1 text-[11px] font-bold text-white/92 backdrop-blur-sm">
@@ -467,16 +464,16 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
                     <div className="space-y-2.5 p-3">
                       <div className="min-w-0">
-                        <div className="truncate text-[13px] font-black text-[#2D2D44] dark:text-white">
+                        <div className="theme-title truncate text-[13px] font-black">
                           {item.title}
                         </div>
-                        <div className="mt-1 truncate text-[11px] font-bold text-[#2D2D44]/70 dark:text-white/70">
+                        <div className="theme-muted mt-1 truncate text-[11px] font-bold">
                           @{item.username} · {item.ratingName || "Unrated"}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] font-semibold text-[#2D2D44]/55 dark:text-white/55">
+                        <div className="theme-subtle text-[10px] font-semibold">
                           {formatDownloadStatus(downloadSummary)}
                         </div>
                         <div className="flex items-center gap-2">
@@ -510,7 +507,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                 ? "pointer-events-none w-0 scale-75 opacity-0"
                                 : selected
                                   ? "bg-[#73D216] text-white"
-                                  : "bg-[#14112C] text-white"
+                                  : "bg-[var(--theme-accent-strong)] text-white"
                             }`}
                           >
                             {downloaded ? (
@@ -537,7 +534,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           <button
             onClick={props.onLoadMore}
             disabled={props.loading}
-            className="flex items-center gap-2 rounded-xl bg-[#2D2D44] px-6 py-3 font-bold text-white shadow-pop transition-all hover:bg-[#3b3b55] hover:shadow-pop-hover"
+            className="theme-button-accent flex items-center gap-2 rounded-xl border px-6 py-3 font-bold shadow-pop transition-all hover:shadow-pop-hover"
           >
             {props.loading ? (
               <LoaderCircle className="animate-spin" size={18} />
@@ -640,7 +637,7 @@ function PreviewFallback(props: {
 
   return (
     <div
-      className={`${props.className} flex items-center justify-center bg-linear-to-br from-[#eef1ff] via-[#f7f8ff] to-[#e8ffef] text-[#2D2D44] dark:from-[#17142a] dark:via-[#1d1737] dark:to-[#11251d] dark:text-white`}
+      className={`${props.className} flex items-center justify-center bg-linear-to-br from-[var(--theme-page-soft)] via-[var(--theme-surface-strong)] to-[var(--theme-surface-soft)] text-[var(--theme-title)]`}
     >
       <div className="flex flex-col items-center gap-2 text-center">
         <div className="rounded-full border border-current/15 bg-white/70 p-4 dark:bg-white/8">
@@ -864,10 +861,10 @@ function GridDownloadButton(props: {
       disabled={props.summary.state === "downloaded"}
       className={`group/grid-download relative flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ${
         props.summary.state === "downloaded"
-          ? "translate-x-10 bg-[#73D216]/85 text-white"
+          ? "translate-x-10 bg-[var(--theme-accent)] text-white"
           : props.cancellable
-            ? "bg-[#2A7FA6] text-white hover:bg-[#CC5E00]"
-            : "bg-[#2A7FA6] text-white hover:scale-105"
+            ? "bg-[var(--theme-info)] text-white hover:bg-[var(--theme-danger)]"
+            : "bg-[var(--theme-info)] text-white hover:scale-105"
       } disabled:cursor-default disabled:hover:scale-100`}
     >
       {props.cancellable ? (

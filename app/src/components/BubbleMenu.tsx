@@ -329,7 +329,7 @@ export default function BubbleMenu({
         <button
           type="button"
           aria-label="Close search sessions"
-          className="absolute inset-0 bg-[#f0f3eb]/62 backdrop-blur-[10px] dark:bg-[#090813]/70 pointer-events-auto"
+          className="theme-overlay-scrim absolute inset-0 pointer-events-auto backdrop-blur-[10px]"
           onClick={() => onOpenChange(false)}
         />
 
@@ -388,7 +388,7 @@ export default function BubbleMenu({
                         ? "h-[160px] w-[160px] rounded-full p-0"
                         : "w-full rounded-[999px]",
                       item.kind === "tab" && item.active
-                        ? "ring-2 ring-[#73D216]/55 dark:ring-[#8AE234]/45"
+                        ? "theme-ring"
                         : "",
                     ]
                       .filter(Boolean)
@@ -459,7 +459,7 @@ export default function BubbleMenu({
                         event.stopPropagation();
                         onClose(item.id);
                       }}
-                      className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-[#14112C]/10 text-[#14112C] opacity-0 shadow-sm transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-[#CC5E00] hover:text-white dark:bg-white/10 dark:text-white dark:hover:bg-[#CC5E00]"
+                      className="theme-panel-soft absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border opacity-0 shadow-sm transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-[var(--theme-danger)] hover:text-white"
                       aria-label={`Close ${item.label}`}
                     >
                       <X size={16} />

@@ -49,7 +49,7 @@ export function StarBackground(props: StarBackgroundProps) {
           className={`absolute inset-0 transition-opacity duration-500 ${props.darkMode ? "opacity-0" : "opacity-100"}`}
           style={{
             backgroundImage:
-              "linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 30%, rgba(83, 92, 55, 0.14) 100%), url(/3404_Lando_1275330202.lando_nobear.jpg)",
+              "var(--theme-image-overlay), url(/3404_Lando_1275330202.lando_nobear.jpg)",
             backgroundPosition: "center center",
             backgroundRepeat: "no-repeat",
             backgroundSize: "cover",
@@ -75,7 +75,7 @@ export function StarBackground(props: StarBackgroundProps) {
           >
             <Star
               size={star.size}
-              className={`fill-current ${props.darkMode ? "text-[#89CFF0]" : "text-[#6d7866]"} ${
+              className={`fill-current ${props.darkMode ? "text-[var(--theme-info-strong)]" : "text-[var(--theme-accent)]"} ${
                 props.motionEnabled
                   ? star.reverse
                     ? "animate-spin-slow"

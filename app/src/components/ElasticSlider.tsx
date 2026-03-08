@@ -165,9 +165,9 @@ export default function ElasticSlider({
             }}
             className="flex flex-grow"
           >
-            <div className="relative h-full flex-grow overflow-hidden rounded-full bg-gray-300/80 dark:bg-white/20">
+            <div className="relative h-full flex-grow overflow-hidden rounded-full bg-[var(--theme-surface-soft)]">
               <div
-                className="absolute h-full rounded-full bg-[#2A7FA6]"
+                className="absolute h-full rounded-full bg-[var(--theme-info)]"
                 style={{ width: `${getRangePercentage()}%` }}
               />
             </div>
@@ -189,7 +189,7 @@ export default function ElasticSlider({
         </motion.div>
       </motion.div>
 
-      <p className="absolute -translate-y-4 text-xs font-medium tracking-wide text-[#2D2D44]/70 dark:text-white/70">
+      <p className="theme-muted absolute -translate-y-4 text-xs font-medium tracking-wide">
         {valueFormatter ? valueFormatter(currentValue) : Math.round(currentValue)}
       </p>
     </div>

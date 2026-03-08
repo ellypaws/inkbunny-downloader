@@ -28,7 +28,7 @@ export function NavigationPill(props: NavigationPillProps) {
 
   return (
     <nav
-      className={`static md:fixed mt-5 md:mt-0 md:top-6 left-0 right-0 mx-auto w-[92%] max-w-6xl z-50 rounded-full border border-[#b8beb1]/95 bg-[#f1f2eb]/92 px-6 py-3 backdrop-blur-xl shadow-pop dark:border-[#4a5360]/95 dark:bg-[#252a31]/88 flex justify-between items-center transition-all duration-300 ${
+      className={`theme-panel static md:fixed mt-5 md:mt-0 md:top-6 left-0 right-0 mx-auto flex w-[92%] max-w-6xl items-center justify-between rounded-full border px-6 py-3 backdrop-blur-xl shadow-pop transition-all duration-300 z-50 ${
         isHidden ? 'opacity-0 -translate-y-10 pointer-events-none' : 'opacity-100'
       }`}
     >
@@ -51,10 +51,10 @@ export function NavigationPill(props: NavigationPillProps) {
           />
         </div>
         <div className="flex flex-col leading-tight">
-          <div className="font-display font-bold text-xl md:text-2xl tracking-tight text-[#4E9A06] dark:text-[#8AE234]">
+          <div className="font-display font-bold text-xl md:text-2xl tracking-tight text-[var(--theme-accent-strong)]">
             Inkbunny downloader
           </div>
-          <div className="text-xs font-bold text-[#555753] dark:text-white/70">
+          <div className="theme-muted text-xs font-bold">
             {props.session.hasSession ? `Session: ${props.session.username}` : 'Search and queue downloads'}
           </div>
         </div>
@@ -62,8 +62,8 @@ export function NavigationPill(props: NavigationPillProps) {
       <div className="flex items-center gap-3 md:gap-4">
         <button
           onClick={props.onToggleTabs}
-          className={`p-2 rounded-full text-[#333333] hover:bg-[#dbe4ca] dark:text-white dark:hover:bg-[#2f353a] transition-colors ${
-            props.tabsOpen ? 'bg-[#dbe4ca] dark:bg-[#2f353a]' : ''
+          className={`theme-title theme-hover p-2 rounded-full transition-colors ${
+            props.tabsOpen ? 'theme-panel-soft' : ''
           }`}
           title="Toggle tabs"
           aria-pressed={props.tabsOpen}
@@ -72,7 +72,7 @@ export function NavigationPill(props: NavigationPillProps) {
         </button>
         <button
           onClick={props.onToggleMotion}
-          className={`p-2 rounded-full text-[#333333] hover:bg-[#dbe4ca] dark:text-white dark:hover:bg-[#2f353a] transition-colors ${
+          className={`theme-title theme-hover p-2 rounded-full transition-colors ${
             !props.motionEnabled ? 'opacity-50' : ''
           }`}
           title="Toggle motion"
@@ -81,7 +81,7 @@ export function NavigationPill(props: NavigationPillProps) {
         </button>
         <button
           onClick={props.onToggleDarkMode}
-          className="p-2 rounded-full text-[#333333] hover:bg-[#dfe6cf] dark:text-white dark:hover:bg-[#2f353a] transition-colors"
+          className="theme-title theme-hover p-2 rounded-full transition-colors"
           title="Toggle theme"
         >
           {props.darkMode ? <Sun size={22} /> : <Moon size={22} />}
@@ -89,14 +89,14 @@ export function NavigationPill(props: NavigationPillProps) {
         {props.session.hasSession ? (
           <button
             onClick={props.onLogout}
-            className="hidden md:block bg-[#76B900] hover:bg-[#4E9A06] text-white cursor-pointer font-display font-bold px-6 py-2 rounded-full shadow-pop hover:shadow-pop-hover transition-all"
+            className="theme-button-accent hidden cursor-pointer rounded-full border-b-8 px-6 py-2 font-display font-bold shadow-pop transition-all hover:shadow-pop-hover md:block"
           >
             Logout
           </button>
         ) : (
           <button
             onClick={props.onOpenLogin}
-            className="hidden md:block bg-[#3465A4] hover:bg-[#204A87] text-white cursor-pointer font-display font-bold px-6 py-2 rounded-full shadow-pop hover:shadow-pop-hover transition-all"
+            className="theme-button-info hidden cursor-pointer rounded-full border-b-8 px-6 py-2 font-display font-bold shadow-pop transition-all hover:shadow-pop-hover md:block"
           >
             Sign In
           </button>

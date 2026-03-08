@@ -29,10 +29,10 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   });
 
   return (
-    <section className="relative rounded-toy-sm border border-[#bcc1b5]/90 bg-[#eff1ea]/92 p-8 shadow-pop backdrop-blur-2xl dark:border-[#4a5360]/90 dark:bg-[#252a31]/90 md:p-10">
+    <section className="theme-panel relative rounded-toy-sm border p-8 shadow-pop backdrop-blur-2xl md:p-10">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h3 className="font-display text-4xl font-black text-[#4E9A06] dark:text-[#8AE234]">
+          <h3 className="font-display text-4xl font-black text-[var(--theme-accent-strong)]">
             Download Queue
           </h3>
         </div>
@@ -52,15 +52,15 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/88 px-4 py-4 backdrop-blur-xl dark:border-[#4a5360] dark:bg-[#1f252b]/80">
-        <div className="text-sm font-bold text-[#555753] dark:text-white/75">
+      <div className="theme-panel-soft mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-4 backdrop-blur-xl">
+        <div className="theme-muted text-sm font-bold">
           {props.selectedCount} selected for download
         </div>
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={props.onOpenDownloadFolder}
-            className="flex items-center gap-2 rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/92 px-4 py-2.5 text-sm font-black text-[#333333] transition-all hover:bg-[#e8eddc] dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white dark:hover:bg-[#2f353a]"
+            className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-black transition-all"
           >
             <FolderOpen size={16} />
             Open Folder
@@ -69,7 +69,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             type="button"
             onClick={props.onClearQueue}
             disabled={props.queue.jobs.length === 0}
-            className="rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/92 px-4 py-2.5 text-sm font-black text-[#333333] transition-all hover:bg-[#e8eddc] disabled:opacity-50 dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white dark:hover:bg-[#2f353a]"
+            className="theme-button-secondary rounded-2xl border px-4 py-2.5 text-sm font-black transition-all disabled:opacity-50"
           >
             Clear List
           </button>
@@ -77,7 +77,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             type="button"
             onClick={props.onToggleSelectAll}
             disabled={props.selectedCount === 0 && props.allSelected}
-            className="rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/92 px-4 py-2.5 text-sm font-black text-[#333333] transition-all hover:bg-[#e8eddc] disabled:opacity-50 dark:border-[#4a5360] dark:bg-[#1f252b] dark:text-white dark:hover:bg-[#2f353a]"
+            className="theme-button-secondary rounded-2xl border px-4 py-2.5 text-sm font-black transition-all disabled:opacity-50"
           >
             {props.allSelected ? "Deselect All" : "Select All"}
           </button>
@@ -85,7 +85,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             type="button"
             onClick={props.onQueueDownloads}
             disabled={!props.canQueueDownloads}
-            className="flex items-center gap-2 rounded-2xl border-b-8 border-[#2f6d05] bg-[#73D216] px-5 py-3 text-sm font-black text-white shadow-xl transition-all hover:bg-[#4E9A06] disabled:opacity-60"
+            className="theme-button-accent flex items-center gap-2 rounded-2xl border-b-8 px-5 py-3 text-sm font-black shadow-xl transition-all disabled:opacity-60"
           >
             <Download size={16} />
             Download
@@ -94,20 +94,20 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
       </div>
 
       {props.message ? (
-        <div className="mt-5 rounded-2xl border border-[#c2c7bc] bg-[#f7f8f2]/92 px-4 py-3 text-sm font-bold text-[#333333] dark:border-[#4a5360] dark:bg-[#1f252b]/90 dark:text-white/75">
+        <div className="theme-panel-soft mt-5 rounded-2xl border px-4 py-3 text-sm font-bold">
           {props.message}
         </div>
       ) : null}
 
       <div className="mt-6">
         {props.queue.jobs.length === 0 ? (
-          <div className="rounded-toy-sm border border-[#c2c7bc] bg-[#f7f8f2]/92 px-6 py-10 text-center font-bold text-[#555753] dark:border-[#4a5360] dark:bg-[#1f252b]/82 dark:text-white/70">
+          <div className="theme-panel-soft theme-muted rounded-toy-sm border px-6 py-10 text-center font-bold">
             No queued downloads yet.
           </div>
         ) : (
           <div
             ref={parentRef}
-            className="h-[32rem] overflow-y-auto rounded-toy-sm border border-[#c2c7bc] bg-[#f7f8f2]/45 p-3 backdrop-blur-md dark:border-[#4a5360] dark:bg-[#1f252b]/40"
+            className="theme-panel-muted h-[32rem] overflow-y-auto rounded-toy-sm border p-3 backdrop-blur-md"
           >
             <div
               className="relative w-full"
