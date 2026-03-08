@@ -107,8 +107,6 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         ? "Deselect all"
         : "Select all";
 
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     return () => {
       if (panelAnimationRef.current !== null) {
@@ -163,7 +161,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   return (
     <section className="relative mt-4">
-      <h1 className="theme-title font-teko text-[144px] font-bold tracking-[-0.02em] leading-[118.8px] -mb-[130px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
+      <h1 className="text-white font-teko text-[144px] font-bold tracking-[-0.02em] leading-[118.8px] -mb-[130px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
         Preview
       </h1>
 
@@ -354,177 +352,176 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       </div>
 
       {props.results.length > 0 ? (
-        <div className="theme-panel-soft mt-6 rounded-toy-lg border-2 p-5 shadow-pop backdrop-blur-2xl">
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={props.onToggleSelectAll}
-                disabled={selectAllDisabled}
-                className="theme-button-secondary rounded-full border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
-              >
-                {selectAllLabel}
-              </button>
-              <button
-                type="button"
-                onClick={props.onRefresh}
-                disabled={!props.searchResponse || props.loading}
-                className="theme-button-secondary flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
-              >
-                {props.loading ? (
-                  <LoaderCircle className="animate-spin" size={14} />
-                ) : (
-                  <RefreshCw size={14} />
-                )}
-                Refresh
-              </button>
-              <button
-                type="button"
-                onClick={props.onQueueDownloads}
-                disabled={!props.searchResponse || selectedCount === 0}
-                className="theme-button-accent flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black shadow-lg transition-all disabled:opacity-60"
-              >
-                <Download size={14} />
-                Download
-              </button>
-              <label className="theme-panel-strong flex items-center gap-3 rounded-full border px-4 py-2 text-xs font-black backdrop-blur-md">
-                Grid Size
-                <ElasticSlider
-                  value={gridCardWidth}
-                  onChange={setGridCardWidth}
-                  startingValue={180}
-                  maxValue={320}
-                  isStepped
-                  stepSize={10}
-                  valueFormatter={(value) => `${value}px`}
-                  leftIcon={<span className="text-[11px]">S</span>}
-                  rightIcon={<span className="text-[11px]">L</span>}
-                  className="w-32"
-                />
-              </label>
+        <div className="theme-panel-soft mt-6 overflow-hidden rounded-toy-sm border-2 p-4 shadow-pop backdrop-blur-2xl">
+          <div className="max-h-[75vh] overflow-x-hidden overflow-y-auto">
+            <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-4 border-b border-[var(--theme-border-soft)] bg-[color:var(--theme-surface)]/92 px-4 py-3 backdrop-blur-2xl">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={props.onToggleSelectAll}
+                  disabled={selectAllDisabled}
+                  className="theme-button-secondary rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
+                >
+                  {selectAllLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={props.onRefresh}
+                  disabled={!props.searchResponse || props.loading}
+                  className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
+                >
+                  {props.loading ? (
+                    <LoaderCircle className="animate-spin" size={14} />
+                  ) : (
+                    <RefreshCw size={14} />
+                  )}
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={props.onQueueDownloads}
+                  disabled={!props.searchResponse || selectedCount === 0}
+                  className="theme-button-accent flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black shadow-lg transition-all disabled:opacity-60"
+                >
+                  <Download size={14} />
+                  Download
+                </button>
+                <label className="theme-panel-strong flex items-center gap-3 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md">
+                  Grid Size
+                  <ElasticSlider
+                    value={gridCardWidth}
+                    onChange={setGridCardWidth}
+                    startingValue={180}
+                    maxValue={320}
+                    isStepped
+                    stepSize={10}
+                    valueFormatter={(value) => `${value}px`}
+                    leftIcon={<span className="text-[11px]">S</span>}
+                    rightIcon={<span className="text-[11px]">L</span>}
+                    className="w-32"
+                  />
+                </label>
+              </div>
             </div>
           </div>
           <div
-            ref={scrollRef}
-            className="theme-panel-muted mt-4 h-[75vh] overflow-y-auto rounded-toy-sm border p-2.5"
+            className="grid gap-3"
+            style={{
+              gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${gridCardWidth}px), 1fr))`,
+            }}
           >
-            <div
-              className="grid gap-3"
-              style={{
-                gridTemplateColumns: `repeat(auto-fill, minmax(${gridCardWidth}px, 1fr))`,
-              }}
-            >
-              {props.results.map((item) => {
-                const isActive =
-                  item.submissionId === activeSubmission?.submissionId;
-                const selected = props.selectedSubmissionIds.includes(
-                  item.submissionId,
-                );
-                const downloadSummary =
-                  downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY;
-                const downloaded = downloadSummary.state === "downloaded";
-                const cancellable = isSubmissionCancellable(
-                  downloadSummary.state,
-                );
+            {props.results.map((item) => {
+              const isActive =
+                item.submissionId === activeSubmission?.submissionId;
+              const selected = props.selectedSubmissionIds.includes(
+                item.submissionId,
+              );
+              const downloadSummary =
+                downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY;
+              const downloaded = downloadSummary.state === "downloaded";
+              const cancellable = isSubmissionCancellable(
+                downloadSummary.state,
+              );
 
-                return (
-                  <article
-                    key={item.submissionId}
-                    onClick={() => {
-                      props.onSelectActive(item.submissionId);
-                      if (!downloaded) {
-                        props.onToggleSelection(item.submissionId);
-                      }
-                    }}
-                    className={`cursor-pointer overflow-hidden rounded-[1.35rem] border transition-colors ${
-                      isActive
-                        ? "border-[var(--theme-accent)] bg-[var(--theme-surface-strong)] ring-4 ring-[var(--theme-accent)]/45 shadow-[0_0_0_1px_var(--theme-accent)]"
-                        : "theme-panel-strong theme-hover border"
-                    }`}
-                  >
-                    <div className="relative aspect-[5/4] overflow-hidden bg-[var(--theme-surface-soft)]">
-                      <SubmissionPreview
-                        submission={item}
-                        alt={item.title}
-                        variant="card"
-                        refreshToken={props.resultsRefreshToken}
-                        className="h-full w-full object-cover"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[rgba(46,52,54,0.78)] via-[rgba(46,52,54,0.22)] to-transparent p-3 dark:from-[#14112C]/75 dark:via-[#14112C]/20">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-[var(--theme-surface-strong)] px-3 py-1 text-[11px] font-black text-[var(--theme-title)]">
-                            {item.typeName || "Submission"}
-                          </span>
-                          <span className="rounded-full border border-white/45 bg-[#14112C]/40 px-3 py-1 text-[11px] font-bold text-white/92 backdrop-blur-sm">
-                            {formatFileCount(item.pageCount)}
-                          </span>
-                        </div>
+              return (
+                <article
+                  key={item.submissionId}
+                  onClick={() => {
+                    props.onSelectActive(item.submissionId);
+                    if (!downloaded) {
+                      props.onToggleSelection(item.submissionId);
+                    }
+                  }}
+                  className={`cursor-pointer overflow-hidden rounded-[1.35rem] border transition-colors ${
+                    isActive
+                      ? "border-[var(--theme-accent)] bg-[var(--theme-surface-strong)] ring-4 ring-[var(--theme-accent)]/45 shadow-[0_0_0_1px_var(--theme-accent)]"
+                      : "theme-panel-strong theme-hover border"
+                  }`}
+                >
+                  <div className="relative aspect-[5/4] overflow-hidden bg-[var(--theme-surface-soft)]">
+                    <SubmissionPreview
+                      submission={item}
+                      alt={item.title}
+                      variant="card"
+                      refreshToken={props.resultsRefreshToken}
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[rgba(46,52,54,0.78)] via-[rgba(46,52,54,0.22)] to-transparent p-3 dark:from-[#14112C]/75 dark:via-[#14112C]/20">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-[var(--theme-surface-strong)] px-3 py-1 text-[11px] font-black text-[var(--theme-title)]">
+                          {item.typeName || "Submission"}
+                        </span>
+                        <span className="rounded-full border border-white/45 bg-[#14112C]/40 px-3 py-1 text-[11px] font-bold text-white/92 backdrop-blur-sm">
+                          {formatFileCount(item.pageCount)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5 p-3">
+                    <div className="min-w-0">
+                      <div className="theme-title truncate text-[13px] font-black">
+                        {item.title}
+                      </div>
+                      <div className="theme-muted mt-1 truncate text-[11px] font-bold">
+                        @{item.username} · {item.ratingName || "Unrated"}
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 p-3">
-                      <div className="min-w-0">
-                        <div className="theme-title truncate text-[13px] font-black">
-                          {item.title}
-                        </div>
-                        <div className="theme-muted mt-1 truncate text-[11px] font-bold">
-                          @{item.username} · {item.ratingName || "Unrated"}
-                        </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="theme-subtle text-[10px] font-semibold">
+                        {formatDownloadStatus(downloadSummary)}
                       </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="theme-subtle text-[10px] font-semibold">
-                          {formatDownloadStatus(downloadSummary)}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <GridDownloadButton
-                            title={item.title}
-                            summary={downloadSummary}
-                            cancellable={cancellable}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (cancellable) {
-                                props.onCancelSubmission(item.submissionId);
-                                return;
-                              }
-                              props.onDownloadSubmission(item.submissionId);
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              props.onToggleSelection(item.submissionId);
-                            }}
-                            disabled={downloaded}
-                            aria-label={
-                              selected
-                                ? `Remove ${item.title} from selection`
-                                : `Select ${item.title}`
+                      <div className="flex items-center gap-2">
+                        <GridDownloadButton
+                          title={item.title}
+                          summary={downloadSummary}
+                          cancellable={cancellable}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (cancellable) {
+                              props.onCancelSubmission(item.submissionId);
+                              return;
                             }
-                            className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${
-                              downloaded
-                                ? "pointer-events-none w-0 scale-75 opacity-0"
-                                : selected
-                                  ? "bg-[#73D216] text-white"
-                                  : "bg-[var(--theme-accent-strong)] text-white"
-                            }`}
-                          >
-                            {downloaded ? (
-                              <Check size={14} />
-                            ) : selected ? (
-                              <Check size={14} />
-                            ) : (
-                              <Plus size={14} />
-                            )}
-                          </button>
-                        </div>
+                            props.onDownloadSubmission(item.submissionId);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            props.onToggleSelection(item.submissionId);
+                          }}
+                          disabled={downloaded}
+                          aria-label={
+                            selected
+                              ? `Remove ${item.title} from selection`
+                              : `Select ${item.title}`
+                          }
+                          className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${
+                            downloaded
+                              ? "pointer-events-none w-0 scale-75 opacity-0"
+                              : selected
+                                ? "bg-[#73D216] text-white"
+                                : "bg-[var(--theme-accent-strong)] text-white"
+                          }`}
+                        >
+                          {downloaded ? (
+                            <Check size={14} />
+                          ) : selected ? (
+                            <Check size={14} />
+                          ) : (
+                            <Plus size={14} />
+                          )}
+                        </button>
                       </div>
                     </div>
-                  </article>
-                );
-              })}
-            </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
           </div>
         </div>
       ) : null}
