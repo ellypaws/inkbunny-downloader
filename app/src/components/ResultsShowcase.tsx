@@ -7,13 +7,21 @@ import {
   FileText,
   LoaderCircle,
   Plus,
+  RefreshCw,
   Search as SearchIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEventHandler,
+} from "react";
 
 import ElasticSlider from "./ElasticSlider";
 import { accentClass } from "../lib/format";
 import type {
+  DownloadJobSnapshot,
   QueueSnapshot,
   SearchResponse,
   SubmissionCard,
@@ -26,14 +34,29 @@ type ResultsShowcaseProps = {
   selectedSubmissionIds: string[];
   allSelected: boolean;
   loading: boolean;
+  resultsRefreshToken: number;
   queue: QueueSnapshot;
   pendingDownloadSubmissionIds: string[];
   onSelectActive: (submissionId: string) => void;
   onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
   onDownloadSubmission: (submissionId: string) => void;
+  onRefresh: () => void;
   onQueueDownloads: () => void;
   onLoadMore: () => void;
+};
+
+type SubmissionDownloadState = "idle" | "queued" | "downloading" | "downloaded";
+
+type SubmissionDownloadSummary = {
+  state: SubmissionDownloadState;
+  progress: number;
+};
+
+const PANEL_WINDOW_SIZE = 5;
+const IDLE_DOWNLOAD_SUMMARY: SubmissionDownloadSummary = {
+  state: "idle",
+  progress: 0,
 };
 
 export function ResultsShowcase(props: ResultsShowcaseProps) {
@@ -57,9 +80,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     () => getPanelItems(props.results, panelStart),
     [props.results, panelStart],
   );
-  const downloadStates = useMemo(
+  const downloadSummaries = useMemo(
     () =>
-      buildSubmissionDownloadStates(
+      buildSubmissionDownloadSummaries(
         props.queue,
         props.pendingDownloadSubmissionIds,
       ),
@@ -68,9 +91,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const downloadedCount = useMemo(
     () =>
       props.results.filter(
-        (item) => downloadStates.get(item.submissionId) === "downloaded",
+        (item) =>
+          downloadSummaries.get(item.submissionId)?.state === "downloaded",
       ).length,
-    [downloadStates, props.results],
+    [downloadSummaries, props.results],
   );
   const selectableCount = props.results.length - downloadedCount;
   const selectAllDisabled = props.results.length === 0 || selectableCount === 0;
@@ -141,7 +165,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         Preview
       </h1>
 
-      <div className="relative z-10 mb-5 flex items-center justify-end gap-4 px-2 flex-wrap">
+      <div className="relative z-10 mb-5 flex flex-wrap items-center justify-end gap-4 px-2">
         <div className="flex items-center gap-3">
           <div className="rounded-full bg-white/72 px-4 py-2 text-sm font-bold text-[#2D2D44] backdrop-blur-md dark:bg-[#1A1733]/80 dark:text-white">
             {selectedCount} selected
@@ -155,9 +179,22 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             {selectAllLabel}
           </button>
           <button
+            type="button"
+            onClick={props.onRefresh}
+            disabled={!props.searchResponse || props.loading}
+            className="flex items-center gap-2 rounded-2xl border border-[#2D2D44]/15 bg-white/80 px-5 py-3 text-sm font-black text-[#2D2D44] shadow-sm backdrop-blur-md transition-all hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white"
+          >
+            {props.loading ? (
+              <LoaderCircle className="animate-spin" size={16} />
+            ) : (
+              <RefreshCw size={16} />
+            )}
+            Refresh
+          </button>
+          <button
             onClick={props.onQueueDownloads}
             disabled={!props.searchResponse || selectedCount === 0}
-            className="px-6 py-3 bg-[#73D216] hover:bg-[#4E9A06] disabled:opacity-60 text-white font-black rounded-2xl shadow-xl transition-all flex items-center gap-2 border-b-8 border-[#2f6d05]"
+            className="flex items-center gap-2 rounded-2xl border-b-8 border-[#2f6d05] bg-[#73D216] px-6 py-3 font-black text-white shadow-xl transition-all hover:bg-[#4E9A06] disabled:opacity-60"
           >
             <Download size={18} />
             Download
@@ -165,9 +202,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row h-[1020px] md:h-[600px] w-full rounded-toy-sm overflow-hidden shadow-pop bg-white/80 dark:bg-gray-800/90 border-2 border-white/70 dark:border-gray-700/70">
+      <div className="flex h-[1020px] w-full flex-col overflow-hidden rounded-toy-sm border-2 border-white/70 bg-white/80 shadow-pop dark:border-gray-700/70 dark:bg-gray-800/90 md:h-[600px] md:flex-row">
         {props.results.length === 0 ? (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-white/35 dark:bg-[#1A1733]/55 text-center px-6">
+          <div className="flex h-full w-full flex-col items-center justify-center bg-white/35 px-6 text-center dark:bg-[#1A1733]/55">
             <SearchIcon className="text-[#89CFF0]" size={42} />
             <p className="mt-4 max-w-md text-lg font-bold text-[#2D2D44] dark:text-white">
               Search results appear here.
@@ -178,9 +215,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             const selected = props.selectedSubmissionIds.includes(
               item.submissionId,
             );
-            const downloadState =
-              downloadStates.get(item.submissionId) ?? "idle";
-            const downloaded = downloadState === "downloaded";
+            const downloadSummary =
+              downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY;
+            const downloaded = downloadSummary.state === "downloaded";
+
             return (
               <div
                 key={item.submissionId}
@@ -198,7 +236,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   panelVisible ? "opacity-100" : "opacity-0"
                 } ${
                   index < panelItems.length - 1
-                    ? "border-b-2 md:border-b-0 md:border-r-2 border-white/70 dark:border-gray-700/70"
+                    ? "border-b-2 border-white/70 dark:border-gray-700/70 md:border-r-2 md:border-b-0"
                     : ""
                 }`}
               >
@@ -206,6 +244,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   submission={item}
                   alt={item.title}
                   variant="full"
+                  refreshToken={props.resultsRefreshToken}
                   className="absolute inset-0 h-full w-full object-cover opacity-70 transition-opacity duration-500 group-hover:opacity-100"
                 />
                 <div
@@ -221,16 +260,17 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       props.onDownloadSubmission(item.submissionId);
                     }}
                     aria-label={`Download ${item.title}`}
-                    disabled={downloadState !== "idle"}
-                    className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-transform ${
-                      downloadState === "downloaded"
-                        ? "bg-[#73D216]/85 text-white"
-                        : downloadState === "downloading"
+                    disabled={downloadSummary.state !== "idle"}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
+                      downloadSummary.state === "downloaded"
+                        ? "translate-x-[3.25rem] bg-[#73D216]/85 text-white"
+                        : downloadSummary.state === "queued" ||
+                            downloadSummary.state === "downloading"
                           ? "bg-[#2A7FA6] text-white"
                           : "bg-[#14112C]/72 text-white hover:scale-105"
                     } disabled:cursor-default disabled:hover:scale-100`}
                   >
-                    {renderDownloadIcon(downloadState, 18)}
+                    {renderDownloadIcon(downloadSummary.state, 18)}
                   </button>
                   <button
                     type="button"
@@ -244,9 +284,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                         ? `Remove ${item.title} from selection`
                         : `Select ${item.title}`
                     }
-                    className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md ${
+                    className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
                       downloaded
-                        ? "bg-white/40 text-[#2D2D44]/35 dark:bg-white/10 dark:text-white/35"
+                        ? "pointer-events-none w-0 scale-75 opacity-0"
                         : selected
                           ? "bg-[#73D216] text-white"
                           : "bg-white/85 text-[#2D2D44]"
@@ -265,10 +305,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 <div className="absolute bottom-8 left-8 z-10 max-w-[72%]">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span
-                      className={`bg-white ${
-                        index % 2 === 0 ? "text-[#3465A4]" : "text-[#CC5E00]"
-                      } font-black px-4 py-1 rounded-full text-sm shadow-sm inline-block transform ${
-                        index % 2 === 0 ? "-rotate-3" : "rotate-2"
+                      className={`inline-block rounded-full bg-white px-4 py-1 text-sm font-black shadow-sm transform ${
+                        index % 2 === 0 ? "-rotate-3 text-[#3465A4]" : "rotate-2 text-[#CC5E00]"
                       }`}
                     >
                       {item.badgeText || item.typeName || "Submission"}
@@ -280,7 +318,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   <h4 className="text-3xl font-display font-black text-white drop-shadow-md">
                     {item.title}
                   </h4>
-                  <p className="text-white font-bold text-xl opacity-95">
+                  <p className="text-xl font-bold text-white opacity-95">
                     @{item.username}
                   </p>
                 </div>
@@ -301,9 +339,22 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 type="button"
                 onClick={props.onToggleSelectAll}
                 disabled={selectAllDisabled}
-                className="rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md transition-colors hover:bg-white dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75 dark:hover:bg-[#241e46] disabled:opacity-50"
+                className="rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md transition-colors hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75 dark:hover:bg-[#241e46]"
               >
                 {selectAllLabel}
+              </button>
+              <button
+                type="button"
+                onClick={props.onRefresh}
+                disabled={!props.searchResponse || props.loading}
+                className="flex items-center gap-2 rounded-full border border-[#2D2D44]/10 bg-white/72 px-4 py-2 text-xs font-black text-[#2D2D44]/75 backdrop-blur-md transition-colors hover:bg-white disabled:opacity-50 dark:border-white/10 dark:bg-[#1A1733]/80 dark:text-white/75 dark:hover:bg-[#241e46]"
+              >
+                {props.loading ? (
+                  <LoaderCircle className="animate-spin" size={14} />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
+                Refresh
               </button>
               <button
                 type="button"
@@ -347,9 +398,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 const selected = props.selectedSubmissionIds.includes(
                   item.submissionId,
                 );
-                const downloadState =
-                  downloadStates.get(item.submissionId) ?? "idle";
-                const downloaded = downloadState === "downloaded";
+                const downloadSummary =
+                  downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY;
+                const downloaded = downloadSummary.state === "downloaded";
 
                 return (
                   <article
@@ -371,6 +422,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                         submission={item}
                         alt={item.title}
                         variant="card"
+                        refreshToken={props.resultsRefreshToken}
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[#14112C]/75 via-[#14112C]/20 to-transparent p-3">
@@ -397,27 +449,17 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-[10px] font-semibold text-[#2D2D44]/55 dark:text-white/55">
-                          {formatDownloadStatus(downloadState)}
+                          {formatDownloadStatus(downloadSummary)}
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
+                          <GridDownloadButton
+                            title={item.title}
+                            summary={downloadSummary}
                             onClick={(event) => {
                               event.stopPropagation();
                               props.onDownloadSubmission(item.submissionId);
                             }}
-                            aria-label={`Download ${item.title}`}
-                            disabled={downloadState !== "idle"}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-transform ${
-                              downloadState === "downloaded"
-                                ? "bg-[#73D216]/85 text-white"
-                                : downloadState === "downloading"
-                                  ? "bg-[#2A7FA6] text-white"
-                                  : "bg-[#2A7FA6] text-white hover:scale-105"
-                            } disabled:cursor-default disabled:hover:scale-100`}
-                          >
-                            {renderDownloadIcon(downloadState, 14)}
-                          </button>
+                          />
                           <button
                             type="button"
                             onClick={(event) => {
@@ -430,9 +472,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                 ? `Remove ${item.title} from selection`
                                 : `Select ${item.title}`
                             }
-                            className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md ${
+                            className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${
                               downloaded
-                                ? "bg-[#2D2D44]/12 text-[#2D2D44]/35 dark:bg-white/10 dark:text-white/35"
+                                ? "pointer-events-none w-0 scale-75 opacity-0"
                                 : selected
                                   ? "bg-[#73D216] text-white"
                                   : "bg-[#14112C] text-white"
@@ -462,7 +504,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           <button
             onClick={props.onLoadMore}
             disabled={props.loading}
-            className="px-6 py-3 bg-[#2D2D44] hover:bg-[#3b3b55] text-white font-bold rounded-xl shadow-pop hover:shadow-pop-hover transition-all flex items-center gap-2"
+            className="flex items-center gap-2 rounded-xl bg-[#2D2D44] px-6 py-3 font-bold text-white shadow-pop transition-all hover:bg-[#3b3b55] hover:shadow-pop-hover"
           >
             {props.loading ? (
               <LoaderCircle className="animate-spin" size={18} />
@@ -482,6 +524,7 @@ function SubmissionPreview(props: {
   alt: string;
   className: string;
   variant?: "full" | "card";
+  refreshToken: number;
 }) {
   const sources = getPreviewSources(props.submission, props.variant);
   const [sourceIndex, setSourceIndex] = useState(0);
@@ -496,6 +539,7 @@ function SubmissionPreview(props: {
     props.submission.fullUrl,
     props.submission.latestPreviewUrl,
     props.submission.latestThumbnailUrl,
+    props.refreshToken,
   ]);
 
   const source = sources[sourceIndex];
@@ -511,6 +555,7 @@ function SubmissionPreview(props: {
 
   return (
     <img
+      key={`${props.submission.submissionId}-${props.refreshToken}-${sourceIndex}`}
       src={source}
       sizes={
         props.variant === "full"
@@ -532,23 +577,24 @@ function getPreviewSources(
   submission: SubmissionCard,
   variant: "full" | "card" = "card",
 ) {
-  const ordered = variant === "full"
-    ? [
-        submission.fullUrl,
-        submission.screenUrl,
-        submission.previewUrl,
-        submission.latestPreviewUrl,
-        submission.thumbnailUrl,
-        submission.latestThumbnailUrl,
-      ]
-    : [
-        submission.previewUrl,
-        submission.latestPreviewUrl,
-        submission.screenUrl,
-        submission.thumbnailUrl,
-        submission.latestThumbnailUrl,
-        submission.fullUrl,
-      ];
+  const ordered =
+    variant === "full"
+      ? [
+          submission.fullUrl,
+          submission.screenUrl,
+          submission.previewUrl,
+          submission.latestPreviewUrl,
+          submission.thumbnailUrl,
+          submission.latestThumbnailUrl,
+        ]
+      : [
+          submission.previewUrl,
+          submission.latestPreviewUrl,
+          submission.screenUrl,
+          submission.thumbnailUrl,
+          submission.latestThumbnailUrl,
+          submission.fullUrl,
+        ];
 
   return [...new Set(ordered.filter((value): value is string => Boolean(value)))];
 }
@@ -577,7 +623,11 @@ function PreviewFallback(props: {
 
 function getPreviewFallbackContent(submission: SubmissionCard) {
   const typeName = submission.typeName.toLowerCase();
-  const primaryMime = (submission.mimeType || submission.latestMimeType || "").toLowerCase();
+  const primaryMime = (
+    submission.mimeType ||
+    submission.latestMimeType ||
+    ""
+  ).toLowerCase();
 
   if (
     submission.submissionTypeId === 12 ||
@@ -621,67 +671,205 @@ function getPanelItems(results: SubmissionCard[], startIndex: number) {
   return results.slice(safeStart, safeStart + PANEL_WINDOW_SIZE);
 }
 
-const PANEL_WINDOW_SIZE = 5;
-
 function getPanelWindowStart(resultCount: number, activeIndex: number) {
   const safeIndex = activeIndex >= 0 ? activeIndex : 0;
   return Math.max(0, Math.min(safeIndex - 2, resultCount - PANEL_WINDOW_SIZE));
 }
 
-type SubmissionDownloadState = "idle" | "downloading" | "downloaded";
-
-function buildSubmissionDownloadStates(
+function buildSubmissionDownloadSummaries(
   queue: QueueSnapshot,
   pendingDownloadSubmissionIds: string[],
 ) {
-  const states = new Map<string, SubmissionDownloadState>();
+  const summaries = new Map<string, SubmissionDownloadSummary>();
+  const pendingSubmissionIds = new Set(pendingDownloadSubmissionIds);
+  const jobsBySubmission = new Map<string, DownloadJobSnapshot[]>();
 
-  for (const submissionId of pendingDownloadSubmissionIds) {
-    states.set(submissionId, "downloading");
-  }
-
-  const statusesBySubmission = new Map<string, string[]>();
   for (const job of queue.jobs) {
     if (!job.submissionId) {
       continue;
     }
-    const statuses = statusesBySubmission.get(job.submissionId) ?? [];
-    statuses.push(job.status);
-    statusesBySubmission.set(job.submissionId, statuses);
+    const jobs = jobsBySubmission.get(job.submissionId) ?? [];
+    jobs.push(job);
+    jobsBySubmission.set(job.submissionId, jobs);
   }
 
-  for (const [submissionId, statuses] of statusesBySubmission.entries()) {
-    if (statuses.some((status) => status === "queued" || status === "active")) {
-      states.set(submissionId, "downloading");
+  const submissionIds = new Set([
+    ...pendingSubmissionIds,
+    ...jobsBySubmission.keys(),
+  ]);
+
+  for (const submissionId of submissionIds) {
+    const jobs = jobsBySubmission.get(submissionId) ?? [];
+    if (jobs.length === 0) {
+      summaries.set(submissionId, {
+        state: "queued",
+        progress: 0,
+      });
       continue;
     }
-    if (
-      statuses.length > 0 &&
-      statuses.every((status) => status === "completed")
-    ) {
-      states.set(submissionId, "downloaded");
+
+    if (jobs.every((job) => job.status === "completed")) {
+      summaries.set(submissionId, {
+        state: "downloaded",
+        progress: 1,
+      });
+      continue;
     }
+
+    const anyActive = jobs.some((job) => job.status === "active");
+    const anyQueued = jobs.some((job) => job.status === "queued");
+    const state =
+      anyActive
+        ? "downloading"
+        : anyQueued || pendingSubmissionIds.has(submissionId)
+          ? "queued"
+          : "idle";
+
+    summaries.set(submissionId, {
+      state,
+      progress: getSubmissionProgress(jobs),
+    });
   }
 
-  return states;
+  return summaries;
 }
 
-function formatDownloadStatus(state: SubmissionDownloadState) {
-  if (state === "downloading") {
+function getSubmissionProgress(jobs: DownloadJobSnapshot[]) {
+  let knownBytes = 0;
+  let writtenBytes = 0;
+  let fallbackProgressTotal = 0;
+  let fallbackProgressCount = 0;
+
+  for (const job of jobs) {
+    const totalBytes = Math.max(0, job.totalBytes || 0);
+    const bytesWritten = Math.max(0, job.bytesWritten || 0);
+    if (totalBytes > 0) {
+      knownBytes += totalBytes;
+      writtenBytes += Math.min(bytesWritten, totalBytes);
+      continue;
+    }
+
+    fallbackProgressTotal +=
+      job.status === "completed" ? 1 : clampProgress(job.progress);
+    fallbackProgressCount++;
+  }
+
+  if (knownBytes > 0) {
+    return clampProgress(writtenBytes / knownBytes);
+  }
+  if (fallbackProgressCount > 0) {
+    return clampProgress(fallbackProgressTotal / fallbackProgressCount);
+  }
+  return 0;
+}
+
+function formatDownloadStatus(summary: SubmissionDownloadSummary) {
+  if (summary.state === "queued") {
+    return "Queued";
+  }
+  if (summary.state === "downloading") {
     return "Downloading";
   }
-  if (state === "downloaded") {
+  if (summary.state === "downloaded") {
     return "Downloaded";
   }
   return "Ready";
 }
 
 function renderDownloadIcon(state: SubmissionDownloadState, size: number) {
-  if (state === "downloading") {
+  if (state === "queued" || state === "downloading") {
     return <LoaderCircle className="animate-spin" size={size} />;
   }
   if (state === "downloaded") {
     return <Check size={size} />;
   }
   return <Download size={size} />;
+}
+
+function clampProgress(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+function GridDownloadButton(props: {
+  title: string;
+  summary: SubmissionDownloadSummary;
+  onClick: MouseEventHandler<HTMLButtonElement>;
+}) {
+  const progress =
+    props.summary.state === "downloaded"
+      ? 1
+      : props.summary.state === "queued"
+        ? Math.max(props.summary.progress, 0.08)
+        : props.summary.state === "downloading"
+          ? Math.max(props.summary.progress, 0.1)
+          : 0;
+
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      aria-label={`Download ${props.title}`}
+      disabled={props.summary.state !== "idle"}
+      className={`relative flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ${
+        props.summary.state === "downloaded"
+          ? "translate-x-10 bg-[#73D216]/85 text-white"
+          : props.summary.state === "queued" ||
+              props.summary.state === "downloading"
+            ? "bg-[#2A7FA6] text-white"
+            : "bg-[#2A7FA6] text-white hover:scale-105"
+      } disabled:cursor-default disabled:hover:scale-100`}
+    >
+      {props.summary.state === "queued" || props.summary.state === "downloading" ? (
+        <CircularProgressIcon progress={progress} />
+      ) : props.summary.state === "downloaded" ? (
+        <Check size={14} />
+      ) : (
+        <Download size={14} />
+      )}
+    </button>
+  );
+}
+
+function CircularProgressIcon(props: { progress: number }) {
+  const size = 20;
+  const strokeWidth = 2.5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - clampProgress(props.progress));
+
+  return (
+    <span className="relative flex h-5 w-5 items-center justify-center">
+      <svg
+        className="-rotate-90"
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        aria-hidden="true"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.28)"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+      </svg>
+      <span className="pointer-events-none absolute h-1.5 w-1.5 rounded-full bg-current" />
+    </span>
+  );
 }

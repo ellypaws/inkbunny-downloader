@@ -66,6 +66,10 @@ export function PickDownloadDirectory() {
   return window['go']['desktopapp']['App']['PickDownloadDirectory']();
 }
 
+export function RefreshSearch(arg1) {
+  return window['go']['desktopapp']['App']['RefreshSearch'](arg1);
+}
+
 export function Search(arg1) {
   return window['go']['desktopapp']['App']['Search'](arg1);
 }

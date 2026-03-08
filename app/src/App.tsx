@@ -70,6 +70,7 @@ export default function App() {
   const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] =
     useState<string[]>([]);
   const [queueMessage, setQueueMessage] = useState("");
+  const [resultsRefreshToken, setResultsRefreshToken] = useState(0);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [apiCooldownUntil, setApiCooldownUntil] = useState(0);
 
@@ -614,24 +615,11 @@ export default function App() {
         if (page === 1) {
           setResults(response.results);
           setSelectedSubmissionIds(
-            response.results
-              .map((item) => item.submissionId)
-              .filter(
-                (submissionId) => !downloadedSubmissionIds.has(submissionId),
-              ),
+            getAutoSelectedSubmissionIds(response.results, downloadedSubmissionIds),
           );
           setActiveSubmissionId(response.results[0]?.submissionId ?? "");
         } else {
           setResults((previous) => [...previous, ...response.results]);
-          setSelectedSubmissionIds((previous) => [
-            ...previous,
-            ...response.results
-              .map((item) => item.submissionId)
-              .filter(
-                (submissionId) => !downloadedSubmissionIds.has(submissionId),
-              )
-              .filter((id) => !previous.includes(id)),
-          ]);
           if (!activeSubmissionId && response.results[0]) {
             setActiveSubmissionId(response.results[0].submissionId);
           }
@@ -641,6 +629,35 @@ export default function App() {
       const message = getErrorMessage(error, "Search failed.");
       setSearchError(message);
       pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  async function handleRefreshSearch() {
+    if (!searchResponse) {
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError("");
+    try {
+      const response = await backend.refreshSearch(searchResponse.searchId);
+      setSession(response.session);
+      setSettings(response.session.settings);
+      startTransition(() => {
+        setSearchResponse(response);
+        setResults(response.results);
+        setSelectedSubmissionIds(
+          getAutoSelectedSubmissionIds(response.results, downloadedSubmissionIds),
+        );
+        setActiveSubmissionId(response.results[0]?.submissionId ?? "");
+        setResultsRefreshToken((previous) => previous + 1);
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, "Refresh failed.");
+      setSearchError(message);
+      pushErrorToast(message, "refresh-search-error");
     } finally {
       setSearchLoading(false);
     }
@@ -912,6 +929,7 @@ export default function App() {
               selectedSubmissionIds={selectedSubmissionIds}
               allSelected={allResultsSelected}
               loading={searchLoading}
+              resultsRefreshToken={resultsRefreshToken}
               queue={queue}
               pendingDownloadSubmissionIds={pendingDownloadSubmissionIds}
               onSelectActive={setActiveSubmissionId}
@@ -926,6 +944,7 @@ export default function App() {
               onDownloadSubmission={(submissionId) =>
                 void handleDownloadSubmissions([submissionId])
               }
+              onRefresh={() => void handleRefreshSearch()}
               onQueueDownloads={() => void handleQueueDownloads()}
               onLoadMore={() =>
                 void handleSearch((searchResponse?.page ?? 1) + 1)
@@ -1064,6 +1083,20 @@ function normalizeRatingsMask(mask: string) {
 
 function mergeSubmissionIds(existing: string[], next: string[]) {
   return [...new Set([...existing, ...next])];
+}
+
+function getAutoSelectedSubmissionIds(
+  results: SubmissionCard[],
+  downloadedSubmissionIds: Set<string>,
+  autoSelectAll = false,
+) {
+  if (!autoSelectAll) {
+    return [];
+  }
+
+  return results
+    .map((item) => item.submissionId)
+    .filter((submissionId) => !downloadedSubmissionIds.has(submissionId));
 }
 
 function getDownloadedSubmissionIds(queue: QueueSnapshot) {

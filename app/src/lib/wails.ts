@@ -19,6 +19,7 @@ type BackendApi = {
   OpenDownloadDirectory(): Promise<void>
   OpenExternalURL(url: string): Promise<void>
   Search(params: SearchParams): Promise<SearchResponse>
+  RefreshSearch(searchId: string): Promise<SearchResponse>
   LoadMoreResults(searchId: string, page: number): Promise<SearchResponse>
   GetKeywordSuggestions(query: string): Promise<string[]>
   GetUsernameSuggestions(query: string): Promise<UsernameSuggestion[]>
@@ -88,6 +89,9 @@ export const backend = {
   },
   async search(params: SearchParams): Promise<SearchResponse> {
     return getBackend().Search(params)
+  },
+  async refreshSearch(searchId: string): Promise<SearchResponse> {
+    return getBackend().RefreshSearch(searchId)
   },
   async loadMoreResults(
     searchId: string,

@@ -107,6 +107,82 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	}, nil
 }
 
+func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
+	a.mu.RLock()
+	state := a.searches[searchID]
+	a.mu.RUnlock()
+	if state == nil {
+		return SearchResponse{}, fmt.Errorf("unknown search ID: %s", searchID)
+	}
+
+	user, err := a.ensureSearchSession()
+	if err != nil {
+		return SearchResponse{}, err
+	}
+
+	key, normalizedReq, err := makeSearchCacheKey(user, userRatingsMask(user), state.Request)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+
+	a.ensureCaches(user)
+	a.searchCache.Delete(key)
+
+	entry, err := a.cachedSearchResponse(user, key)
+	if err != nil {
+		if a.handleSessionError(err) {
+			user, err = a.ensureSearchSession()
+			if err != nil {
+				return SearchResponse{}, err
+			}
+			key, normalizedReq, err = makeSearchCacheKey(user, userRatingsMask(user), state.Request)
+			if err != nil {
+				return SearchResponse{}, err
+			}
+			a.ensureCaches(user)
+			a.searchCache.Delete(key)
+			entry, err = a.cachedSearchResponse(user, key)
+		}
+		if err != nil {
+			return SearchResponse{}, err
+		}
+	}
+
+	a.mu.Lock()
+	state.RID = entry.Response.RID
+	state.SID = entry.Response.SID
+	state.ExpiresAt = entry.Response.RIDExpiry
+	state.PagesCount = int(entry.Response.PagesCount)
+	state.ClientPage = 1
+	state.NextServerPage = 0
+	state.DeliveredCount = 0
+	state.PendingResults = nil
+	state.RawResultsCount = int(entry.Response.ResultsCountAll)
+	state.Request = normalizedReq
+	state.CacheKey = key
+	a.mu.Unlock()
+
+	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(user, state, &entry.Response)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+
+	a.mu.Lock()
+	state.ClientPage = 1
+	state.NextServerPage = nextServerPage
+	state.DeliveredCount = len(visible)
+	a.mu.Unlock()
+
+	return SearchResponse{
+		SearchID:     searchID,
+		Page:         1,
+		PagesCount:   searchPageCount(1, hasMore),
+		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
+		Results:      mapSubmissionCards(visible, user.SID),
+		Session:      a.GetSession(),
+	}, nil
+}
+
 func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error) {
 	a.mu.RLock()
 	state := a.searches[searchID]
