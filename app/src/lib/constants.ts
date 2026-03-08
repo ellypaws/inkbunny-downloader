@@ -72,7 +72,7 @@ export const DEFAULT_SEARCH: SearchParams = {
   submissionTypes: [],
   orderBy: 'create_datetime',
   page: 1,
-  perPage: 0,
+  perPage: 30,
   maxDownloads: 0,
   maxActive: 4,
   saveKeywords: false,

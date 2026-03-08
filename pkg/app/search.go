@@ -24,10 +24,13 @@ type searchState struct {
 	DeliveredCount  int
 	MaxDownloads    int
 	PerPage         int
+	PendingResults  []inkbunny.SubmissionSearch
 	RawResultsCount int
 	Request         inkbunny.SubmissionSearchRequest
 	CacheKey        searchCacheKey
 }
+
+const defaultSearchPerPage = 30
 
 func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	user, err := a.ensureSearchSession()
@@ -64,7 +67,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	response := entry.Response
 	perPage := int(normalizedReq.SubmissionsPerPage)
 	if perPage <= 0 {
-		perPage = 24
+		perPage = defaultSearchPerPage
 	}
 
 	searchID := a.newSearchID()
@@ -220,7 +223,7 @@ func (a *App) GetUsernameSuggestions(query string) ([]UsernameSuggestion, error)
 func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkbunny.SubmissionSearchRequest, error) {
 	perPage := params.PerPage
 	if perPage <= 0 || perPage > 100 {
-		perPage = 24
+		perPage = defaultSearchPerPage
 	}
 	page := params.Page
 	if page <= 0 {
@@ -402,6 +405,16 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 	nextServerPage := state.NextServerPage
 	pagesCount := state.PagesCount
 	rawResultsCount := state.RawResultsCount
+	pendingResults := state.PendingResults
+
+	if len(pendingResults) > 0 {
+		remaining := target
+		if len(pendingResults) < remaining {
+			remaining = len(pendingResults)
+		}
+		visible = append(visible, pendingResults[:remaining]...)
+		pendingResults = pendingResults[remaining:]
+	}
 
 	appendVisible := func(response inkbunny.SubmissionSearchResponse) {
 		if rawResultsCount == 0 {
@@ -410,7 +423,10 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 		pagesCount = int(response.PagesCount)
 		filtered := filterSubmissionsByRatings(response.Submissions, ratingsMask)
 		remaining := target - len(visible)
-		if remaining > 0 && len(filtered) > remaining {
+		if remaining <= 0 {
+			pendingResults = append(pendingResults, filtered...)
+		} else if len(filtered) > remaining {
+			pendingResults = append(pendingResults, filtered[remaining:]...)
 			filtered = filtered[:remaining]
 		}
 		visible = append(visible, filtered...)
@@ -434,8 +450,9 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 	}
 
 	state.PagesCount = pagesCount
+	state.PendingResults = pendingResults
 	state.RawResultsCount = rawResultsCount
-	hasMore := nextServerPage > 0 && nextServerPage <= pagesCount
+	hasMore := len(pendingResults) > 0 || (nextServerPage > 0 && nextServerPage <= pagesCount)
 	if remainingLimit > 0 && len(visible) >= remainingLimit {
 		hasMore = false
 	}
