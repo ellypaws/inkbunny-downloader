@@ -97,7 +97,10 @@ export default function App() {
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
     [activeTabId, tabs],
   );
-  const downloadedSubmissionIds = useMemo(() => getDownloadedSubmissionIds(queue), [queue]);
+  const completedQueueSubmissionIds = useMemo(
+    () => getCompletedQueueSubmissionIds(queue),
+    [queue],
+  );
   const completedJobIds = useMemo(
     () =>
       queue.jobs
@@ -106,10 +109,19 @@ export default function App() {
         .join(","),
     [queue.jobs],
   );
+  const downloadedSubmissionIds = useMemo(
+    () => getDownloadedSubmissionIds(tabs, completedQueueSubmissionIds),
+    [completedQueueSubmissionIds, tabs],
+  );
   const downloadedSubmissionIdsRef = useRef(downloadedSubmissionIds);
   const unavailableSubmissionIds = useMemo(
-    () => getUnavailableSubmissionIds(queue, pendingDownloadSubmissionIds),
-    [pendingDownloadSubmissionIds, queue],
+    () =>
+      getUnavailableSubmissionIds(
+        queue,
+        pendingDownloadSubmissionIds,
+        downloadedSubmissionIds,
+      ),
+    [downloadedSubmissionIds, pendingDownloadSubmissionIds, queue],
   );
   const activeSearchParams = activeTab?.searchParams ?? buildDefaultSearch(session, settings);
   const activeSearchResponse = activeTab?.searchResponse ?? null;
@@ -485,18 +497,23 @@ export default function App() {
   }, [activeResults.length, activeSearchResponse?.searchId, activeTabId, settings.motionEnabled]);
 
   useEffect(() => {
-    if (downloadedSubmissionIds.size === 0) {
+    if (completedQueueSubmissionIds.size === 0) {
       return;
     }
     setTabs((previous) =>
       previous.map((tab) => ({
         ...tab,
+        results: tab.results.map((result) =>
+          completedQueueSubmissionIds.has(result.submissionId)
+            ? { ...result, downloaded: true }
+            : result,
+        ),
         selectedSubmissionIds: tab.selectedSubmissionIds.filter(
           (submissionId) => !downloadedSubmissionIds.has(submissionId),
         ),
       })),
     );
-  }, [downloadedSubmissionIds]);
+  }, [completedQueueSubmissionIds, downloadedSubmissionIds]);
 
   useEffect(() => {
     const requestId = ++keywordRequestRef.current;
@@ -684,7 +701,10 @@ export default function App() {
                 results: response.results,
                 selectedSubmissionIds: getAutoSelectedSubmissionIds(
                   response.results,
-                  downloadedSubmissionIdsRef.current,
+                  mergeDownloadedSubmissionIds(
+                    downloadedSubmissionIdsRef.current,
+                    response.results,
+                  ),
                 ),
                 activeSubmissionId: response.results[0]?.submissionId ?? "",
                 searchError: "",
@@ -735,7 +755,10 @@ export default function App() {
                   results: response.results,
                   selectedSubmissionIds: getAutoSelectedSubmissionIds(
                     response.results,
-                    downloadedSubmissionIdsRef.current,
+                    mergeDownloadedSubmissionIds(
+                      downloadedSubmissionIdsRef.current,
+                      response.results,
+                    ),
                   ),
                   activeSubmissionId: response.results[0]?.submissionId ?? "",
                   resultsRefreshToken: currentTab.resultsRefreshToken + 1,
@@ -1028,6 +1051,7 @@ export default function App() {
               loading={activeSearchLoading}
               resultsRefreshToken={activeResultsRefreshToken}
               queue={queue}
+              downloadedSubmissionIds={downloadedSubmissionIds}
               pendingDownloadSubmissionIds={pendingDownloadSubmissionIds}
               onSelectActive={(submissionId) => {
                 if (!activeTab) {
@@ -1180,7 +1204,7 @@ function getAutoSelectedSubmissionIds(
     .filter((submissionId) => !downloadedSubmissionIds.has(submissionId));
 }
 
-function getDownloadedSubmissionIds(queue: QueueSnapshot) {
+function getCompletedQueueSubmissionIds(queue: QueueSnapshot) {
   const completedBySubmission = new Map<string, boolean>();
   for (const job of queue.jobs) {
     if (!job.submissionId) {
@@ -1203,8 +1227,9 @@ function getDownloadedSubmissionIds(queue: QueueSnapshot) {
 function getUnavailableSubmissionIds(
   queue: QueueSnapshot,
   pendingDownloadSubmissionIds: string[],
+  downloadedSubmissionIds: Set<string>,
 ) {
-  const unavailable = new Set(pendingDownloadSubmissionIds);
+  const unavailable = new Set([...pendingDownloadSubmissionIds, ...downloadedSubmissionIds]);
   for (const job of queue.jobs) {
     if (!job.submissionId) {
       continue;
@@ -1218,6 +1243,34 @@ function getUnavailableSubmissionIds(
     }
   }
   return unavailable;
+}
+
+function getDownloadedSubmissionIds(
+  tabs: SearchTabState[],
+  completedQueueSubmissionIds: Set<string>,
+) {
+  const downloaded = new Set(completedQueueSubmissionIds);
+  for (const tab of tabs) {
+    for (const result of tab.results) {
+      if (result.downloaded) {
+        downloaded.add(result.submissionId);
+      }
+    }
+  }
+  return downloaded;
+}
+
+function mergeDownloadedSubmissionIds(
+  existing: Set<string>,
+  results: SubmissionCard[],
+) {
+  const merged = new Set(existing);
+  for (const result of results) {
+    if (result.downloaded) {
+      merged.add(result.submissionId);
+    }
+  }
+  return merged;
 }
 
 function buildDefaultSearch(session: SessionInfo, settings: AppSettings) {

@@ -97,12 +97,17 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	a.mu.Unlock()
 	_ = a.persist()
 
+	cards, err := a.buildSubmissionCards(user, visible)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+
 	return SearchResponse{
 		SearchID:     searchID,
 		Page:         state.ClientPage,
 		PagesCount:   searchPageCount(state.ClientPage, hasMore),
 		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
-		Results:      mapSubmissionCards(visible, user.SID),
+		Results:      cards,
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -173,12 +178,17 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 	state.DeliveredCount = len(visible)
 	a.mu.Unlock()
 
+	cards, err := a.buildSubmissionCards(user, visible)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+
 	return SearchResponse{
 		SearchID:     searchID,
 		Page:         1,
 		PagesCount:   searchPageCount(1, hasMore),
 		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
-		Results:      mapSubmissionCards(visible, user.SID),
+		Results:      cards,
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -231,12 +241,17 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 	state.DeliveredCount += len(visible)
 	a.mu.Unlock()
 
+	cards, err := a.buildSubmissionCards(user, visible)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+
 	return SearchResponse{
 		SearchID:     searchID,
 		Page:         page,
 		PagesCount:   searchPageCount(page, hasMore),
 		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
-		Results:      mapSubmissionCards(visible, user.SID),
+		Results:      cards,
 		Session:      a.GetSession(),
 	}, nil
 }
@@ -426,7 +441,24 @@ func normalizeScrapsMode(value string) inkbunny.Scraps {
 	}
 }
 
-func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string) []SubmissionCard {
+func (a *App) buildSubmissionCards(user *inkbunny.User, submissions []inkbunny.SubmissionSearch) ([]SubmissionCard, error) {
+	downloadedSubmissions, err := a.lookupDownloadedSubmissions(user, submissions)
+	if err != nil {
+		if a.handleSessionError(err) {
+			user, err = a.ensureSearchSession()
+			if err != nil {
+				return nil, err
+			}
+			downloadedSubmissions, err = a.lookupDownloadedSubmissions(user, submissions)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return mapSubmissionCards(submissions, user.SID, downloadedSubmissions), nil
+}
+
+func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string, downloadedSubmissions map[string]bool) []SubmissionCard {
 	cards := make([]SubmissionCard, 0, len(submissions))
 	accents := []string{"rose", "mint", "lavender", "sky"}
 
@@ -475,11 +507,65 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string) []S
 				submission.Public.Bool(),
 				sid,
 			),
-			BadgeText: badge,
-			Accent:    accents[index%len(accents)],
+			BadgeText:  badge,
+			Accent:     accents[index%len(accents)],
+			Downloaded: downloadedSubmissions[submission.SubmissionID.String()],
 		})
 	}
 	return cards
+}
+
+func (a *App) lookupDownloadedSubmissions(user *inkbunny.User, submissions []inkbunny.SubmissionSearch) (map[string]bool, error) {
+	downloaded := make(map[string]bool, len(submissions))
+	if len(submissions) == 0 {
+		return downloaded, nil
+	}
+
+	downloadRoot := strings.TrimSpace(a.GetSession().Settings.DownloadDirectory)
+	if downloadRoot == "" {
+		return downloaded, nil
+	}
+
+	submissionIDs := make([]string, 0, len(submissions))
+	for _, submission := range submissions {
+		id := submission.SubmissionID.String()
+		if id == "" {
+			continue
+		}
+		submissionIDs = append(submissionIDs, id)
+	}
+	if len(submissionIDs) == 0 {
+		return downloaded, nil
+	}
+
+	details, err := a.cachedSubmissionDetails(user, submissionIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, submission := range details.Submissions {
+		downloaded[submission.SubmissionID.String()] = submissionFilesDownloaded(downloadRoot, submission)
+	}
+
+	return downloaded, nil
+}
+
+func submissionFilesDownloaded(downloadRoot string, submission inkbunny.SubmissionDetails) bool {
+	if len(submission.Files) == 0 {
+		return false
+	}
+
+	for _, file := range submission.Files {
+		result, err := verifyDownloadedFile(
+			downloadFilePath(downloadRoot, submission.Username, file.FileName),
+			file.FullFileMD5,
+		)
+		if err != nil || !result.Matches {
+			return false
+		}
+	}
+
+	return true
 }
 
 func firstNonEmpty(values ...string) string {

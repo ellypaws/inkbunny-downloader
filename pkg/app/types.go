@@ -79,6 +79,7 @@ type SubmissionCard struct {
 	BadgeText          string   `json:"badgeText,omitempty"`
 	Accent             string   `json:"accent,omitempty"`
 	FileIDs            []string `json:"fileIds,omitempty"`
+	Downloaded         bool     `json:"downloaded"`
 }
 
 type SelectedSubmission struct {

@@ -267,13 +267,19 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 
 	task := job.task
 	folder := filepath.Join(task.DownloadRoot, task.Username)
-	filename := filepath.Join(folder, task.FileName)
-	if fileExists(filename) {
-		info, err := os.Stat(filename)
-		if err == nil {
-			m.setProgress(jobID, info.Size(), info.Size())
-		}
+	filename := downloadFilePath(task.DownloadRoot, task.Username, task.FileName)
+	verified, err := verifyDownloadedFile(filename, task.FileMD5)
+	if err != nil {
+		return err
+	}
+	if verified.Matches {
+		m.setProgress(jobID, verified.Size, verified.Size)
 		return nil
+	}
+	if verified.Exists {
+		if removeErr := os.Remove(filename); removeErr != nil && !os.IsNotExist(removeErr) {
+			return removeErr
+		}
 	}
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		return err
@@ -496,19 +502,18 @@ func removeString(items []string, target string) []string {
 	return out
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
 func jobFileExists(job *downloadJob) bool {
 	if job == nil {
 		return false
 	}
-	if job.task.DownloadRoot == "" || job.task.Username == "" || job.task.FileName == "" {
+	result, err := verifyDownloadedFile(
+		downloadFilePath(job.task.DownloadRoot, job.task.Username, job.task.FileName),
+		job.task.FileMD5,
+	)
+	if err != nil {
 		return false
 	}
-	return fileExists(filepath.Join(job.task.DownloadRoot, job.task.Username, job.task.FileName))
+	return result.Matches
 }
 
 func max64(a, b int64) int64 {

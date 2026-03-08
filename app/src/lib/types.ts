@@ -68,6 +68,7 @@ export type SubmissionCard = {
   badgeText?: string
   accent?: string
   fileIds?: string[]
+  downloaded: boolean
 }
 
 export type SearchResponse = {

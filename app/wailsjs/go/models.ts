@@ -296,6 +296,7 @@ export namespace desktopapp {
 	    badgeText?: string;
 	    accent?: string;
 	    fileIds?: string[];
+	    downloaded: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SubmissionCard(source);
@@ -324,6 +325,7 @@ export namespace desktopapp {
 	        this.badgeText = source["badgeText"];
 	        this.accent = source["accent"];
 	        this.fileIds = source["fileIds"];
+	        this.downloaded = source["downloaded"];
 	    }
 	}
 	export class SearchResponse {

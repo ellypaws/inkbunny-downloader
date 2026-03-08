@@ -37,6 +37,7 @@ type ResultsShowcaseProps = {
   loading: boolean;
   resultsRefreshToken: number;
   queue: QueueSnapshot;
+  downloadedSubmissionIds: ReadonlySet<string>;
   pendingDownloadSubmissionIds: string[];
   onSelectActive: (submissionId: string) => void;
   onToggleSelectAll: () => void;
@@ -86,9 +87,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     () =>
       buildSubmissionDownloadSummaries(
         props.queue,
+        props.downloadedSubmissionIds,
         props.pendingDownloadSubmissionIds,
       ),
-    [props.pendingDownloadSubmissionIds, props.queue],
+    [props.downloadedSubmissionIds, props.pendingDownloadSubmissionIds, props.queue],
   );
   const downloadedCount = useMemo(
     () =>
@@ -705,6 +707,7 @@ function getPanelWindowStart(resultCount: number, activeIndex: number) {
 
 function buildSubmissionDownloadSummaries(
   queue: QueueSnapshot,
+  downloadedSubmissionIds: ReadonlySet<string>,
   pendingDownloadSubmissionIds: string[],
 ) {
   const summaries = new Map<string, SubmissionDownloadSummary>();
@@ -721,6 +724,7 @@ function buildSubmissionDownloadSummaries(
   }
 
   const submissionIds = new Set([
+    ...downloadedSubmissionIds,
     ...pendingSubmissionIds,
     ...jobsBySubmission.keys(),
   ]);
@@ -730,6 +734,13 @@ function buildSubmissionDownloadSummaries(
     const relevantJobs = jobs.filter((job) => job.status !== "cancelled");
 
     if (jobs.length === 0) {
+      if (downloadedSubmissionIds.has(submissionId)) {
+        summaries.set(submissionId, {
+          state: "downloaded",
+          progress: 1,
+        });
+        continue;
+      }
       summaries.set(submissionId, {
         state: "queued",
         progress: 0,
@@ -738,6 +749,13 @@ function buildSubmissionDownloadSummaries(
     }
 
     if (relevantJobs.length === 0) {
+      if (downloadedSubmissionIds.has(submissionId)) {
+        summaries.set(submissionId, {
+          state: "downloaded",
+          progress: 1,
+        });
+        continue;
+      }
       summaries.set(submissionId, IDLE_DOWNLOAD_SUMMARY);
       continue;
     }
