@@ -38,6 +38,7 @@ type ResultsShowcaseProps = {
   loading: boolean;
   resultsRefreshToken: number;
   queue: QueueSnapshot;
+  canStopAll: boolean;
   downloadedSubmissionIds: ReadonlySet<string>;
   pendingDownloadSubmissionIds: string[];
   onSelectActive: (submissionId: string) => void;
@@ -45,6 +46,7 @@ type ResultsShowcaseProps = {
   onToggleSelection: (submissionId: string) => void;
   onDownloadSubmission: (submissionId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
+  onStopAll: () => void;
   onRefresh: () => void;
   onQueueDownloads: () => void;
   onLoadMore: () => void;
@@ -261,6 +263,16 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             Refresh
           </button>
           <button
+            type="button"
+            onClick={props.onStopAll}
+            disabled={!props.canStopAll}
+            className="theme-button-danger flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50"
+            title="Stop every queued or active download"
+          >
+            <Square size={15} className="fill-current" strokeWidth={2.5} />
+            Stop All
+          </button>
+          <button
             onClick={props.onQueueDownloads}
             disabled={!props.searchResponse || selectedCount === 0}
             className="theme-button-accent flex items-center gap-2 rounded-2xl border-b-8 px-6 py-3 font-black shadow-xl transition-all disabled:opacity-60"
@@ -448,6 +460,16 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 </button>
                 <button
                   type="button"
+                  onClick={props.onStopAll}
+                  disabled={!props.canStopAll}
+                  className="theme-button-danger flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
+                  title="Stop every queued or active download"
+                >
+                  <Square size={12} className="fill-current" strokeWidth={2.5} />
+                  Stop All
+                </button>
+                <button
+                  type="button"
                   onClick={props.onQueueDownloads}
                   disabled={!props.searchResponse || selectedCount === 0}
                   className="theme-button-accent flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black shadow-lg transition-all disabled:opacity-60"
@@ -467,7 +489,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     valueFormatter={(value) => `${value}px`}
                     leftIcon={<span className="text-[11px]">S</span>}
                     rightIcon={<span className="text-[11px]">L</span>}
-                    className="w-32"
+                    className="w-24"
                   />
                 </label>
               </div>

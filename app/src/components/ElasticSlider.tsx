@@ -109,7 +109,7 @@ export default function ElasticSlider({
   }
 
   return (
-    <div className={`relative flex w-48 flex-col items-center justify-center gap-4 ${className}`}>
+    <div className={`relative flex w-40 flex-col items-center justify-center gap-3 ${className}`}>
       <motion.div
         onHoverStart={() => animate(scale, 1.2)}
         onHoverEnd={() => animate(scale, 1)}
@@ -119,7 +119,7 @@ export default function ElasticSlider({
           scale,
           opacity: useTransform(scale, [1, 1.2], [0.7, 1]),
         }}
-        className="flex w-full touch-none select-none items-center justify-center gap-4"
+        className="flex w-full touch-none select-none items-center justify-center gap-3"
       >
         <motion.div
           animate={{

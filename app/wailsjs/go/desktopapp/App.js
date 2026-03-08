@@ -86,6 +86,10 @@ export function SkipReleaseTag(arg1) {
   return window['go']['desktopapp']['App']['SkipReleaseTag'](arg1);
 }
 
+export function StopAllDownloads() {
+  return window['go']['desktopapp']['App']['StopAllDownloads']();
+}
+
 export function UpdateRatings(arg1) {
   return window['go']['desktopapp']['App']['UpdateRatings'](arg1);
 }

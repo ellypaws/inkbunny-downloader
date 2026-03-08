@@ -240,6 +240,13 @@ func (a *App) CancelSubmission(submissionID string) QueueSnapshot {
 	return a.downloadManager.CancelSubmission(submissionID)
 }
 
+func (a *App) StopAllDownloads() QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.CancelAll()
+}
+
 func (a *App) ClearQueue() QueueSnapshot {
 	if a.downloadManager == nil {
 		return QueueSnapshot{}

@@ -168,6 +168,9 @@ export default function App() {
   );
   const queueReadyForTour =
     pendingDownloadSubmissionIds.length > 0 || queue.jobs.length > 0;
+  const canStopAllDownloads = queue.jobs.some(
+    (job) => job.status === "queued" || job.status === "active",
+  );
   const currentTourStep = getTourStepPresentation(tourStepId, {
     tabMenuOpen,
     hasSelectableActiveResult,
@@ -1055,6 +1058,25 @@ export default function App() {
     }
   }
 
+  async function handleStopAllDownloads() {
+    if (!canStopAllDownloads) {
+      return;
+    }
+    setPendingDownloadSubmissionIds([]);
+    try {
+      setQueue(await backend.stopAllDownloads());
+      updateQueueMessage(
+        "Stopping all active and queued downloads.",
+        "success",
+        "queue-stop-all",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to stop downloads.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "stop-all-downloads-error");
+    }
+  }
+
   function handleMaxActiveChange(maxActive: number) {
     const nextMaxActive = clampConcurrentDownloads(maxActive);
     if (nextMaxActive === settingsRef.current.maxActive) {
@@ -1277,6 +1299,7 @@ export default function App() {
               loading={activeSearchLoading}
               resultsRefreshToken={activeResultsRefreshToken}
               queue={queue}
+              canStopAll={canStopAllDownloads}
               downloadedSubmissionIds={downloadedSubmissionIds}
               pendingDownloadSubmissionIds={pendingDownloadSubmissionIds}
               onSelectActive={(submissionId) => {
@@ -1302,6 +1325,7 @@ export default function App() {
               }}
               onDownloadSubmission={(submissionId) => void handleDownloadSubmissions([submissionId])}
               onCancelSubmission={(submissionId) => void handleCancelSubmission(submissionId)}
+              onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
               onQueueDownloads={() => void handleQueueDownloads()}
               onLoadMore={() => void handleSearch((activeSearchResponse?.page ?? 1) + 1)}
@@ -1313,6 +1337,7 @@ export default function App() {
             maxActive={settings.maxActive}
             selectedCount={activeSelectedSubmissionIds.length}
             canQueueDownloads={Boolean(activeSearchResponse) && activeSelectedSubmissionIds.length > 0}
+            canStopAll={canStopAllDownloads}
             allSelected={allResultsSelected}
             autoClearCompleted={settings.autoClearCompleted}
             onOpenDownloadFolder={() => {
@@ -1338,6 +1363,7 @@ export default function App() {
             }}
             onClearCompleted={() => void handleClearCompleted()}
             onQueueDownloads={() => void handleQueueDownloads()}
+            onStopAll={() => void handleStopAllDownloads()}
             onToggleSelectAll={handleToggleSelectAll}
             onToggleAutoClearCompleted={(enabled) =>
               void persistSettings({ autoClearCompleted: enabled })

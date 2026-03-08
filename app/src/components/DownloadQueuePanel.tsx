@@ -23,12 +23,14 @@ type DownloadQueuePanelProps = {
   maxActive: number;
   selectedCount: number;
   canQueueDownloads: boolean;
+  canStopAll: boolean;
   allSelected: boolean;
   autoClearCompleted: boolean;
   onOpenDownloadFolder: () => void;
   onClearQueue: () => void;
   onClearCompleted: () => void;
   onQueueDownloads: () => void;
+  onStopAll: () => void;
   onToggleSelectAll: () => void;
   onToggleAutoClearCompleted: (enabled: boolean) => void;
   onMaxActiveChange: (value: number) => void;
@@ -115,6 +117,16 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               <Download size={16} />
               Download
             </button>
+            <button
+              type="button"
+              onClick={props.onStopAll}
+              disabled={!props.canStopAll}
+              className="theme-button-danger flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
+              title="Stop every queued or active download"
+            >
+              <Square size={15} className="fill-current" strokeWidth={2.5} />
+              Stop All
+            </button>
 
             <AutoClearToggle
               checked={props.autoClearCompleted}
@@ -122,8 +134,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             />
           </div>
 
-          <div className="theme-panel-strong min-w-[16rem] flex-1 rounded-2xl border px-4 pt-3 shadow-sm md:max-w-sm">
-            <div className="flex items-center gap-3">
+          <div className="theme-panel-strong min-w-[13rem] flex-1 rounded-2xl border px-4 pt-3 shadow-sm md:max-w-[17rem]">
               <ElasticSlider
                 value={props.maxActive}
                 onChange={props.onMaxActiveChange}
@@ -131,7 +142,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                 maxValue={MAX_CONCURRENT_DOWNLOADS}
                 isStepped
                 stepSize={1}
-                valueFormatter={(value) => `Download ${Math.round(value)} at once`}
+                valueFormatter={(value) => `${Math.round(value)} at once`}
                 leftIcon={<span className="text-xs font-black">1</span>}
                 rightIcon={
                   <span className="text-xs font-black">
@@ -141,7 +152,6 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                 className="w-full"
               />
             </div>
-          </div>
         </div>
       </div>
 
@@ -248,13 +258,14 @@ function QueueRow(props: {
                       type="button"
                       onClick={() => props.onCancelSubmission(job.submissionId)}
                       className="theme-button-danger flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
+                      title={`Stop every file for submission ${job.submissionId}`}
                     >
                       <Square
                         size={11}
                         className="fill-current"
                         strokeWidth={2.5}
                       />
-                      Stop all
+                      Submission
                     </button>
                     <button
                       type="button"
@@ -335,10 +346,7 @@ function AutoClearToggle(props: {
 }) {
   return (
     <label className="theme-panel-strong flex items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-black shadow-sm">
-      <span className="theme-title">Auto-clear completed</span>
-      <span className="theme-subtle text-[11px] font-bold uppercase tracking-[0.14em]">
-        3s
-      </span>
+      <span className="theme-title">Auto-clear</span>
       <button
         type="button"
         role="switch"

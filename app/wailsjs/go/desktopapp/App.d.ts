@@ -44,6 +44,8 @@ export function Search(arg1:desktopapp.SearchParams):Promise<desktopapp.SearchRe
 
 export function SkipReleaseTag(arg1:string):Promise<desktopapp.AppSettings>;
 
+export function StopAllDownloads():Promise<desktopapp.QueueSnapshot>;
+
 export function UpdateRatings(arg1:string):Promise<desktopapp.SessionInfo>;
 
 export function UpdateSettings(arg1:desktopapp.AppSettings):Promise<desktopapp.AppSettings>;

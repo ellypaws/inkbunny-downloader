@@ -171,6 +171,37 @@ func (m *DownloadManager) CancelSubmission(submissionID string) QueueSnapshot {
 	return snapshot
 }
 
+func (m *DownloadManager) CancelAll() QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	changed := false
+	for jobID, job := range m.jobs {
+		if job == nil {
+			continue
+		}
+
+		switch job.snapshot.Status {
+		case "queued":
+			job.snapshot.Status = "cancelled"
+			job.snapshot.UpdatedAt = time.Now().Format(time.RFC3339Nano)
+			m.pending = removeString(m.pending, jobID)
+			changed = true
+		case "active":
+			if job.cancel != nil {
+				job.cancel()
+				changed = true
+			}
+		}
+	}
+
+	snapshot := m.snapshotLocked()
+	if changed {
+		m.emitLocked(snapshot, DownloadJobSnapshot{})
+	}
+	return snapshot
+}
+
 func (m *DownloadManager) Clear() QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
