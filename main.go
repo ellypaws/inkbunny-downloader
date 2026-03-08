@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"os"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	desktopapp "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/modes"
 )
@@ -36,7 +38,7 @@ func main() {
 	app := desktopapp.NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "Inkbunny Downloader",
+		Title:     fmt.Sprintf("Inkbunny Downloader [%s]", buildinfo.Version),
 		MinWidth:  1280,
 		MinHeight: 860,
 		Width:     1440,
