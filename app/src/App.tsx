@@ -23,6 +23,7 @@ import {
 import type {
   AppNotification,
   AppSettings,
+  ArtistValidationState,
   BackendDebugEvent,
   DownloadProgressEvent,
   QueueSnapshot,
@@ -317,6 +318,92 @@ export default function App() {
 
   function updateTab(tabId: string, updater: (tab: SearchTabState) => SearchTabState) {
     setTabs((previous) => previous.map((tab) => (tab.id === tabId ? updater(tab) : tab)));
+  }
+
+  function applyArtistResolution(
+    targetTabId: string,
+    artistName: string,
+    resolution: { avatarUrl?: string; validation: ArtistValidationState },
+  ) {
+    const normalizedArtist = normalizeArtistToken(artistName);
+    if (!normalizedArtist) {
+      return;
+    }
+
+    updateTab(targetTabId, (currentTab) => {
+      if (
+        !currentTab.searchParams.artistNames.some(
+          (item) => normalizeArtistToken(item) === normalizedArtist,
+        )
+      ) {
+        return currentTab;
+      }
+
+      const currentValidation = currentTab.artistValidation[normalizedArtist];
+      const nextValidation =
+        currentValidation === "valid" && resolution.validation !== "valid"
+          ? currentValidation
+          : resolution.validation;
+      const nextArtistAvatars =
+        resolution.avatarUrl &&
+        currentTab.artistAvatars[normalizedArtist] !== resolution.avatarUrl
+          ? {
+              ...currentTab.artistAvatars,
+              [normalizedArtist]: resolution.avatarUrl,
+            }
+          : currentTab.artistAvatars;
+      const nextArtistValidation =
+        currentValidation !== nextValidation
+          ? {
+              ...currentTab.artistValidation,
+              [normalizedArtist]: nextValidation,
+            }
+          : currentTab.artistValidation;
+
+      if (
+        nextArtistAvatars === currentTab.artistAvatars &&
+        nextArtistValidation === currentTab.artistValidation
+      ) {
+        return currentTab;
+      }
+
+      return {
+        ...currentTab,
+        artistAvatars: nextArtistAvatars,
+        artistValidation: nextArtistValidation,
+      };
+    });
+  }
+
+  function resolveArtistIdentity(
+    targetTabId: string,
+    artistName: string,
+    seedSuggestions: UsernameSuggestion[] = [],
+  ) {
+    const normalizedArtist = normalizeArtistToken(artistName);
+    if (!normalizedArtist) {
+      return;
+    }
+
+    const seededMatch = findExactUsernameSuggestion(artistName, seedSuggestions);
+    if (seededMatch) {
+      applyArtistResolution(targetTabId, artistName, {
+        avatarUrl: seededMatch.avatarUrl || "",
+        validation: "valid",
+      });
+      return;
+    }
+
+    void backend
+      .getUsernameSuggestions(artistName)
+      .then((suggestions) => {
+        const exactMatch = findExactUsernameSuggestion(artistName, suggestions);
+        applyArtistResolution(targetTabId, artistName, {
+          avatarUrl: exactMatch?.avatarUrl || "",
+          validation: exactMatch ? "valid" : "invalid",
+        });
+      })
+      .catch(() => undefined);
   }
 
   function startLoadMoreRun(tabId: string) {
@@ -1393,6 +1480,17 @@ export default function App() {
     }));
     const runId = startSearchRequestRun(targetTabId);
     try {
+      const committedArtistName = getCommittedArtistDraftName(
+        tab.searchParams,
+        tab.artistDraft,
+      );
+      const committedArtistSuggestion =
+        committedArtistName && targetTabId === activeTabIdRef.current
+          ? findExactUsernameSuggestion(committedArtistName, artistSuggestions)
+          : undefined;
+      if (committedArtistName && !committedArtistSuggestion) {
+        resolveArtistIdentity(targetTabId, committedArtistName);
+      }
       const normalizedParams = normalizeSearchParamsForMode(
         finalizeArtistDraft(tab.searchParams, tab.artistDraft),
         tab.mode,
@@ -1424,8 +1522,14 @@ export default function App() {
               return currentTab;
             }
             if (page === 1) {
+              const nextTab = committedArtistName
+                ? commitArtistSelection(currentTab, committedArtistName, {
+                    avatarUrl: committedArtistSuggestion?.avatarUrl || "",
+                    validation: committedArtistSuggestion ? "valid" : "pending",
+                  })
+                : currentTab;
               return {
-                ...currentTab,
+                ...nextTab,
                 searchParams: normalizedParams,
                 artistDraft: "",
                 searchResponse: response,
@@ -2018,6 +2122,7 @@ export default function App() {
               searchParams={activeSearchParams}
               artistDraft={activeArtistDraft}
               artistAvatarUrls={activeTab?.artistAvatars ?? {}}
+              artistValidation={activeTab?.artistValidation ?? {}}
               mode={activeTab?.mode ?? "default"}
               keywordSuggestions={keywordSuggestions}
               artistSuggestions={artistSuggestions}
@@ -2059,30 +2164,26 @@ export default function App() {
                 if (!activeTab) {
                   return;
                 }
+                const matchedSuggestion =
+                  typeof value === "string"
+                    ? findExactUsernameSuggestion(value, artistSuggestions)
+                    : value;
                 const artistName =
                   typeof value === "string"
                     ? value
                     : value.username || value.value;
-                const avatarUrl =
-                  typeof value === "string" ? "" : value.avatarUrl || "";
-                updateTab(activeTab.id, (currentTab) => ({
-                  ...currentTab,
-                  artistDraft: "",
-                  searchParams: {
-                    ...currentTab.searchParams,
-                    artistNames: appendArtistNames(
-                      currentTab.searchParams.artistNames,
-                      artistName,
-                    ),
-                    useWatchingArtists: false,
-                  },
-                  artistAvatars: avatarUrl
-                    ? {
-                        ...currentTab.artistAvatars,
-                        [normalizeArtistToken(artistName)]: avatarUrl,
-                      }
-                    : currentTab.artistAvatars,
-                }));
+                if (!normalizeArtistToken(artistName)) {
+                  return;
+                }
+                updateTab(activeTab.id, (currentTab) =>
+                  commitArtistSelection(currentTab, artistName, {
+                    avatarUrl: matchedSuggestion?.avatarUrl || "",
+                    validation: matchedSuggestion ? "valid" : "pending",
+                  }),
+                );
+                if (typeof value === "string" && !matchedSuggestion) {
+                  resolveArtistIdentity(activeTab.id, artistName);
+                }
               }}
               onRemoveArtist={(value) => {
                 if (!activeTab) {
@@ -2099,6 +2200,11 @@ export default function App() {
                   },
                   artistAvatars: Object.fromEntries(
                     Object.entries(currentTab.artistAvatars).filter(
+                      ([artist]) => artist !== normalizeArtistToken(value),
+                    ),
+                  ),
+                  artistValidation: Object.fromEntries(
+                    Object.entries(currentTab.artistValidation).filter(
                       ([artist]) => artist !== normalizeArtistToken(value),
                     ),
                   ),
@@ -2459,6 +2565,67 @@ function normalizeArtistToken(value: string) {
   return value.trim().toLowerCase();
 }
 
+function findExactUsernameSuggestion(
+  value: string,
+  suggestions: UsernameSuggestion[],
+) {
+  const normalizedValue = normalizeArtistToken(value);
+  if (!normalizedValue) {
+    return undefined;
+  }
+  return suggestions.find(
+    (suggestion) =>
+      normalizeArtistToken(suggestion.username || suggestion.value) ===
+      normalizedValue,
+  );
+}
+
+function commitArtistSelection(
+  tab: SearchTabState,
+  artistName: string,
+  options: {
+    avatarUrl?: string;
+    validation?: ArtistValidationState;
+  } = {},
+): SearchTabState {
+  const normalizedArtist = normalizeArtistToken(artistName);
+  if (!normalizedArtist) {
+    return tab;
+  }
+
+  const currentValidation = tab.artistValidation[normalizedArtist];
+  const nextValidation =
+    options.validation === undefined
+      ? currentValidation
+      : currentValidation === "valid" && options.validation !== "valid"
+        ? currentValidation
+        : options.validation;
+
+  return {
+    ...tab,
+    artistDraft: "",
+    searchParams: {
+      ...tab.searchParams,
+      artistNames: appendArtistNames(tab.searchParams.artistNames, artistName),
+      useWatchingArtists: false,
+    },
+    artistAvatars:
+      options.avatarUrl && tab.artistAvatars[normalizedArtist] !== options.avatarUrl
+        ? {
+            ...tab.artistAvatars,
+            [normalizedArtist]: options.avatarUrl,
+          }
+        : tab.artistAvatars,
+    artistValidation:
+      nextValidation && currentValidation !== nextValidation
+        ? {
+            ...tab.artistValidation,
+            [normalizedArtist]: nextValidation,
+          }
+        : tab.artistValidation,
+  };
+}
+
 function appendArtistNames(existing: string[], rawValue: string) {
   const tokens = rawValue
     .split(/[\s,]+/)
@@ -2481,13 +2648,27 @@ function appendArtistNames(existing: string[], rawValue: string) {
   return next;
 }
 
+function getCommittedArtistDraftName(
+  searchParams: SearchParams,
+  artistDraft: string,
+) {
+  if (searchParams.useWatchingArtists) {
+    return "";
+  }
+  return artistDraft.trim();
+}
+
 function finalizeArtistDraft(searchParams: SearchParams, artistDraft: string) {
-  if (searchParams.useWatchingArtists || !artistDraft.trim()) {
+  const committedArtistName = getCommittedArtistDraftName(
+    searchParams,
+    artistDraft,
+  );
+  if (!committedArtistName) {
     return searchParams;
   }
   return {
     ...searchParams,
-    artistNames: appendArtistNames(searchParams.artistNames, artistDraft),
+    artistNames: appendArtistNames(searchParams.artistNames, committedArtistName),
   };
 }
 
@@ -2571,6 +2752,7 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     searchParams: buildDefaultSearch(session, settings),
     artistDraft: "",
     artistAvatars: {},
+    artistValidation: {},
     searchResponse: null,
     results: [],
     activeSubmissionId: "",
@@ -2723,6 +2905,7 @@ function toSavedSearchTab(tab: SearchTabState): SavedSearchTab {
     searchParams: cloneSearchParams(tab.searchParams),
     artistDraft: tab.artistDraft,
     artistAvatars: { ...tab.artistAvatars },
+    artistValidation: { ...tab.artistValidation },
     searchResponse: tab.searchResponse
       ? {
           ...tab.searchResponse,
@@ -2790,6 +2973,7 @@ function restoreSavedSearchTab(
     searchParams,
     artistDraft: savedTab.artistDraft ?? "",
     artistAvatars: { ...(savedTab.artistAvatars ?? {}) },
+    artistValidation: { ...(savedTab.artistValidation ?? {}) },
     searchResponse: savedTab.searchResponse
       ? {
           ...savedTab.searchResponse,
@@ -2897,6 +3081,7 @@ function isSearchTabUntouched(
     areSearchParamsEqual(tab.searchParams, buildDefaultSearch(session, settings)) &&
     tab.artistDraft === "" &&
     Object.keys(tab.artistAvatars).length === 0 &&
+    Object.keys(tab.artistValidation).length === 0 &&
     tab.searchResponse === null &&
     tab.results.length === 0 &&
     tab.activeSubmissionId === "" &&

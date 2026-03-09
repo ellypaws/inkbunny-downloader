@@ -18,6 +18,7 @@ import {
   TYPE_OPTIONS,
 } from "../lib/constants";
 import type {
+  ArtistValidationState,
   SearchParams,
   SessionInfo,
   UsernameSuggestion,
@@ -30,6 +31,7 @@ type SearchWorkspaceProps = {
   keywordSuggestions: string[];
   artistDraft: string;
   artistAvatarUrls: Record<string, string>;
+  artistValidation: Record<string, ArtistValidationState>;
   artistSuggestions: UsernameSuggestion[];
   favoriteSuggestions: UsernameSuggestion[];
   watchingCount: number;
@@ -329,6 +331,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   optionalText="optional"
                   artistNames={props.searchParams.artistNames}
                   artistAvatarUrls={props.artistAvatarUrls}
+                  artistValidation={props.artistValidation}
                   useWatchingArtists={props.searchParams.useWatchingArtists}
                   watchingCount={props.watchingCount}
                   watchingLoading={props.watchingLoading}
@@ -798,6 +801,7 @@ type ArtistSuggestionFieldBlockProps = {
   optionalText: string;
   artistNames: string[];
   artistAvatarUrls: Record<string, string>;
+  artistValidation: Record<string, ArtistValidationState>;
   useWatchingArtists: boolean;
   watchingCount: number;
   watchingLoading: boolean;
@@ -847,11 +851,21 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
         <div className="theme-input min-h-[3.125rem] rounded-xl border px-4 py-3 backdrop-blur-md">
           {!props.useWatchingArtists && props.artistNames.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2">
-              {props.artistNames.map((artist) => (
-                <span
-                  key={artist}
-                  className="group inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] px-3 py-1 text-sm font-semibold text-[var(--theme-title)]"
-                >
+              {props.artistNames.map((artist) => {
+                const normalizedArtist = artist.trim().toLowerCase();
+                const validationState =
+                  props.artistValidation[normalizedArtist] ?? "valid";
+                const isInvalid = validationState === "invalid";
+
+                return (
+                  <span
+                    key={artist}
+                    className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${
+                      isInvalid
+                        ? "border-[#F97066] bg-[#FEF3F2] text-[#B42318]"
+                        : "border-[var(--theme-border)] bg-[var(--theme-surface-strong)] text-[var(--theme-title)]"
+                    }`}
+                  >
                   <img
                     src={
                       props.artistAvatarUrls[artist.trim().toLowerCase()] ||
@@ -864,6 +878,11 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
                     className="h-5 w-5 shrink-0 rounded-full border border-white/70 bg-white object-cover"
                   />
                   <span>{artist}</span>
+                  {isInvalid ? (
+                    <span className="rounded-full bg-[#FEE4E2] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-[#B42318]">
+                      Invalid
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     onMouseDown={(event) => {
@@ -876,7 +895,8 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
                     <X size={12} />
                   </button>
                 </span>
-              ))}
+                );
+              })}
             </div>
           ) : null}
           <input
