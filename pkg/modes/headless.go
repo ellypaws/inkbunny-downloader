@@ -159,12 +159,10 @@ Login:
 			defer f.Close()
 
 			var resp *http.Response
+			url := utils.ResourceURL(file.FileURLFull.String(), user.SID, details.Public.Bool())
+			sidURL := utils.AppendSID(file.FileURLFull.String(), user.SID)
 			for {
-				if !details.Public.Bool() {
-					resp, err = client.Get(file.FileURLFull.String() + "?sid=" + user.SID)
-				} else {
-					resp, err = client.Get(file.FileURLFull.String())
-				}
+				resp, err = client.Get(url)
 				if err != nil {
 					return err
 				}
@@ -178,6 +176,10 @@ Login:
 					continue
 				}
 				resp.Body.Close()
+				if sidURL != "" && sidURL != url {
+					url = sidURL
+					continue
+				}
 				return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 			}
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/ellypaws/inkbunny"
 
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 )
 
 type searchState struct {
@@ -544,13 +544,14 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string, dow
 			FileName:         submission.FileName.String(),
 			MimeType:         submission.MimeType,
 			LatestMimeType:   submission.LatestMimeType,
-			PreviewURL:       submissionPreviewURL(submission.FileURLPreview.String(), sid),
-			ScreenURL:        submissionPreviewURL(submission.FileURLScreen.String(), sid),
-			FullURL:          submissionPreviewURL(submission.FileURLFull.String(), sid),
-			ThumbnailURL:     submissionPreviewURL(thumbnail, sid),
-			LatestThumbnailURL: submissionPreviewURL(
+			PreviewURL:       submissionResourceURL(submission.FileURLPreview.String(), sid, submission.Public.Bool()),
+			ScreenURL:        submissionResourceURL(submission.FileURLScreen.String(), sid, submission.Public.Bool()),
+			FullURL:          submissionResourceURL(submission.FileURLFull.String(), sid, submission.Public.Bool()),
+			ThumbnailURL:     submissionResourceURL(thumbnail, sid, submission.Public.Bool()),
+			LatestThumbnailURL: submissionResourceURL(
 				latestThumbnail,
 				sid,
+				submission.Public.Bool(),
 			),
 			BadgeText:  badge,
 			Accent:     accents[index%len(accents)],
@@ -901,29 +902,8 @@ func submissionRatingID(submission inkbunny.SubmissionSearch) (int, bool) {
 	return 0, false
 }
 
-func submissionPreviewURL(raw string, sid string) string {
-	if raw == "" || sid == "" {
-		return raw
-	}
-
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		if strings.Contains(raw, "sid=") {
-			return raw
-		}
-		if strings.Contains(raw, "?") {
-			return raw + "&sid=" + sid
-		}
-		return raw + "?sid=" + sid
-	}
-
-	query := parsed.Query()
-	if query.Get("sid") != "" {
-		return raw
-	}
-	query.Set("sid", sid)
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
+func submissionResourceURL(raw string, sid string, isPublic bool) string {
+	return utils.ResourceURL(raw, sid, isPublic)
 }
 
 func normalizeArtistFilters(values []string) []string {

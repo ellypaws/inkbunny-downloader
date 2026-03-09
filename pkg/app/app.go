@@ -352,7 +352,7 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 				URL:          file.FileURLFull.String(),
 				IsPublic:     submission.Public.Bool(),
 				Keywords:     keywords,
-				PreviewURL:   submissionPreviewURL(file.FileURLPreview.String(), user.SID),
+				PreviewURL:   submissionResourceURL(file.FileURLPreview.String(), user.SID, submission.Public.Bool()),
 				SaveKeywords: saveKeywords,
 				DownloadRoot: downloadRoot,
 			})

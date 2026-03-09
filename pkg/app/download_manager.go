@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 )
 
 type downloadTask struct {
@@ -362,7 +364,8 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 		return err
 	}
 
-	url := submissionPreviewURL(task.URL, task.SessionID)
+	url := utils.ResourceURL(task.URL, task.SessionID, task.IsPublic)
+	sidURL := utils.AppendSID(task.URL, task.SessionID)
 
 	const maxAttempts = 5
 	var lastErr error
@@ -378,6 +381,11 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 			}
 			return nil
 		}
+		if errors.Is(err, errRetryWithSID) {
+			url = sidURL
+			lastErr = err
+			continue
+		}
 		if !errors.Is(err, errRetry) {
 			return err
 		}
@@ -390,6 +398,7 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 }
 
 var errRetry = errors.New("retry")
+var errRetryWithSID = errors.New("retry with sid")
 
 func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, attempt int, task downloadTask, filename string, url string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -412,6 +421,9 @@ func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, att
 		return errRetry
 	}
 	if resp.StatusCode != http.StatusOK {
+		if sidURL := utils.AppendSID(task.URL, task.SessionID); sidURL != "" && sidURL != url {
+			return errRetryWithSID
+		}
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 

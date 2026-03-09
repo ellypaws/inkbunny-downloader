@@ -21,6 +21,8 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/ellypaws/inkbunny"
+
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 )
 
 type DownloadCompleteMsg struct {
@@ -530,10 +532,8 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 		}
 
 		var resp *http.Response
-		url := item.URL
-		if !item.IsPublic {
-			url += "?sid=" + user.SID
-		}
+		url := utils.ResourceURL(item.URL, user.SID, item.IsPublic)
+		sidURL := utils.AppendSID(item.URL, user.SID)
 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
@@ -554,6 +554,10 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
+			if sidURL != "" && sidURL != url {
+				item.URL = sidURL
+				return RetryDownloadMsg{Item: item}
+			}
 			return DownloadErrorMsg{Item: item, Err: fmt.Errorf("unexpected status: %d", resp.StatusCode)}
 		}
 
