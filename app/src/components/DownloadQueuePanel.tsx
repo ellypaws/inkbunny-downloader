@@ -60,8 +60,8 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             Download Queue
           </h3>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.14em]">
-          <StatChip tone="active" label={`${props.queue.activeCount} active`} />
+        <div className="flex flex-wrap gap-2 text-xs font-black">
+          <StatChip tone="active" label={`${props.queue.activeCount} downloading`} />
           <StatChip tone="queued" label={`${props.queue.queuedCount} queued`} />
           <StatChip
             tone="completed"
