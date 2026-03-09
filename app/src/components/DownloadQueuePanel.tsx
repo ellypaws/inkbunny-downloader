@@ -1,6 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowUpRight,
+  ChevronsDown,
   Download,
   FileImage,
   FolderOpen,
@@ -9,7 +10,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import ElasticSlider from "./ElasticSlider";
 import {
@@ -43,12 +44,45 @@ type DownloadQueuePanelProps = {
 
 export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollIgnoreUntilRef = useRef(0);
+  const [followActiveDownload, setFollowActiveDownload] = useState(false);
   const rowVirtualizer = useVirtualizer({
     count: props.queue.jobs.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 78,
     overscan: 8,
   });
+  const firstActiveIndex = props.queue.jobs.findIndex(
+    (job) => job.status === "active",
+  );
+  const hasActiveDownload = firstActiveIndex >= 0;
+
+  useEffect(() => {
+    if (!hasActiveDownload && followActiveDownload) {
+      setFollowActiveDownload(false);
+    }
+  }, [followActiveDownload, hasActiveDownload]);
+
+  useEffect(() => {
+    if (!followActiveDownload || firstActiveIndex < 0) {
+      return;
+    }
+    autoScrollIgnoreUntilRef.current = performance.now() + 400;
+    rowVirtualizer.scrollToIndex(firstActiveIndex, {
+      align: "start",
+      behavior: "smooth",
+    });
+  }, [firstActiveIndex, followActiveDownload, rowVirtualizer]);
+
+  function handleQueueScroll() {
+    if (!followActiveDownload) {
+      return;
+    }
+    if (performance.now() <= autoScrollIgnoreUntilRef.current) {
+      return;
+    }
+    setFollowActiveDownload(false);
+  }
 
   return (
     <section
@@ -86,7 +120,6 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
             >
               <FolderOpen size={16} />
-              Open Folder
             </button>
             <button
               type="button"
@@ -95,7 +128,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
             >
               <Trash2 size={16} />
-              Clear Completed
+              Completed
             </button>
             <button
               type="button"
@@ -138,6 +171,28 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               checked={props.autoClearCompleted}
               onChange={props.onToggleAutoClearCompleted}
             />
+            <button
+              type="button"
+              aria-pressed={followActiveDownload}
+              disabled={!hasActiveDownload}
+              onClick={() =>
+                setFollowActiveDownload((current) =>
+                  hasActiveDownload ? !current : false,
+                )
+              }
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 ${
+                followActiveDownload
+                  ? "border-[var(--theme-accent)] bg-[var(--theme-accent)] text-white"
+                  : "theme-button-secondary"
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+              title={
+                followActiveDownload
+                  ? "Following the first active download"
+                  : "Follow the first active download"
+              }
+            >
+              <ChevronsDown size={18} strokeWidth={2.6} />
+            </button>
           </div>
 
           <div className="theme-panel-strong min-w-[13rem] flex-1 rounded-2xl border px-4 pt-3 shadow-sm md:max-w-[17rem]">
@@ -175,6 +230,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
         ) : (
           <div
             ref={parentRef}
+            onScroll={handleQueueScroll}
             className="theme-panel-muted h-[75vh] min-h-[26rem] overflow-y-auto rounded-toy-sm border p-2 backdrop-blur-md"
           >
             <div

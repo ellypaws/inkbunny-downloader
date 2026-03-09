@@ -38,6 +38,7 @@ type downloadJob struct {
 	task     downloadTask
 	cancel   context.CancelFunc
 	created  time.Time
+	order    uint64
 }
 
 type DownloadManager struct {
@@ -83,9 +84,11 @@ func (m *DownloadManager) Enqueue(tasks []downloadTask, maxActive int) QueueSnap
 	}
 	now := time.Now()
 	for _, task := range tasks {
-		id := fmt.Sprintf("job-%d", m.nextID.Add(1))
+		order := m.nextID.Add(1)
+		id := fmt.Sprintf("job-%d", order)
 		m.jobs[id] = &downloadJob{
 			created: now,
+			order:   order,
 			task:    task,
 			snapshot: DownloadJobSnapshot{
 				ID:           id,
@@ -559,6 +562,7 @@ func (m *DownloadManager) setProgress(jobID string, written, total int64) {
 func (m *DownloadManager) snapshotLocked() QueueSnapshot {
 	type orderedJob struct {
 		created  time.Time
+		order    uint64
 		snapshot DownloadJobSnapshot
 	}
 
@@ -569,6 +573,7 @@ func (m *DownloadManager) snapshotLocked() QueueSnapshot {
 		snapshot.FileExists = jobFileExists(job)
 		jobs = append(jobs, orderedJob{
 			created:  job.created,
+			order:    job.order,
 			snapshot: snapshot,
 		})
 		switch snapshot.Status {
@@ -587,9 +592,9 @@ func (m *DownloadManager) snapshotLocked() QueueSnapshot {
 	slices.SortFunc(jobs, func(a, b orderedJob) int {
 		if a.created.Equal(b.created) {
 			switch {
-			case a.snapshot.ID < b.snapshot.ID:
+			case a.order < b.order:
 				return -1
-			case a.snapshot.ID > b.snapshot.ID:
+			case a.order > b.order:
 				return 1
 			default:
 				return 0

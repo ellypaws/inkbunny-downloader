@@ -76,6 +76,12 @@ func (a *App) Startup(ctx context.Context) {
 			wruntime.EventsEmit(a.ctx, event, payload)
 		}
 	})
+	a.emitDebugLog("info", "app.startup", "desktop app startup complete", map[string]any{
+		"hasSession":     a.user != nil && a.user.SID != "",
+		"maxActive":      a.settings.MaxActive,
+		"downloadDirSet": strings.TrimSpace(a.settings.DownloadDirectory) != "",
+		"lastSearchId":   a.lastSearchID,
+	})
 }
 
 func (a *App) Shutdown(context.Context) {}
@@ -111,6 +117,9 @@ func (a *App) CancelSearchRequests() {
 	cancel := a.searchOpCancel
 	a.searchOpCancel = nil
 	a.searchOpMu.Unlock()
+	a.emitDebugLog("debug", "search.cancel", "cancel search requests invoked", map[string]any{
+		"hadActiveRequest": cancel != nil,
+	})
 	if cancel != nil {
 		cancel()
 	}
@@ -120,6 +129,14 @@ func (a *App) emitNotification(notification AppNotification) {
 	if a.ctx == nil {
 		return
 	}
+	a.emitDebugLog("info", "notification", "app notification emitted", map[string]any{
+		"id":           notification.ID,
+		"level":        notification.Level,
+		"scope":        notification.Scope,
+		"message":      notification.Message,
+		"dedupeKey":    notification.DedupeKey,
+		"retryAfterMs": notification.RetryAfterMS,
+	})
 	wruntime.EventsEmit(a.ctx, "app-notification", notification)
 }
 

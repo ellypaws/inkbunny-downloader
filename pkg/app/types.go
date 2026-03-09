@@ -142,6 +142,14 @@ type AppNotification struct {
 	RetryAfterMS int64  `json:"retryAfterMs,omitempty"`
 }
 
+type BackendDebugEvent struct {
+	Timestamp string         `json:"timestamp"`
+	Level     string         `json:"level"`
+	Scope     string         `json:"scope"`
+	Message   string         `json:"message"`
+	Fields    map[string]any `json:"fields,omitempty"`
+}
+
 type ReleaseStatus struct {
 	CurrentVersion  string `json:"currentVersion"`
 	CurrentTag      string `json:"currentTag"`

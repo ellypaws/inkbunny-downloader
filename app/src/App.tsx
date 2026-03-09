@@ -23,6 +23,7 @@ import {
 import type {
   AppNotification,
   AppSettings,
+  BackendDebugEvent,
   DownloadProgressEvent,
   QueueSnapshot,
   ReleaseStatus,
@@ -760,6 +761,9 @@ export default function App() {
         setQueue(event.queue);
       }
     });
+    const unsubscribeDebugLogs = onRuntimeEvent<BackendDebugEvent>("app-debug-log", (event) => {
+      writeBackendDebugEvent(event);
+    });
     const unsubscribeNotifications = onRuntimeEvent<AppNotification>("app-notification", (event) => {
       if (event.retryAfterMs && event.retryAfterMs > 0) {
         setApiCooldownUntil(Date.now() + event.retryAfterMs);
@@ -774,6 +778,7 @@ export default function App() {
     });
     return () => {
       unsubscribeProgress();
+      unsubscribeDebugLogs();
       unsubscribeNotifications();
     };
   }, []);
@@ -856,19 +861,35 @@ export default function App() {
     if (completedQueueSubmissionIds.size === 0) {
       return;
     }
-    setTabs((previous) =>
-      previous.map((tab) => ({
-        ...tab,
-        results: tab.results.map((result) =>
-          completedQueueSubmissionIds.has(result.submissionId)
-            ? { ...result, downloaded: true }
-            : result,
-        ),
-        selectedSubmissionIds: tab.selectedSubmissionIds.filter(
+    setTabs((previous) => {
+      let changed = false;
+      const nextTabs = previous.map((tab) => {
+        let tabChanged = false;
+        const nextResults = tab.results.map((result) => {
+          if (!completedQueueSubmissionIds.has(result.submissionId) || result.downloaded) {
+            return result;
+          }
+          tabChanged = true;
+          return { ...result, downloaded: true };
+        });
+        const nextSelectedSubmissionIds = tab.selectedSubmissionIds.filter(
           (submissionId) => !downloadedSubmissionIds.has(submissionId),
-        ),
-      })),
-    );
+        );
+        if (nextSelectedSubmissionIds.length !== tab.selectedSubmissionIds.length) {
+          tabChanged = true;
+        }
+        if (!tabChanged) {
+          return tab;
+        }
+        changed = true;
+        return {
+          ...tab,
+          results: nextResults,
+          selectedSubmissionIds: nextSelectedSubmissionIds,
+        };
+      });
+      return changed ? nextTabs : previous;
+    });
   }, [completedQueueSubmissionIds, downloadedSubmissionIds]);
 
   useEffect(() => {
@@ -2090,6 +2111,24 @@ function getDownloadedSubmissionIds(
     }
   }
   return downloaded;
+}
+
+function writeBackendDebugEvent(event: BackendDebugEvent) {
+  const prefix = `[backend][${event.scope}] ${event.timestamp} ${event.message}`;
+  const fields = event.fields && Object.keys(event.fields).length > 0 ? event.fields : undefined;
+  if (event.level === "error") {
+    console.error(prefix, fields ?? "");
+    return;
+  }
+  if (event.level === "warn") {
+    console.warn(prefix, fields ?? "");
+    return;
+  }
+  if (event.level === "info") {
+    console.info(prefix, fields ?? "");
+    return;
+  }
+  console.debug(prefix, fields ?? "");
 }
 
 function mergeDownloadedSubmissionIds(

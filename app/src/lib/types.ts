@@ -140,6 +140,14 @@ export type AppNotification = {
   retryAfterMs?: number
 }
 
+export type BackendDebugEvent = {
+  timestamp: string
+  level: 'debug' | 'info' | 'warn' | 'error'
+  scope: string
+  message: string
+  fields?: Record<string, unknown>
+}
+
 export type ReleaseStatus = {
   currentVersion: string
   currentTag: string

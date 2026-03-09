@@ -36,7 +36,23 @@ type searchState struct {
 
 const defaultSearchPerPage = 30
 
-func (a *App) Search(params SearchParams) (SearchResponse, error) {
+func (a *App) Search(params SearchParams) (resp SearchResponse, err error) {
+	startedAt := time.Now()
+	a.emitDebugLog("debug", "search.run", "search requested", debugSearchParamsFields(params))
+	defer func() {
+		fields := withDebugDuration(debugSearchParamsFields(params), startedAt)
+		if err != nil {
+			a.emitDebugLog("error", "search.run", "search failed", withDebugError(fields, err))
+			return
+		}
+		fields["searchId"] = resp.SearchID
+		fields["page"] = resp.Page
+		fields["pagesCount"] = resp.PagesCount
+		fields["resultsCount"] = resp.ResultsCount
+		fields["returnedResults"] = len(resp.Results)
+		a.emitDebugLog("info", "search.run", "search completed", fields)
+	}()
+
 	ctx, finish := a.beginSearchOperation()
 	defer finish()
 
@@ -48,6 +64,12 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	if err != nil {
 		return SearchResponse{}, err
 	}
+	a.emitDebugLog("debug", "search.run", "artist filters resolved", map[string]any{
+		"artistFilters":       artistFilters,
+		"artistCount":         len(artistFilters),
+		"useWatchingArtists":  params.UseWatchingArtists,
+		"requestedArtistList": params.ArtistNames,
+	})
 	req, err := a.buildSearchRequest(ctx, user, params, artistFilters)
 	if err != nil {
 		return SearchResponse{}, err
@@ -59,6 +81,10 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	}
 	entry, err := a.cachedSearchResponse(ctx, user, key)
 	if err != nil {
+		a.emitDebugLog("warn", "search.run", "cached search fetch failed, checking session state", map[string]any{
+			"query": params.Query,
+			"error": err.Error(),
+		})
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
 			if err != nil {
@@ -80,6 +106,12 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	if perPage <= 0 {
 		perPage = defaultSearchPerPage
 	}
+	a.emitDebugLog("debug", "search.run", "search response cached", map[string]any{
+		"rawResultsCount":  int(response.ResultsCountAll),
+		"serverPagesCount": int(response.PagesCount),
+		"perPage":          perPage,
+		"query":            params.Query,
+	})
 
 	searchID := a.newSearchID()
 	state := &searchState{
@@ -115,17 +147,37 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 		return SearchResponse{}, err
 	}
 
-	return SearchResponse{
+	resp = SearchResponse{
 		SearchID:     searchID,
 		Page:         state.ClientPage,
 		PagesCount:   searchPageCount(state.ClientPage, hasMore),
 		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
-	}, nil
+	}
+	return resp, nil
 }
 
-func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
+func (a *App) RefreshSearch(searchID string) (resp SearchResponse, err error) {
+	startedAt := time.Now()
+	a.emitDebugLog("debug", "search.refresh", "refresh requested", map[string]any{
+		"searchId": searchID,
+	})
+	defer func() {
+		fields := withDebugDuration(map[string]any{
+			"searchId": searchID,
+		}, startedAt)
+		if err != nil {
+			a.emitDebugLog("error", "search.refresh", "refresh failed", withDebugError(fields, err))
+			return
+		}
+		fields["page"] = resp.Page
+		fields["pagesCount"] = resp.PagesCount
+		fields["resultsCount"] = resp.ResultsCount
+		fields["returnedResults"] = len(resp.Results)
+		a.emitDebugLog("info", "search.refresh", "refresh completed", fields)
+	}()
+
 	ctx, finish := a.beginSearchOperation()
 	defer finish()
 
@@ -200,17 +252,40 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 		return SearchResponse{}, err
 	}
 
-	return SearchResponse{
+	resp = SearchResponse{
 		SearchID:     searchID,
 		Page:         1,
 		PagesCount:   searchPageCount(1, hasMore),
 		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
-	}, nil
+	}
+	return resp, nil
 }
 
-func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error) {
+func (a *App) LoadMoreResults(searchID string, page int) (resp SearchResponse, err error) {
+	requestedPage := page
+	startedAt := time.Now()
+	a.emitDebugLog("debug", "search.loadMore", "load more requested", map[string]any{
+		"searchId": searchID,
+		"page":     requestedPage,
+	})
+	defer func() {
+		fields := withDebugDuration(map[string]any{
+			"searchId": searchID,
+			"page":     requestedPage,
+		}, startedAt)
+		if err != nil {
+			a.emitDebugLog("error", "search.loadMore", "load more failed", withDebugError(fields, err))
+			return
+		}
+		fields["resolvedPage"] = resp.Page
+		fields["pagesCount"] = resp.PagesCount
+		fields["resultsCount"] = resp.ResultsCount
+		fields["returnedResults"] = len(resp.Results)
+		a.emitDebugLog("info", "search.loadMore", "load more completed", fields)
+	}()
+
 	ctx, finish := a.beginSearchOperation()
 	defer finish()
 
@@ -266,21 +341,34 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 		return SearchResponse{}, err
 	}
 
-	return SearchResponse{
+	resp = SearchResponse{
 		SearchID:     searchID,
 		Page:         page,
 		PagesCount:   searchPageCount(page, hasMore),
 		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
-	}, nil
+	}
+	return resp, nil
 }
 
-func (a *App) GetKeywordSuggestions(query string) ([]string, error) {
+func (a *App) GetKeywordSuggestions(query string) (values []string, err error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
 	}
+	startedAt := time.Now()
+	defer func() {
+		fields := withDebugDuration(map[string]any{
+			"query": query,
+		}, startedAt)
+		if err != nil {
+			a.emitDebugLog("error", "suggestions.keyword", "keyword suggestions failed", withDebugError(fields, err))
+			return
+		}
+		fields["count"] = len(values)
+		a.emitDebugLog("debug", "suggestions.keyword", "keyword suggestions completed", fields)
+	}()
 
 	user, err := a.ensureSearchSession()
 	if err != nil {
@@ -292,7 +380,7 @@ func (a *App) GetKeywordSuggestions(query string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	values := make([]string, 0, minInt(len(items), 10))
+	values = make([]string, 0, minInt(len(items), 10))
 	for i, item := range items {
 		if i >= 10 {
 			break
@@ -302,11 +390,23 @@ func (a *App) GetKeywordSuggestions(query string) ([]string, error) {
 	return values, nil
 }
 
-func (a *App) GetUsernameSuggestions(query string) ([]UsernameSuggestion, error) {
+func (a *App) GetUsernameSuggestions(query string) (values []UsernameSuggestion, err error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
 	}
+	startedAt := time.Now()
+	defer func() {
+		fields := withDebugDuration(map[string]any{
+			"query": query,
+		}, startedAt)
+		if err != nil {
+			a.emitDebugLog("error", "suggestions.username", "username suggestions failed", withDebugError(fields, err))
+			return
+		}
+		fields["count"] = len(values)
+		a.emitDebugLog("debug", "suggestions.username", "username suggestions completed", fields)
+	}()
 
 	user, err := a.ensureSearchSession()
 	if err != nil {
@@ -321,7 +421,7 @@ func (a *App) GetUsernameSuggestions(query string) ([]UsernameSuggestion, error)
 	if err != nil {
 		return nil, err
 	}
-	values := make([]UsernameSuggestion, 0, minInt(len(items), 10))
+	values = make([]UsernameSuggestion, 0, minInt(len(items), 10))
 	for i, item := range items {
 		if i >= 10 {
 			break
@@ -331,7 +431,17 @@ func (a *App) GetUsernameSuggestions(query string) ([]UsernameSuggestion, error)
 	return values, nil
 }
 
-func (a *App) GetWatching() ([]UsernameSuggestion, error) {
+func (a *App) GetWatching() (items []UsernameSuggestion, err error) {
+	startedAt := time.Now()
+	defer func() {
+		fields := withDebugDuration(nil, startedAt)
+		if err != nil {
+			a.emitDebugLog("error", "watching", "watching lookup failed", withDebugError(fields, err))
+			return
+		}
+		fields["count"] = len(items)
+		a.emitDebugLog("debug", "watching", "watching lookup completed", fields)
+	}()
 	return a.getWatching(context.Background())
 }
 
