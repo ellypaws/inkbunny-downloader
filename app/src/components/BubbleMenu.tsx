@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Eye, LoaderCircle, Plus, X } from "lucide-react";
 import { gsap } from "gsap";
 
 export type BubbleMenuItem = {
@@ -8,6 +8,8 @@ export type BubbleMenuItem = {
   label: string;
   subtitle?: string;
   active?: boolean;
+  showEye?: boolean;
+  showLoading?: boolean;
   ariaLabel?: string;
   rotation?: number;
   hoverStyles?: {
@@ -446,6 +448,18 @@ export default function BubbleMenu({
                         <Plus size={36} strokeWidth={2.4} />
                       ) : (
                         <>
+                          <span className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 text-[0.24em]">
+                            {item.showEye ? (
+                              <span className="rounded-full bg-white/88 p-2 text-[#21400f] shadow-sm">
+                                <Eye size={16} />
+                              </span>
+                            ) : null}
+                            {item.showLoading ? (
+                              <span className="rounded-full bg-[#2A7FA6] p-2 text-white shadow-sm">
+                                <LoaderCircle size={16} className="animate-spin" />
+                              </span>
+                            ) : null}
+                          </span>
                           <span className="block truncate px-10">
                             {item.label}
                           </span>

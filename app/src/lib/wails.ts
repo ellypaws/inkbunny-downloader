@@ -8,6 +8,7 @@ import type {
   SearchResponse,
   SessionInfo,
   UsernameSuggestion,
+  WorkspaceState,
 } from './types'
 
 type BackendApi = {
@@ -33,6 +34,8 @@ type BackendApi = {
     options: DownloadOptions,
   ): Promise<QueueSnapshot>
   GetQueueSnapshot(): Promise<QueueSnapshot>
+  GetWorkspaceState(): Promise<WorkspaceState>
+  SaveWorkspaceState(state: WorkspaceState): Promise<void>
   CancelDownload(jobId: string): Promise<QueueSnapshot>
   CancelSubmission(submissionId: string): Promise<QueueSnapshot>
   RetryDownload(jobId: string): Promise<QueueSnapshot>
@@ -135,6 +138,12 @@ export const backend = {
   },
   async getQueueSnapshot(): Promise<QueueSnapshot> {
     return getBackend().GetQueueSnapshot()
+  },
+  async getWorkspaceState(): Promise<WorkspaceState> {
+    return getBackend().GetWorkspaceState()
+  },
+  async saveWorkspaceState(state: WorkspaceState): Promise<void> {
+    return getBackend().SaveWorkspaceState(state)
   },
   async cancelDownload(jobId: string): Promise<QueueSnapshot> {
     return getBackend().CancelDownload(jobId)

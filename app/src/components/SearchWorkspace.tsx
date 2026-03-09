@@ -1,6 +1,7 @@
 import {
   Check,
   ChevronDown,
+  Eye,
   LoaderCircle,
   Search as SearchIcon,
   X,
@@ -34,6 +35,10 @@ type SearchWorkspaceProps = {
   watchingCount: number;
   watchingLoading: boolean;
   loading: boolean;
+  searchButtonMode: "default" | "waiting" | "searching" | "downloading";
+  searchButtonLabel: string;
+  searchButtonDisabled: boolean;
+  autoQueueEnabled: boolean;
   ratingUpdating: boolean;
   collapsed: boolean;
   error: string;
@@ -44,6 +49,7 @@ type SearchWorkspaceProps = {
   onToggleMyWatches: () => void;
   onSearch: () => void;
   onStopSearch: () => void;
+  onToggleAutoQueue: (enabled: boolean) => void;
   onToggleCollapse: () => void;
   onToggleRating: (index: number) => void;
 };
@@ -99,6 +105,25 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
     pinnedField === "favoritesBy"
       ? pinnedFavoriteSuggestions
       : props.favoriteSuggestions;
+  const searchStops = props.searchButtonMode === "searching";
+  const searchButtonIcon =
+    props.searchButtonMode === "searching" ? (
+      <X size={18} />
+    ) : props.searchButtonMode === "downloading" ? (
+      <LoaderCircle size={18} className="animate-spin" />
+    ) : props.searchButtonMode === "waiting" ? (
+      <Eye size={18} />
+    ) : (
+      <SearchIcon size={18} />
+    );
+  const searchButtonTone =
+    props.searchButtonMode === "searching"
+      ? "theme-button-danger"
+      : props.searchButtonMode === "downloading"
+        ? "theme-button-secondary"
+        : props.searchButtonMode === "waiting"
+          ? "theme-button-secondary"
+          : "theme-button-accent";
 
   const clearPinnedField = (field: SuggestionField) => {
     setPinnedField((current) => (current === field ? null : current));
@@ -201,18 +226,15 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   </div>
                   <button
                     type="button"
-                    onClick={props.loading ? props.onStopSearch : props.onSearch}
-                    className={`theme-button-accent flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-5 py-3.5 text-sm font-black shadow-xl transition-all sm:w-32 ${
-                      props.loading ? "opacity-70" : ""
+                    onClick={searchStops ? props.onStopSearch : props.onSearch}
+                    disabled={props.searchButtonDisabled}
+                    className={`${searchButtonTone} flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-5 py-3.5 text-sm font-black shadow-xl transition-all disabled:opacity-60 sm:w-40 ${
+                      props.searchButtonDisabled ? "opacity-70" : ""
                     }`}
                     data-tour-anchor="search-action"
                   >
-                    {props.loading ? (
-                      <X size={18} />
-                    ) : (
-                      <SearchIcon size={18} />
-                    )}
-                    {props.loading ? "Stop" : "Search"}
+                    {searchButtonIcon}
+                    {props.searchButtonLabel}
                   </button>
                   <div className="theme-muted text-sm leading-6 sm:col-span-2">
                     Separate words with spaces. Use{" "}
@@ -607,20 +629,43 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     </select>
                   </label>
                 </div>
-                <button
-                  type="button"
-                  onClick={props.loading ? props.onStopSearch : props.onSearch}
-                  className={`theme-button-accent flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-6 py-3.5 text-sm font-black shadow-xl transition-all xl:w-40 xl:self-end ${
-                    props.loading ? "opacity-70" : ""
-                  }`}
-                >
-                  {props.loading ? (
-                    <X size={18} />
-                  ) : (
-                    <SearchIcon size={18} />
-                  )}
-                  {props.loading ? "Stop" : "Search"}
-                </button>
+                <div className="flex w-full flex-col xl:w-52 xl:self-end">
+                  <label className="theme-panel-soft flex items-center gap-3 rounded-t-2xl rounded-b-none border border-b-0 px-4 py-3 text-sm font-semibold text-[var(--theme-title)] shadow-sm backdrop-blur-md">
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-5 w-5 items-center justify-center rounded-[0.35rem] border ${
+                        props.autoQueueEnabled
+                          ? "border-[#76B900] bg-[#76B900] text-white"
+                          : "border-[var(--theme-subtle)] bg-transparent text-transparent"
+                      }`}
+                    >
+                      <Check size={12} />
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={props.autoQueueEnabled}
+                      onChange={(event) =>
+                        props.onToggleAutoQueue(event.target.checked)
+                      }
+                      className="sr-only"
+                    />
+                    <span className="inline-flex items-center gap-2">
+                      <Eye size={16} className="text-[var(--theme-info)]" />
+                      Auto Queue
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={searchStops ? props.onStopSearch : props.onSearch}
+                    disabled={props.searchButtonDisabled}
+                    className={`${searchButtonTone} flex w-full items-center justify-center gap-2 rounded-t-none rounded-b-2xl border-b-8 px-6 py-3.5 text-sm font-black shadow-xl transition-all disabled:opacity-60 ${
+                      props.searchButtonDisabled ? "opacity-70" : ""
+                    }`}
+                  >
+                    {searchButtonIcon}
+                    {props.searchButtonLabel}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -27,11 +27,13 @@ import type {
   DownloadProgressEvent,
   QueueSnapshot,
   ReleaseStatus,
+  SavedSearchTab,
   SearchParams,
-  SearchResponse,
   SessionInfo,
+  SearchTabMode,
   SubmissionCard,
   UsernameSuggestion,
+  WorkspaceState,
 } from "./lib/types";
 import { backend, onRuntimeEvent } from "./lib/wails";
 import { GLOBAL_STYLES } from "./styles/globalStyles";
@@ -41,6 +43,8 @@ const RELEASE_UPDATE_TOAST_ID = "release-update-toast";
 const TOUR_STEP_DELAY_MS = 420;
 const UNREAD_POLL_INTERVAL_MS = 60_000;
 const LOAD_ALL_DELAY_MS = 500;
+const AUTO_QUEUE_INTERVAL_MS = 60_000;
+const AUTO_QUEUE_TICK_MS = 1_000;
 
 declare global {
   interface Window {
@@ -53,29 +57,20 @@ type InkbunnyDebugControls = {
   showOnboarding: () => void;
 };
 
-type SearchTabMode = "default" | "unread";
 type SearchTabLoadMoreMode = "idle" | "more" | "all";
+type AutoQueuePhase = "idle" | "searching" | "queueing";
 
 type SearchTabLoadMoreState = {
   mode: SearchTabLoadMoreMode;
   pagesLoaded: number;
 };
 
-type SearchTabState = {
-  id: string;
-  mode: SearchTabMode;
-  searchParams: SearchParams;
-  artistDraft: string;
-  artistAvatars: Record<string, string>;
-  searchResponse: SearchResponse | null;
-  results: SubmissionCard[];
-  activeSubmissionId: string;
-  selectedSubmissionIds: string[];
+type SearchTabState = SavedSearchTab & {
   searchLoading: boolean;
-  searchCollapsed: boolean;
   searchError: string;
   resultsRefreshToken: number;
   loadMoreState: SearchTabLoadMoreState;
+  autoQueuePhase: AutoQueuePhase;
 };
 
 type TourStepId =
@@ -116,6 +111,7 @@ export default function App() {
   const [queueMessage, setQueueMessage] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [apiCooldownUntil, setApiCooldownUntil] = useState(0);
+  const [autoQueueClock, setAutoQueueClock] = useState(() => Date.now());
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStepId, setTourStepId] = useState<TourStepId>("tabs-toggle");
   const [tourSearchAttempted, setTourSearchAttempted] = useState(false);
@@ -140,9 +136,14 @@ export default function App() {
   const favoritesRequestRef = useRef(0);
   const tabsRef = useRef<SearchTabState[]>(tabs);
   const activeTabIdRef = useRef(activeTabId);
+  const queueRef = useRef(queue);
+  const pendingDownloadSubmissionIdsRef = useRef(pendingDownloadSubmissionIds);
   const sessionRef = useRef(session);
   const settingsRef = useRef(settings);
   const unreadTotalRef = useRef(unreadTotal);
+  const workspaceLoadedRef = useRef(false);
+  const workspacePersistTimeoutRef = useRef<number | null>(null);
+  const autoQueueRunningRef = useRef(false);
   const tourAdvanceTimeoutRef = useRef<number | null>(null);
   const scheduledTourAdvanceRef = useRef("");
   const loadMoreControllersRef = useRef(
@@ -174,6 +175,7 @@ export default function App() {
       ),
     [downloadedSubmissionIds, pendingDownloadSubmissionIds, queue],
   );
+  const unavailableSubmissionIdsRef = useRef(unavailableSubmissionIds);
   const activeSearchParams = activeTab?.searchParams ?? buildDefaultSearch(session, settings);
   const activeArtistDraft = activeTab?.artistDraft ?? "";
   const activeSearchResponse = activeTab?.searchResponse ?? null;
@@ -187,6 +189,50 @@ export default function App() {
   const activeLoadMoreState = activeTab?.loadMoreState ?? createIdleLoadMoreState();
   const activeSearchBusy =
     activeSearchLoading || activeLoadMoreState.mode !== "idle";
+  const activeTabQueueing = activeTab?.autoQueuePhase === "queueing";
+  const activeTabDownloading = activeTab
+    ? hasTrackedQueueActivity(
+        activeTab,
+        queue,
+        pendingDownloadSubmissionIds,
+      )
+    : false;
+  const activeAutoQueueArmed =
+    Boolean(activeTab?.autoQueueEnabled) &&
+    (activeTab?.autoQueueNextRunAt ?? 0) > 0;
+  const activeSearchButtonMode = activeSearchBusy
+    ? "searching"
+    : activeTabDownloading || activeTabQueueing
+      ? "downloading"
+      : activeAutoQueueArmed
+        ? "waiting"
+        : "default";
+  const activeSearchButtonLabel =
+    activeSearchButtonMode === "searching"
+      ? "Stop Search"
+      : activeSearchButtonMode === "downloading"
+        ? "Downloading"
+        : activeSearchButtonMode === "waiting"
+          ? formatAutoQueueCountdown(activeTab?.autoQueueNextRunAt ?? 0, autoQueueClock)
+          : "Search";
+  const activeSearchButtonDisabled = activeSearchButtonMode === "downloading";
+  const activeDownloadButtonMode = activeTabDownloading
+    ? "stop"
+    : activeSearchBusy || activeTabQueueing
+      ? "searching"
+      : "default";
+  const activeDownloadButtonLabel =
+    activeDownloadButtonMode === "stop"
+      ? "Stop Downloads"
+      : activeDownloadButtonMode === "searching"
+        ? "Searching"
+        : "Download";
+  const activeDownloadButtonDisabled =
+    activeDownloadButtonMode === "searching"
+      ? true
+      : activeDownloadButtonMode === "stop"
+        ? false
+        : !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
   const unreadModeActive = activeTab?.mode === "unread";
   const newUnreadCount =
     trackedUnreadBaseline < 0 ? 0 : Math.max(unreadTotal - trackedUnreadBaseline, 0);
@@ -225,8 +271,13 @@ export default function App() {
       tabs.map((tab, index) => ({
         id: tab.id,
         label: getSearchTabLabel(tab, index),
-        subtitle: getSearchTabSubtitle(tab),
+        subtitle: getSearchTabSubtitle(tab, queue, pendingDownloadSubmissionIds, autoQueueClock),
         active: tab.id === activeTabId,
+        showEye: tab.autoQueueEnabled,
+        showLoading:
+          tab.searchLoading ||
+          tab.autoQueuePhase !== "idle" ||
+          hasTrackedQueueActivity(tab, queue, pendingDownloadSubmissionIds),
         ariaLabel: `Switch to ${getSearchTabLabel(tab, index)}`,
         hoverStyles:
           tab.mode === "unread"
@@ -243,7 +294,7 @@ export default function App() {
               }
             : undefined,
       })),
-    [activeTabId, tabs],
+    [activeTabId, autoQueueClock, pendingDownloadSubmissionIds, queue, tabs],
   );
 
   function applySession(nextSession: SessionInfo, nextSettings = nextSession.settings) {
@@ -342,14 +393,11 @@ export default function App() {
     stopSearchRequest(targetTabId);
     stopLoadMore(targetTabId);
     cancelLoadMore(targetTabId);
-    updateTab(targetTabId, (currentTab) =>
-      currentTab.searchLoading
-        ? {
-            ...currentTab,
-            searchLoading: false,
-          }
-        : currentTab,
-    );
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      searchLoading: false,
+      autoQueuePhase: "idle",
+    }));
     try {
       await backend.cancelSearchRequests();
     } catch {
@@ -473,6 +521,18 @@ export default function App() {
     setActiveTabId(nextTab.id);
   }
 
+  function handleToggleAutoQueue(enabled: boolean, targetTabId = activeTabIdRef.current) {
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      autoQueueEnabled: enabled,
+      autoQueuePhase: "idle",
+      autoQueueNextRunAt: 0,
+      trackedDownloadSubmissionIds: enabled
+        ? currentTab.trackedDownloadSubmissionIds
+        : [],
+    }));
+  }
+
   async function resetUnreadBaseline() {
     if (!sessionRef.current.hasSession || sessionRef.current.isGuest) {
       setUnreadTotal(0);
@@ -541,11 +601,24 @@ export default function App() {
 
   useEffect(() => void (tabsRef.current = tabs), [tabs]);
   useEffect(() => void (activeTabIdRef.current = activeTabId), [activeTabId]);
+  useEffect(() => void (queueRef.current = queue), [queue]);
+  useEffect(
+    () => void (pendingDownloadSubmissionIdsRef.current = pendingDownloadSubmissionIds),
+    [pendingDownloadSubmissionIds],
+  );
   useEffect(() => void (sessionRef.current = session), [session]);
   useEffect(() => void (settingsRef.current = settings), [settings]);
   useEffect(() => void (unreadTotalRef.current = unreadTotal), [unreadTotal]);
   useEffect(() => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds), [downloadedSubmissionIds]);
+  useEffect(() => void (unavailableSubmissionIdsRef.current = unavailableSubmissionIds), [unavailableSubmissionIds]);
   useEffect(() => void (toastsRef.current = toasts), [toasts]);
+  useEffect(() => {
+    const intervalId = window.setInterval(
+      () => setAutoQueueClock(Date.now()),
+      AUTO_QUEUE_TICK_MS,
+    );
+    return () => window.clearInterval(intervalId);
+  }, []);
   useEffect(() => {
     setWatchingUsers(null);
     setWatchingLoading(false);
@@ -703,6 +776,10 @@ export default function App() {
       autoClearTimeoutsRef.current.clear();
       autoClearPendingSubmissionIdsRef.current.clear();
       clearScheduledTourAdvance();
+      if (workspacePersistTimeoutRef.current !== null) {
+        window.clearTimeout(workspacePersistTimeoutRef.current);
+        workspacePersistTimeoutRef.current = null;
+      }
     },
     [],
   );
@@ -717,14 +794,26 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
-    backend
-      .getSession()
-      .then((nextSession) => {
+    Promise.all([
+      backend.getSession(),
+      backend.getWorkspaceState(),
+      backend.getQueueSnapshot(),
+    ])
+      .then(([nextSession, workspace, snapshot]) => {
         if (!mounted) {
           return;
         }
         applySession(nextSession);
+        const restoredTabs = restoreWorkspaceTabs(
+          workspace,
+          nextSession,
+          nextSession.settings,
+        );
+        setTabs(restoredTabs);
+        setActiveTabId(resolveActiveWorkspaceTabId(workspace, restoredTabs));
+        setQueue(snapshot);
         setLoginOpen(!nextSession.hasSession);
+        workspaceLoadedRef.current = true;
         void backend
           .getReleaseStatus()
           .then((status) => {
@@ -742,14 +831,6 @@ export default function App() {
         setAuthError(message);
         pushErrorToast(message, "backend-unavailable");
       });
-    backend
-      .getQueueSnapshot()
-      .then((snapshot) => {
-        if (mounted) {
-          setQueue(snapshot);
-        }
-      })
-      .catch(() => undefined);
     return () => {
       mounted = false;
     };
@@ -782,6 +863,86 @@ export default function App() {
       unsubscribeNotifications();
     };
   }, []);
+
+  useEffect(() => {
+    const activeSubmissionIds = getTrackedSubmissionIdsInFlight(
+      queue,
+      pendingDownloadSubmissionIds,
+    );
+    setTabs((previous) =>
+      previous.map((tab) => {
+        const nextTracked = tab.trackedDownloadSubmissionIds.filter((submissionId) =>
+          activeSubmissionIds.has(submissionId),
+        );
+        return areStringArraysEqual(nextTracked, tab.trackedDownloadSubmissionIds)
+          ? tab
+          : {
+              ...tab,
+              trackedDownloadSubmissionIds: nextTracked,
+            };
+      }),
+    );
+  }, [pendingDownloadSubmissionIds, queue]);
+
+  useEffect(() => {
+    if (!workspaceLoadedRef.current) {
+      return;
+    }
+    if (workspacePersistTimeoutRef.current !== null) {
+      window.clearTimeout(workspacePersistTimeoutRef.current);
+    }
+    workspacePersistTimeoutRef.current = window.setTimeout(() => {
+      workspacePersistTimeoutRef.current = null;
+      void backend
+        .saveWorkspaceState(buildWorkspaceState(tabsRef.current, activeTabIdRef.current))
+        .catch((error: unknown) => {
+          pushErrorToast(
+            getErrorMessage(error, "Unable to save tab workspace."),
+            "save-workspace-error",
+          );
+        });
+    }, 150);
+    return () => {
+      if (workspacePersistTimeoutRef.current !== null) {
+        window.clearTimeout(workspacePersistTimeoutRef.current);
+        workspacePersistTimeoutRef.current = null;
+      }
+    };
+  }, [activeTabId, tabs]);
+
+  useEffect(() => {
+    if (!session.hasSession) {
+      return;
+    }
+    if (
+      autoQueueRunningRef.current ||
+      tabs.some(
+        (tab) =>
+          tab.searchLoading ||
+          tab.loadMoreState.mode !== "idle" ||
+          tab.autoQueuePhase !== "idle",
+      )
+    ) {
+      return;
+    }
+    for (const tab of tabs) {
+      if (
+        !shouldRunAutoQueue(
+          tab,
+          queue,
+          pendingDownloadSubmissionIds,
+          autoQueueClock,
+        )
+      ) {
+        continue;
+      }
+      autoQueueRunningRef.current = true;
+      void runAutoQueue(tab.id).finally(() => {
+        autoQueueRunningRef.current = false;
+      });
+      break;
+    }
+  }, [autoQueueClock, pendingDownloadSubmissionIds, queue, session.hasSession, tabs]);
 
   useEffect(() => {
     const animate = () => {
@@ -1299,6 +1460,9 @@ export default function App() {
       ) {
         return undefined;
       }
+      if (page > 1 && isUnknownSearchIDError(error)) {
+        return handleSearch(1, targetTabId);
+      }
       const message = getErrorMessage(error, "Search failed.");
       updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
       pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
@@ -1357,6 +1521,10 @@ export default function App() {
         isSearchRequestStopRequested(resolvedTabId, runId) ||
         isSearchCancellationError(error)
       ) {
+        return;
+      }
+      if (isUnknownSearchIDError(error)) {
+        await handleSearch(1, resolvedTabId);
         return;
       }
       const message = getErrorMessage(error, "Refresh failed.");
@@ -1450,8 +1618,44 @@ export default function App() {
     void stopActiveSearch(targetTabId);
   }
 
-  async function handleQueueDownloads() {
-    await handleDownloadSubmissions(activeSelectedSubmissionIds);
+  async function handleQueueDownloads(targetTabId = activeTabIdRef.current) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab) {
+      return;
+    }
+    await handleDownloadSubmissions(tab.selectedSubmissionIds, targetTabId);
+  }
+
+  async function handleSearchAction(targetTabId = activeTabIdRef.current) {
+    if (!tabsRef.current.some((item) => item.id === targetTabId)) {
+      return;
+    }
+
+    const response = await handleSearch(1, targetTabId);
+    const currentTab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!response || !currentTab?.autoQueueEnabled) {
+      return;
+    }
+
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      autoQueuePhase: "queueing",
+      autoQueueNextRunAt: Date.now() + AUTO_QUEUE_INTERVAL_MS,
+    }));
+
+    const submissionIds = response.results
+      .map((result) => result.submissionId)
+      .filter((submissionId) => !unavailableSubmissionIdsRef.current.has(submissionId));
+
+    if (submissionIds.length > 0) {
+      await handleDownloadSubmissions(submissionIds, targetTabId);
+    }
+
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      autoQueuePhase: "idle",
+      autoQueueNextRunAt: Date.now() + AUTO_QUEUE_INTERVAL_MS,
+    }));
   }
 
   async function handleDownloadSubmissions(
@@ -1460,10 +1664,10 @@ export default function App() {
   ) {
     const tab = tabsRef.current.find((item) => item.id === targetTabId);
     if (!tab?.searchResponse || submissionIds.length === 0) {
-      return;
+      return [];
     }
     const eligibleSubmissionIds = submissionIds.filter(
-      (submissionId) => !unavailableSubmissionIds.has(submissionId),
+      (submissionId) => !unavailableSubmissionIdsRef.current.has(submissionId),
     );
     if (eligibleSubmissionIds.length === 0) {
       updateQueueMessage(
@@ -1471,9 +1675,16 @@ export default function App() {
         "warning",
         "queue-no-eligible-results",
       );
-      return;
+      return [];
     }
     setQueueMessage("");
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      trackedDownloadSubmissionIds: mergeSubmissionIds(
+        currentTab.trackedDownloadSubmissionIds,
+        eligibleSubmissionIds,
+      ),
+    }));
     setPendingDownloadSubmissionIds((previous) =>
       mergeSubmissionIds(previous, eligibleSubmissionIds),
     );
@@ -1496,15 +1707,97 @@ export default function App() {
         "success",
         "queue-downloads-success",
       );
+      return eligibleSubmissionIds;
     } catch (error) {
       const message = getErrorMessage(error, "Failed to queue downloads.");
       updateQueueMessage(message);
       pushErrorToast(message, "queue-downloads-error");
+      return [];
     } finally {
       setPendingDownloadSubmissionIds((previous) =>
         previous.filter((submissionId) => !eligibleSubmissionIds.includes(submissionId)),
       );
     }
+  }
+
+  async function handleStopTrackedDownloads(targetTabId = activeTabIdRef.current) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab) {
+      return;
+    }
+    const trackedSubmissionIds = getTrackedActiveSubmissionIds(
+      tab,
+      queueRef.current,
+      pendingDownloadSubmissionIdsRef.current,
+    );
+    if (trackedSubmissionIds.length === 0) {
+      return;
+    }
+    setPendingDownloadSubmissionIds((previous) =>
+      previous.filter((submissionId) => !trackedSubmissionIds.includes(submissionId)),
+    );
+    try {
+      const snapshots = await Promise.all(
+        trackedSubmissionIds.map((submissionId) =>
+          backend.cancelSubmission(submissionId),
+        ),
+      );
+      const latestSnapshot = snapshots[snapshots.length - 1];
+      if (latestSnapshot) {
+        setQueue(latestSnapshot);
+      }
+      updateQueueMessage(
+        `Stopping ${formatCountLabel(trackedSubmissionIds.length, "submission")} for this tab.`,
+        "success",
+        "queue-stop-tab",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to stop this tab's downloads.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "stop-tab-downloads-error");
+    }
+  }
+
+  async function runAutoQueue(targetTabId: string) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab || !tab.autoQueueEnabled || tab.autoQueuePhase !== "idle") {
+      return;
+    }
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      autoQueuePhase: "searching",
+      autoQueueNextRunAt: Date.now() + AUTO_QUEUE_INTERVAL_MS,
+    }));
+    const response = await handleSearch(1, targetTabId);
+    if (!response) {
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        autoQueuePhase: "idle",
+      }));
+      return;
+    }
+
+    const submissionIds = response.results
+      .map((result) => result.submissionId)
+      .filter((submissionId) => !unavailableSubmissionIdsRef.current.has(submissionId));
+    if (submissionIds.length === 0) {
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        autoQueuePhase: "idle",
+      }));
+      return;
+    }
+
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      autoQueuePhase: "queueing",
+    }));
+    await handleDownloadSubmissions(submissionIds, targetTabId);
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      autoQueuePhase: "idle",
+      autoQueueNextRunAt: Date.now() + AUTO_QUEUE_INTERVAL_MS,
+    }));
   }
 
   async function handleCancelSubmission(submissionId: string) {
@@ -1732,6 +2025,10 @@ export default function App() {
               watchingCount={watchingUsers?.length ?? 0}
               watchingLoading={watchingLoading}
               loading={activeSearchBusy}
+              searchButtonMode={activeSearchButtonMode}
+              searchButtonLabel={activeSearchButtonLabel}
+              searchButtonDisabled={activeSearchButtonDisabled}
+              autoQueueEnabled={activeTab?.autoQueueEnabled ?? false}
               ratingUpdating={ratingUpdating}
               collapsed={activeSearchCollapsed}
               error={activeSearchError}
@@ -1808,8 +2105,9 @@ export default function App() {
                 }));
               }}
               onToggleMyWatches={() => void handleToggleWatchingArtists()}
-              onSearch={() => void handleSearch(1)}
+              onSearch={() => void handleSearchAction()}
               onStopSearch={() => void stopActiveSearch()}
+              onToggleAutoQueue={(enabled) => handleToggleAutoQueue(enabled)}
               onToggleCollapse={() => {
                 if (!activeTab) {
                   return;
@@ -1881,6 +2179,9 @@ export default function App() {
               canStopAll={canStopAllDownloads}
               downloadedSubmissionIds={downloadedSubmissionIds}
               pendingDownloadSubmissionIds={pendingDownloadSubmissionIds}
+              downloadButtonMode={activeDownloadButtonMode}
+              downloadButtonLabel={activeDownloadButtonLabel}
+              downloadButtonDisabled={activeDownloadButtonDisabled}
               onSelectActive={(submissionId) => {
                 if (!activeTab) {
                   return;
@@ -1907,7 +2208,13 @@ export default function App() {
               onRetrySubmission={(submissionId) => void handleRetrySubmission(submissionId)}
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
-              onQueueDownloads={() => void handleQueueDownloads()}
+              onDownloadAction={() =>
+                void (
+                  activeDownloadButtonMode === "stop"
+                    ? handleStopTrackedDownloads()
+                    : handleQueueDownloads()
+                )
+              }
               onLoadMore={() => void handleLoadMore("more")}
               onLoadAll={() => void handleLoadMore("all")}
               onStopLoadMore={() => void handleStopLoadMore()}
@@ -2268,11 +2575,15 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     results: [],
     activeSubmissionId: "",
     selectedSubmissionIds: [],
+    autoQueueEnabled: false,
+    trackedDownloadSubmissionIds: [],
+    autoQueueNextRunAt: 0,
     searchLoading: false,
     searchCollapsed: false,
     searchError: "",
     resultsRefreshToken: 0,
     loadMoreState: createIdleLoadMoreState(),
+    autoQueuePhase: "idle",
   };
 }
 
@@ -2350,7 +2661,27 @@ function getSearchTabLabel(tab: SearchTabState, index: number) {
   return `Tab ${index + 1}`;
 }
 
-function getSearchTabSubtitle(tab: SearchTabState) {
+function getSearchTabSubtitle(
+  tab: SearchTabState,
+  queue: QueueSnapshot,
+  pendingDownloadSubmissionIds: string[],
+  autoQueueClock: number,
+) {
+  if (tab.autoQueueEnabled) {
+    if (tab.searchLoading || tab.autoQueuePhase === "searching") {
+      return "searching";
+    }
+    if (tab.autoQueuePhase === "queueing") {
+      return "queueing";
+    }
+    if (hasTrackedQueueActivity(tab, queue, pendingDownloadSubmissionIds)) {
+      return "downloading";
+    }
+    if (tab.autoQueueNextRunAt <= 0) {
+      return "auto ready";
+    }
+    return `auto ${formatAutoQueueCountdown(tab.autoQueueNextRunAt, autoQueueClock)}`;
+  }
   if (tab.mode === "unread") {
     return "new submissions";
   }
@@ -2375,6 +2706,187 @@ function getSearchTabSubtitle(tab: SearchTabState) {
   return "new search";
 }
 
+function buildWorkspaceState(
+  tabs: SearchTabState[],
+  activeTabId: string,
+): WorkspaceState {
+  return {
+    activeTabId,
+    tabs: tabs.map(toSavedSearchTab),
+  };
+}
+
+function toSavedSearchTab(tab: SearchTabState): SavedSearchTab {
+  return {
+    id: tab.id,
+    mode: tab.mode,
+    searchParams: cloneSearchParams(tab.searchParams),
+    artistDraft: tab.artistDraft,
+    artistAvatars: { ...tab.artistAvatars },
+    searchResponse: tab.searchResponse
+      ? {
+          ...tab.searchResponse,
+          results: [...tab.searchResponse.results],
+        }
+      : null,
+    results: [...tab.results],
+    activeSubmissionId: tab.activeSubmissionId,
+    selectedSubmissionIds: [...tab.selectedSubmissionIds],
+    searchCollapsed: tab.searchCollapsed,
+    autoQueueEnabled: tab.autoQueueEnabled,
+    trackedDownloadSubmissionIds: [...tab.trackedDownloadSubmissionIds],
+    autoQueueNextRunAt: tab.autoQueueNextRunAt,
+  };
+}
+
+function restoreWorkspaceTabs(
+  workspace: WorkspaceState | null | undefined,
+  session: SessionInfo,
+  settings: AppSettings,
+) {
+  const restoredTabs = (workspace?.tabs ?? [])
+    .map((tab) => restoreSavedSearchTab(tab, session, settings))
+    .filter((tab): tab is SearchTabState => tab !== null);
+  return restoredTabs.length > 0
+    ? restoredTabs
+    : [createSearchTab(session, settings)];
+}
+
+function resolveActiveWorkspaceTabId(
+  workspace: WorkspaceState | null | undefined,
+  restoredTabs: SearchTabState[],
+) {
+  const requestedId = workspace?.activeTabId ?? "";
+  return restoredTabs.some((tab) => tab.id === requestedId)
+    ? requestedId
+    : restoredTabs[0]?.id ?? "";
+}
+
+function restoreSavedSearchTab(
+  savedTab: SavedSearchTab,
+  session: SessionInfo,
+  settings: AppSettings,
+): SearchTabState | null {
+  const id = savedTab.id.trim();
+  if (!id) {
+    return null;
+  }
+  const mode: SearchTabMode = savedTab.mode === "unread" ? "unread" : "default";
+  const searchParams = syncSearchParamsWithSession(
+    savedTab.searchParams ?? buildDefaultSearch(session, settings),
+    session,
+    settings,
+    mode,
+  );
+  const results = Array.isArray(savedTab.results) ? [...savedTab.results] : [];
+  const activeSubmissionId =
+    savedTab.activeSubmissionId ||
+    results[0]?.submissionId ||
+    "";
+
+  return {
+    id,
+    mode,
+    searchParams,
+    artistDraft: savedTab.artistDraft ?? "",
+    artistAvatars: { ...(savedTab.artistAvatars ?? {}) },
+    searchResponse: savedTab.searchResponse
+      ? {
+          ...savedTab.searchResponse,
+          results: [...savedTab.searchResponse.results],
+        }
+      : null,
+    results,
+    activeSubmissionId,
+    selectedSubmissionIds: [...(savedTab.selectedSubmissionIds ?? [])],
+    searchLoading: false,
+    searchCollapsed: Boolean(savedTab.searchCollapsed),
+    searchError: "",
+    resultsRefreshToken: 0,
+    loadMoreState: createIdleLoadMoreState(),
+    autoQueueEnabled: Boolean(savedTab.autoQueueEnabled),
+    trackedDownloadSubmissionIds: [...(savedTab.trackedDownloadSubmissionIds ?? [])],
+    autoQueueNextRunAt:
+      savedTab.autoQueueEnabled && savedTab.autoQueueNextRunAt > 0
+        ? savedTab.autoQueueNextRunAt
+        : 0,
+    autoQueuePhase: "idle",
+  };
+}
+
+function getTrackedSubmissionIdsInFlight(
+  queue: QueueSnapshot,
+  pendingDownloadSubmissionIds: string[],
+) {
+  const trackedSubmissionIds = new Set(pendingDownloadSubmissionIds);
+  for (const job of queue.jobs) {
+    if (
+      job.submissionId &&
+      (job.status === "queued" || job.status === "active")
+    ) {
+      trackedSubmissionIds.add(job.submissionId);
+    }
+  }
+  return trackedSubmissionIds;
+}
+
+function getTrackedActiveSubmissionIds(
+  tab: SearchTabState,
+  queue: QueueSnapshot,
+  pendingDownloadSubmissionIds: string[],
+) {
+  const inFlight = getTrackedSubmissionIdsInFlight(queue, pendingDownloadSubmissionIds);
+  return tab.trackedDownloadSubmissionIds.filter((submissionId) =>
+    inFlight.has(submissionId),
+  );
+}
+
+function hasTrackedQueueActivity(
+  tab: SearchTabState,
+  queue: QueueSnapshot,
+  pendingDownloadSubmissionIds: string[],
+) {
+  return getTrackedActiveSubmissionIds(tab, queue, pendingDownloadSubmissionIds).length > 0;
+}
+
+function shouldRunAutoQueue(
+  tab: SearchTabState,
+  queue: QueueSnapshot,
+  pendingDownloadSubmissionIds: string[],
+  autoQueueClock: number,
+) {
+  return (
+    tab.autoQueueEnabled &&
+    tab.autoQueuePhase === "idle" &&
+    !tab.searchLoading &&
+    tab.loadMoreState.mode === "idle" &&
+    queue.activeCount === 0 &&
+    pendingDownloadSubmissionIds.length === 0 &&
+    !hasTrackedQueueActivity(tab, queue, pendingDownloadSubmissionIds) &&
+    tab.autoQueueNextRunAt > 0 &&
+    autoQueueClock >= tab.autoQueueNextRunAt
+  );
+}
+
+function formatAutoQueueCountdown(nextRunAt: number, autoQueueClock: number) {
+  const remainingMs = Math.max(0, nextRunAt - autoQueueClock);
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function isUnknownSearchIDError(error: unknown) {
+  return getErrorMessage(error, "").toLowerCase().includes("unknown search id");
+}
+
 function isSearchTabUntouched(
   tab: SearchTabState,
   session: SessionInfo,
@@ -2389,6 +2901,9 @@ function isSearchTabUntouched(
     tab.results.length === 0 &&
     tab.activeSubmissionId === "" &&
     tab.selectedSubmissionIds.length === 0 &&
+    !tab.autoQueueEnabled &&
+    tab.trackedDownloadSubmissionIds.length === 0 &&
+    tab.autoQueueNextRunAt === 0 &&
     !tab.searchLoading &&
     tab.searchError === ""
   );

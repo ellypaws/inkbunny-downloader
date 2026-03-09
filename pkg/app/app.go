@@ -25,6 +25,7 @@ type App struct {
 	searchOpMu      sync.Mutex
 	user            *inkbunny.User
 	settings        AppSettings
+	workspace       WorkspaceState
 	sessionAvatar   string
 	searches        map[string]*searchState
 	lastSearchID    string
@@ -50,6 +51,7 @@ func NewApp() *App {
 	return &App{
 		store:       store,
 		settings:    defaultState.Settings,
+		workspace:   defaultState.Workspace,
 		searches:    make(map[string]*searchState),
 		rateLimiter: newAPIRateLimiter(nil),
 	}
@@ -62,6 +64,7 @@ func (a *App) Startup(ctx context.Context) {
 		state, err := a.store.Load()
 		if err == nil {
 			a.settings = state.Settings
+			a.workspace = state.Workspace
 			a.lastSearchID = state.Session.LastSearchID
 			a.sessionAvatar = state.Session.AvatarURL
 			a.user = restoreUser(state.User)
@@ -249,6 +252,20 @@ func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 		a.downloadManager.SetMaxActive(current.MaxActive)
 	}
 	return current, a.persist()
+}
+
+func (a *App) GetWorkspaceState() WorkspaceState {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.workspace
+}
+
+func (a *App) SaveWorkspaceState(workspace WorkspaceState) error {
+	a.mu.Lock()
+	a.workspace = workspace
+	a.mu.Unlock()
+	return a.persist()
 }
 
 func (a *App) PickDownloadDirectory() (string, error) {
@@ -504,8 +521,9 @@ func (a *App) persist() error {
 			LastSearchID:   a.lastSearchID,
 			EffectiveTheme: ternary(a.settings.DarkMode, "dark", "light"),
 		},
-		User:     toStoredUser(a.user),
-		Settings: a.settings,
+		User:      toStoredUser(a.user),
+		Settings:  a.settings,
+		Workspace: a.workspace,
 	})
 }
 

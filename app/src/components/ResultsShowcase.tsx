@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Check,
   Download,
+  Eye,
   File,
   FileImage,
   FileText,
@@ -42,6 +43,9 @@ type ResultsShowcaseProps = {
   canStopAll: boolean;
   downloadedSubmissionIds: ReadonlySet<string>;
   pendingDownloadSubmissionIds: string[];
+  downloadButtonMode: "default" | "stop" | "searching" | "timer";
+  downloadButtonLabel: string;
+  downloadButtonDisabled: boolean;
   onSelectActive: (submissionId: string) => void;
   onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
@@ -50,7 +54,7 @@ type ResultsShowcaseProps = {
   onRetrySubmission: (submissionId: string) => void;
   onStopAll: () => void;
   onRefresh: () => void;
-  onQueueDownloads: () => void;
+  onDownloadAction: () => void;
   onLoadMore: () => void;
   onLoadAll: () => void;
   onStopLoadMore: () => void;
@@ -297,12 +301,19 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             Stop All
           </button>
           <button
-            onClick={props.onQueueDownloads}
-            disabled={!props.searchResponse || selectedCount === 0}
-            className="theme-button-accent flex items-center gap-2 rounded-2xl border-b-8 px-6 py-3 font-black shadow-xl transition-all disabled:opacity-60"
+            type="button"
+            onClick={props.onDownloadAction}
+            disabled={props.downloadButtonDisabled}
+            className={getDownloadActionButtonClass(
+              props.downloadButtonMode,
+              "rounded-2xl border-b-8 px-6 py-3 font-black shadow-xl",
+            )}
           >
-            <Download size={18} />
-            Download
+            {renderDownloadActionButtonContent(
+              props.downloadButtonMode,
+              props.downloadButtonLabel,
+              18,
+            )}
           </button>
         </div>
       </div>
@@ -511,12 +522,18 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={props.onQueueDownloads}
-                  disabled={!props.searchResponse || selectedCount === 0}
-                  className="theme-button-accent flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black shadow-lg transition-all disabled:opacity-60"
+                  onClick={props.onDownloadAction}
+                  disabled={props.downloadButtonDisabled}
+                  className={getDownloadActionButtonClass(
+                    props.downloadButtonMode,
+                    "rounded-2xl border px-4 py-2 text-xs font-black shadow-lg",
+                  )}
                 >
-                  <Download size={14} />
-                  Download
+                  {renderDownloadActionButtonContent(
+                    props.downloadButtonMode,
+                    props.downloadButtonLabel,
+                    14,
+                  )}
                 </button>
                 <label className="theme-panel-strong flex items-center gap-3 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md">
                   Grid Size
@@ -1166,6 +1183,53 @@ function GridDownloadButton(props: {
         <Download size={14} />
       )}
     </button>
+  );
+}
+
+function getDownloadActionButtonClass(mode: ResultsShowcaseProps["downloadButtonMode"], baseClassName: string) {
+  const tone =
+    mode === "stop"
+      ? "theme-button-danger"
+      : mode === "default"
+        ? "theme-button-accent"
+        : "theme-button-secondary";
+  return `${tone} flex items-center gap-2 transition-all disabled:opacity-60 ${baseClassName}`;
+}
+
+function renderDownloadActionButtonContent(
+  mode: ResultsShowcaseProps["downloadButtonMode"],
+  label: string,
+  iconSize: number,
+) {
+  if (mode === "stop") {
+    return (
+      <>
+        <Square size={Math.max(12, iconSize - 2)} className="fill-current" strokeWidth={2.5} />
+        {label}
+      </>
+    );
+  }
+  if (mode === "searching") {
+    return (
+      <>
+        <LoaderCircle className="animate-spin" size={iconSize} />
+        {label}
+      </>
+    );
+  }
+  if (mode === "timer") {
+    return (
+      <>
+        <Eye size={iconSize} />
+        {label}
+      </>
+    );
+  }
+  return (
+    <>
+      <Download size={iconSize} />
+      {label}
+    </>
   );
 }
 

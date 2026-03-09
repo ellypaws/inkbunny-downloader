@@ -61,6 +61,27 @@ type SearchResponse struct {
 	Session      SessionInfo      `json:"session"`
 }
 
+type SavedSearchTab struct {
+	ID                           string            `json:"id"`
+	Mode                         string            `json:"mode"`
+	SearchParams                 SearchParams      `json:"searchParams"`
+	ArtistDraft                  string            `json:"artistDraft"`
+	ArtistAvatars                map[string]string `json:"artistAvatars"`
+	SearchResponse               *SearchResponse   `json:"searchResponse,omitempty"`
+	Results                      []SubmissionCard  `json:"results"`
+	ActiveSubmissionID           string            `json:"activeSubmissionId"`
+	SelectedSubmissionIDs        []string          `json:"selectedSubmissionIds"`
+	SearchCollapsed              bool              `json:"searchCollapsed"`
+	AutoQueueEnabled             bool              `json:"autoQueueEnabled"`
+	TrackedDownloadSubmissionIDs []string          `json:"trackedDownloadSubmissionIds"`
+	AutoQueueNextRunAt           int64             `json:"autoQueueNextRunAt"`
+}
+
+type WorkspaceState struct {
+	ActiveTabID string           `json:"activeTabId"`
+	Tabs        []SavedSearchTab `json:"tabs"`
+}
+
 type SubmissionCard struct {
 	SubmissionID       string   `json:"submissionId"`
 	Title              string   `json:"title"`
@@ -161,9 +182,10 @@ type ReleaseStatus struct {
 }
 
 type storedState struct {
-	Session  SessionInfo `json:"session"`
-	User     sessionUser `json:"user"`
-	Settings AppSettings `json:"settings"`
+	Session   SessionInfo    `json:"session"`
+	User      sessionUser    `json:"user"`
+	Settings  AppSettings    `json:"settings"`
+	Workspace WorkspaceState `json:"workspace"`
 }
 
 type sessionUser struct {

@@ -97,6 +97,7 @@ func defaultStoredState() storedState {
 			EffectiveTheme: "light",
 			AvatarURL:      defaultAvatarURL,
 		},
+		Workspace: WorkspaceState{},
 	}
 }
 

@@ -34,6 +34,8 @@ export function GetUsernameSuggestions(arg1:string):Promise<Array<desktopapp.Use
 
 export function GetWatching():Promise<Array<desktopapp.UsernameSuggestion>>;
 
+export function GetWorkspaceState():Promise<desktopapp.WorkspaceState>;
+
 export function LoadMoreResults(arg1:string,arg2:number):Promise<desktopapp.SearchResponse>;
 
 export function Login(arg1:string,arg2:string):Promise<desktopapp.SessionInfo>;
@@ -51,6 +53,8 @@ export function RefreshSearch(arg1:string):Promise<desktopapp.SearchResponse>;
 export function RetryDownload(arg1:string):Promise<desktopapp.QueueSnapshot>;
 
 export function RetrySubmission(arg1:string):Promise<desktopapp.QueueSnapshot>;
+
+export function SaveWorkspaceState(arg1:desktopapp.WorkspaceState):Promise<void>;
 
 export function Search(arg1:desktopapp.SearchParams):Promise<desktopapp.SearchResponse>;
 

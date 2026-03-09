@@ -66,6 +66,10 @@ export function GetWatching() {
   return window['go']['desktopapp']['App']['GetWatching']();
 }
 
+export function GetWorkspaceState() {
+  return window['go']['desktopapp']['App']['GetWorkspaceState']();
+}
+
 export function LoadMoreResults(arg1, arg2) {
   return window['go']['desktopapp']['App']['LoadMoreResults'](arg1, arg2);
 }
@@ -100,6 +104,10 @@ export function RetryDownload(arg1) {
 
 export function RetrySubmission(arg1) {
   return window['go']['desktopapp']['App']['RetrySubmission'](arg1);
+}
+
+export function SaveWorkspaceState(arg1) {
+  return window['go']['desktopapp']['App']['SaveWorkspaceState'](arg1);
 }
 
 export function Search(arg1) {

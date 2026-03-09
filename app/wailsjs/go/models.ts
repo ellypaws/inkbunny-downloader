@@ -190,56 +190,6 @@ export namespace desktopapp {
 	        this.updateAvailable = source["updateAvailable"];
 	    }
 	}
-	export class SearchParams {
-	    query: string;
-	    joinType: string;
-	    searchInKeywords: boolean;
-	    searchInTitle: boolean;
-	    searchInDescription: boolean;
-	    searchInMD5: boolean;
-	    unreadSubmissions: boolean;
-	    artistNames: string[];
-	    useWatchingArtists: boolean;
-	    favoritesBy: string;
-	    poolId: number;
-	    scraps: string;
-	    timeRangeDays: number;
-	    submissionTypes: number[];
-	    orderBy: string;
-	    page: number;
-	    perPage: number;
-	    maxDownloads: number;
-	    maxActive: number;
-	    saveKeywords: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new SearchParams(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.query = source["query"];
-	        this.joinType = source["joinType"];
-	        this.searchInKeywords = source["searchInKeywords"];
-	        this.searchInTitle = source["searchInTitle"];
-	        this.searchInDescription = source["searchInDescription"];
-	        this.searchInMD5 = source["searchInMD5"];
-	        this.unreadSubmissions = source["unreadSubmissions"];
-	        this.artistNames = source["artistNames"];
-	        this.useWatchingArtists = source["useWatchingArtists"];
-	        this.favoritesBy = source["favoritesBy"];
-	        this.poolId = source["poolId"];
-	        this.scraps = source["scraps"];
-	        this.timeRangeDays = source["timeRangeDays"];
-	        this.submissionTypes = source["submissionTypes"];
-	        this.orderBy = source["orderBy"];
-	        this.page = source["page"];
-	        this.perPage = source["perPage"];
-	        this.maxDownloads = source["maxDownloads"];
-	        this.maxActive = source["maxActive"];
-	        this.saveKeywords = source["saveKeywords"];
-	    }
-	}
 	export class SessionInfo {
 	    hasSession: boolean;
 	    username: string;
@@ -378,6 +328,112 @@ export namespace desktopapp {
 		    return a;
 		}
 	}
+	export class SearchParams {
+	    query: string;
+	    joinType: string;
+	    searchInKeywords: boolean;
+	    searchInTitle: boolean;
+	    searchInDescription: boolean;
+	    searchInMD5: boolean;
+	    unreadSubmissions: boolean;
+	    artistNames: string[];
+	    useWatchingArtists: boolean;
+	    favoritesBy: string;
+	    poolId: number;
+	    scraps: string;
+	    timeRangeDays: number;
+	    submissionTypes: number[];
+	    orderBy: string;
+	    page: number;
+	    perPage: number;
+	    maxDownloads: number;
+	    maxActive: number;
+	    saveKeywords: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SearchParams(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.query = source["query"];
+	        this.joinType = source["joinType"];
+	        this.searchInKeywords = source["searchInKeywords"];
+	        this.searchInTitle = source["searchInTitle"];
+	        this.searchInDescription = source["searchInDescription"];
+	        this.searchInMD5 = source["searchInMD5"];
+	        this.unreadSubmissions = source["unreadSubmissions"];
+	        this.artistNames = source["artistNames"];
+	        this.useWatchingArtists = source["useWatchingArtists"];
+	        this.favoritesBy = source["favoritesBy"];
+	        this.poolId = source["poolId"];
+	        this.scraps = source["scraps"];
+	        this.timeRangeDays = source["timeRangeDays"];
+	        this.submissionTypes = source["submissionTypes"];
+	        this.orderBy = source["orderBy"];
+	        this.page = source["page"];
+	        this.perPage = source["perPage"];
+	        this.maxDownloads = source["maxDownloads"];
+	        this.maxActive = source["maxActive"];
+	        this.saveKeywords = source["saveKeywords"];
+	    }
+	}
+	export class SavedSearchTab {
+	    id: string;
+	    mode: string;
+	    searchParams: SearchParams;
+	    artistDraft: string;
+	    artistAvatars: Record<string, string>;
+	    searchResponse?: SearchResponse;
+	    results: SubmissionCard[];
+	    activeSubmissionId: string;
+	    selectedSubmissionIds: string[];
+	    searchCollapsed: boolean;
+	    autoQueueEnabled: boolean;
+	    trackedDownloadSubmissionIds: string[];
+	    autoQueueNextRunAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SavedSearchTab(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.mode = source["mode"];
+	        this.searchParams = this.convertValues(source["searchParams"], SearchParams);
+	        this.artistDraft = source["artistDraft"];
+	        this.artistAvatars = source["artistAvatars"];
+	        this.searchResponse = this.convertValues(source["searchResponse"], SearchResponse);
+	        this.results = this.convertValues(source["results"], SubmissionCard);
+	        this.activeSubmissionId = source["activeSubmissionId"];
+	        this.selectedSubmissionIds = source["selectedSubmissionIds"];
+	        this.searchCollapsed = source["searchCollapsed"];
+	        this.autoQueueEnabled = source["autoQueueEnabled"];
+	        this.trackedDownloadSubmissionIds = source["trackedDownloadSubmissionIds"];
+	        this.autoQueueNextRunAt = source["autoQueueNextRunAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	
 	
 	
@@ -398,6 +454,38 @@ export namespace desktopapp {
 	        this.username = source["username"];
 	        this.avatarUrl = source["avatarUrl"];
 	    }
+	}
+	export class WorkspaceState {
+	    activeTabId: string;
+	    tabs: SavedSearchTab[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.activeTabId = source["activeTabId"];
+	        this.tabs = this.convertValues(source["tabs"], SavedSearchTab);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

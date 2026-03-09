@@ -20,6 +20,8 @@ export type SessionInfo = {
   effectiveTheme?: string
 }
 
+export type SearchTabMode = 'default' | 'unread'
+
 export type UsernameSuggestion = {
   userId: string
   value: string
@@ -82,6 +84,27 @@ export type SearchResponse = {
   resultsCount: number
   results: SubmissionCard[]
   session: SessionInfo
+}
+
+export type SavedSearchTab = {
+  id: string
+  mode: SearchTabMode
+  searchParams: SearchParams
+  artistDraft: string
+  artistAvatars: Record<string, string>
+  searchResponse: SearchResponse | null
+  results: SubmissionCard[]
+  activeSubmissionId: string
+  selectedSubmissionIds: string[]
+  searchCollapsed: boolean
+  autoQueueEnabled: boolean
+  trackedDownloadSubmissionIds: string[]
+  autoQueueNextRunAt: number
+}
+
+export type WorkspaceState = {
+  activeTabId: string
+  tabs: SavedSearchTab[]
 }
 
 export type SelectedSubmission = {
