@@ -1,6 +1,7 @@
 package flight
 
 import (
+	"context"
 	"sync"
 )
 
@@ -9,7 +10,7 @@ type Cache[K comparable, V any] struct {
 	fmu      *sync.RWMutex
 	pending  map[K]*job[V]
 	pmu      *sync.Mutex
-	work     func(K) (V, error)
+	work     func(context.Context, K) (V, error)
 }
 
 type job[V any] struct {
@@ -18,7 +19,7 @@ type job[V any] struct {
 	done chan struct{}
 }
 
-func NewCache[K comparable, V any](work func(K) (V, error)) Cache[K, V] {
+func NewCache[K comparable, V any](work func(context.Context, K) (V, error)) Cache[K, V] {
 	return Cache[K, V]{
 		finished: make(map[K]V),
 		fmu:      new(sync.RWMutex),
@@ -29,6 +30,15 @@ func NewCache[K comparable, V any](work func(K) (V, error)) Cache[K, V] {
 }
 
 func (p *Cache[K, V]) Get(k K) (V, error) {
+	return p.GetWithContext(context.Background(), k)
+}
+
+func (p *Cache[K, V]) GetWithContext(ctx context.Context, k K) (V, error) {
+	var zero V
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	p.pmu.Lock()
 	p.fmu.RLock()
 	finished, ok := p.finished[k]
@@ -41,15 +51,19 @@ func (p *Cache[K, V]) Get(k K) (V, error) {
 	pending, ok := p.pending[k]
 	if ok {
 		p.pmu.Unlock()
-		<-pending.done
-		return pending.val, pending.err
+		select {
+		case <-pending.done:
+			return pending.val, pending.err
+		case <-ctx.Done():
+			return zero, ctx.Err()
+		}
 	}
 
 	j := job[V]{done: make(chan struct{})}
 	p.pending[k] = &j
 	p.pmu.Unlock()
 
-	j.val, j.err = p.work(k)
+	j.val, j.err = p.work(ctx, k)
 	if j.err == nil {
 		p.fmu.Lock()
 		p.finished[k] = j.val

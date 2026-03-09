@@ -1,6 +1,7 @@
 package desktopapp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,15 +37,18 @@ type searchState struct {
 const defaultSearchPerPage = 30
 
 func (a *App) Search(params SearchParams) (SearchResponse, error) {
+	ctx, finish := a.beginSearchOperation()
+	defer finish()
+
 	user, err := a.ensureSearchSession()
 	if err != nil {
 		return SearchResponse{}, err
 	}
-	artistFilters, err := a.resolveArtistFilters(user, params)
+	artistFilters, err := a.resolveArtistFilters(ctx, user, params)
 	if err != nil {
 		return SearchResponse{}, err
 	}
-	req, err := a.buildSearchRequest(user, params, artistFilters)
+	req, err := a.buildSearchRequest(ctx, user, params, artistFilters)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -53,7 +57,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	if err != nil {
 		return SearchResponse{}, err
 	}
-	entry, err := a.cachedSearchResponse(user, key)
+	entry, err := a.cachedSearchResponse(ctx, user, key)
 	if err != nil {
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
@@ -65,7 +69,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 			if err != nil {
 				return SearchResponse{}, err
 			}
-			entry, err = a.cachedSearchResponse(user, key)
+			entry, err = a.cachedSearchResponse(ctx, user, key)
 		}
 		if err != nil {
 			return SearchResponse{}, err
@@ -93,7 +97,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 		Request:         normalizedReq,
 		CacheKey:        key,
 	}
-	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(user, state, &response)
+	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, &response)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -106,7 +110,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	a.mu.Unlock()
 	_ = a.persist()
 
-	cards, err := a.buildSubmissionCards(user, visible)
+	cards, err := a.buildSubmissionCards(ctx, user, visible)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -122,6 +126,9 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 }
 
 func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
+	ctx, finish := a.beginSearchOperation()
+	defer finish()
+
 	a.mu.RLock()
 	state := a.searches[searchID]
 	a.mu.RUnlock()
@@ -142,7 +149,7 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 	a.ensureCaches(user)
 	a.searchCache.Delete(key)
 
-	entry, err := a.cachedSearchResponse(user, key)
+	entry, err := a.cachedSearchResponse(ctx, user, key)
 	if err != nil {
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
@@ -155,7 +162,7 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 			}
 			a.ensureCaches(user)
 			a.searchCache.Delete(key)
-			entry, err = a.cachedSearchResponse(user, key)
+			entry, err = a.cachedSearchResponse(ctx, user, key)
 		}
 		if err != nil {
 			return SearchResponse{}, err
@@ -177,7 +184,7 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 	state.CacheKey = key
 	a.mu.Unlock()
 
-	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(user, state, &entry.Response)
+	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, &entry.Response)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -188,7 +195,7 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 	state.DeliveredCount = len(visible)
 	a.mu.Unlock()
 
-	cards, err := a.buildSubmissionCards(user, visible)
+	cards, err := a.buildSubmissionCards(ctx, user, visible)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -204,6 +211,9 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 }
 
 func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error) {
+	ctx, finish := a.beginSearchOperation()
+	defer finish()
+
 	a.mu.RLock()
 	state := a.searches[searchID]
 	a.mu.RUnlock()
@@ -218,27 +228,27 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 		return SearchResponse{}, err
 	}
 	if !state.ExpiresAt.IsZero() && time.Now().After(state.ExpiresAt) {
-		if err := a.refreshSearchState(user, state); err != nil {
+		if err := a.refreshSearchState(ctx, user, state); err != nil {
 			return SearchResponse{}, err
 		}
 	}
 
-	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(user, state, nil)
+	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, nil)
 	if err != nil {
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
 			if err != nil {
 				return SearchResponse{}, err
 			}
-			if err := a.refreshSearchState(user, state); err != nil {
+			if err := a.refreshSearchState(ctx, user, state); err != nil {
 				return SearchResponse{}, err
 			}
-			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(user, state, nil)
+			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(ctx, user, state, nil)
 		} else if a.handleRIDExpiredError(err) {
-			if err := a.refreshSearchStateForced(user, state); err != nil {
+			if err := a.refreshSearchStateForced(ctx, user, state); err != nil {
 				return SearchResponse{}, err
 			}
-			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(user, state, nil)
+			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(ctx, user, state, nil)
 		}
 	}
 	if err != nil {
@@ -251,7 +261,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 	state.DeliveredCount += len(visible)
 	a.mu.Unlock()
 
-	cards, err := a.buildSubmissionCards(user, visible)
+	cards, err := a.buildSubmissionCards(ctx, user, visible)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -322,6 +332,10 @@ func (a *App) GetUsernameSuggestions(query string) ([]UsernameSuggestion, error)
 }
 
 func (a *App) GetWatching() ([]UsernameSuggestion, error) {
+	return a.getWatching(context.Background())
+}
+
+func (a *App) getWatching(ctx context.Context) ([]UsernameSuggestion, error) {
 	user, err := a.ensureSearchSession()
 	if err != nil {
 		return nil, err
@@ -331,7 +345,7 @@ func (a *App) GetWatching() ([]UsernameSuggestion, error) {
 	}
 
 	a.ensureCaches(user)
-	items, err := a.watchingCache.Get(watchingCacheKey{
+	items, err := a.watchingCache.GetWithContext(ctx, watchingCacheKey{
 		Scope: sessionScope(user),
 	})
 	if err != nil {
@@ -341,7 +355,7 @@ func (a *App) GetWatching() ([]UsernameSuggestion, error) {
 				return nil, err
 			}
 			a.ensureCaches(user)
-			items, err = a.watchingCache.Get(watchingCacheKey{
+			items, err = a.watchingCache.GetWithContext(ctx, watchingCacheKey{
 				Scope: sessionScope(user),
 			})
 		}
@@ -352,7 +366,12 @@ func (a *App) GetWatching() ([]UsernameSuggestion, error) {
 	return items, nil
 }
 
-func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams, artistFilters []string) (inkbunny.SubmissionSearchRequest, error) {
+func (a *App) buildSearchRequest(
+	ctx context.Context,
+	user *inkbunny.User,
+	params SearchParams,
+	artistFilters []string,
+) (inkbunny.SubmissionSearchRequest, error) {
 	perPage := params.PerPage
 	if perPage <= 0 || perPage > 100 {
 		perPage = defaultSearchPerPage
@@ -415,7 +434,7 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams, artis
 	}
 
 	if favBy := strings.TrimSpace(params.FavoritesBy); favBy != "" {
-		member, ok, err := a.lookupUsernameSuggestion(user, favBy)
+		member, ok, err := a.lookupUsernameSuggestion(ctx, user, favBy)
 		if err != nil {
 			return req, err
 		}
@@ -428,7 +447,7 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams, artis
 	}
 
 	if req.Username != "" {
-		member, ok, err := a.lookupUsernameSuggestion(user, req.Username)
+		member, ok, err := a.lookupUsernameSuggestion(ctx, user, req.Username)
 		if err != nil {
 			return req, err
 		}
@@ -487,15 +506,19 @@ func normalizeScrapsMode(value string) inkbunny.Scraps {
 	}
 }
 
-func (a *App) buildSubmissionCards(user *inkbunny.User, submissions []inkbunny.SubmissionSearch) ([]SubmissionCard, error) {
-	downloadedSubmissions, err := a.lookupDownloadedSubmissions(user, submissions)
+func (a *App) buildSubmissionCards(
+	ctx context.Context,
+	user *inkbunny.User,
+	submissions []inkbunny.SubmissionSearch,
+) ([]SubmissionCard, error) {
+	downloadedSubmissions, err := a.lookupDownloadedSubmissions(ctx, user, submissions)
 	if err != nil {
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
 			if err != nil {
 				return nil, err
 			}
-			downloadedSubmissions, err = a.lookupDownloadedSubmissions(user, submissions)
+			downloadedSubmissions, err = a.lookupDownloadedSubmissions(ctx, user, submissions)
 		}
 		if err != nil {
 			return nil, err
@@ -561,7 +584,11 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string, dow
 	return cards
 }
 
-func (a *App) lookupDownloadedSubmissions(user *inkbunny.User, submissions []inkbunny.SubmissionSearch) (map[string]bool, error) {
+func (a *App) lookupDownloadedSubmissions(
+	ctx context.Context,
+	user *inkbunny.User,
+	submissions []inkbunny.SubmissionSearch,
+) (map[string]bool, error) {
 	downloaded := make(map[string]bool, len(submissions))
 	if len(submissions) == 0 {
 		return downloaded, nil
@@ -584,7 +611,7 @@ func (a *App) lookupDownloadedSubmissions(user *inkbunny.User, submissions []ink
 		return downloaded, nil
 	}
 
-	details, err := a.cachedSubmissionDetailsBatched(user, submissionIDs)
+	details, err := a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +650,12 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, initial *inkbunny.SubmissionSearchResponse) ([]inkbunny.SubmissionSearch, int, bool, error) {
+func (a *App) collectVisibleSearchPage(
+	ctx context.Context,
+	user *inkbunny.User,
+	state *searchState,
+	initial *inkbunny.SubmissionSearchResponse,
+) ([]inkbunny.SubmissionSearch, int, bool, error) {
 	if state == nil {
 		return nil, 0, false, errors.New("search state is missing")
 	}
@@ -688,7 +720,10 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 	}
 
 	for len(visible) < target && nextServerPage > 0 && nextServerPage <= pagesCount {
-		response, err := a.cachedLoadMore(state, nextServerPage)
+		if err := ctx.Err(); err != nil {
+			return nil, 0, false, err
+		}
+		response, err := a.cachedLoadMore(ctx, state, nextServerPage)
 		if err != nil {
 			return nil, 0, false, err
 		}
@@ -965,9 +1000,13 @@ func mapWatchingSuggestions(items []inkbunny.UsernameID) []UsernameSuggestion {
 	return suggestions
 }
 
-func (a *App) resolveArtistFilters(user *inkbunny.User, params SearchParams) ([]string, error) {
+func (a *App) resolveArtistFilters(
+	ctx context.Context,
+	user *inkbunny.User,
+	params SearchParams,
+) ([]string, error) {
 	if params.UseWatchingArtists {
-		items, err := a.GetWatching()
+		items, err := a.getWatching(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -989,8 +1028,8 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 	defer a.cacheMu.Unlock()
 
 	if a.keywordCache == nil {
-		cache := flight.NewCache(func(key keywordCacheKey) ([]inkbunny.KeywordAutocomplete, error) {
-			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "keyword suggestions", func() ([]inkbunny.KeywordAutocomplete, error) {
+		cache := flight.NewCache(func(ctx context.Context, key keywordCacheKey) ([]inkbunny.KeywordAutocomplete, error) {
+			return executeWithRateLimitRetry(ctx, a.rateLimiter, "keyword suggestions", func() ([]inkbunny.KeywordAutocomplete, error) {
 				ratings := inkbunny.ParseMask(key.RatingsMask)
 				return inkbunny.KeywordSuggestion(key.Query, ratings, key.Underscore)
 			})
@@ -998,8 +1037,8 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.keywordCache = &cache
 	}
 	if a.usernameCache == nil {
-		cache := flight.NewCache(func(key usernameCacheKey) ([]UsernameSuggestion, error) {
-			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "username suggestions", func() ([]UsernameSuggestion, error) {
+		cache := flight.NewCache(func(ctx context.Context, key usernameCacheKey) ([]UsernameSuggestion, error) {
+			return executeWithRateLimitRetry(ctx, a.rateLimiter, "username suggestions", func() ([]UsernameSuggestion, error) {
 				current, err := a.ensureSearchSession()
 				if err != nil {
 					return nil, err
@@ -1021,13 +1060,13 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.usernameCache = &cache
 	}
 	if a.avatarCache == nil {
-		cache := flight.NewCache(func(key avatarCacheKey) (string, error) {
-			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "avatar lookups", func() (string, error) {
+		cache := flight.NewCache(func(ctx context.Context, key avatarCacheKey) (string, error) {
+			return executeWithRateLimitRetry(ctx, a.rateLimiter, "avatar lookups", func() (string, error) {
 				current, err := a.ensureSearchSession()
 				if err != nil {
 					return "", err
 				}
-				member, ok, err := a.lookupUsernameSuggestion(current, key.Username)
+				member, ok, err := a.lookupUsernameSuggestion(ctx, current, key.Username)
 				if err != nil {
 					return "", err
 				}
@@ -1040,8 +1079,8 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.avatarCache = &cache
 	}
 	if a.watchingCache == nil {
-		cache := flight.NewCache(func(key watchingCacheKey) ([]UsernameSuggestion, error) {
-			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "watch list", func() ([]UsernameSuggestion, error) {
+		cache := flight.NewCache(func(ctx context.Context, key watchingCacheKey) ([]UsernameSuggestion, error) {
+			return executeWithRateLimitRetry(ctx, a.rateLimiter, "watch list", func() ([]UsernameSuggestion, error) {
 				current, err := a.ensureSearchSession()
 				if err != nil {
 					return nil, err
@@ -1059,8 +1098,8 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.watchingCache = &cache
 	}
 	if a.searchCache == nil {
-		cache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
-			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
+		cache := flight.NewCache(func(ctx context.Context, key searchCacheKey) (cachedSearchResult, error) {
+			return executeWithRateLimitRetry(ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
 				req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
 				if err != nil {
 					return cachedSearchResult{}, err
@@ -1083,8 +1122,8 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.searchCache = &cache
 	}
 	if a.loadMoreCache == nil {
-		cache := flight.NewCache(func(key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
-			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
+		cache := flight.NewCache(func(ctx context.Context, key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
+			return executeWithRateLimitRetry(ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
 				return inkbunny.SearchSubmissions(inkbunny.SubmissionSearchRequest{
 					SID:  key.SID,
 					RID:  key.RID,
@@ -1095,8 +1134,8 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.loadMoreCache = &cache
 	}
 	if a.detailsCache == nil {
-		cache := flight.NewCache(func(key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
-			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
+		cache := flight.NewCache(func(ctx context.Context, key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
+			return executeWithRateLimitRetry(ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
 				current, err := a.ensureSearchSession()
 				if err != nil {
 					return inkbunny.SubmissionDetailsResponse{}, err
@@ -1116,14 +1155,14 @@ func (a *App) resetCaches(user *inkbunny.User) {
 	a.cacheMu.Lock()
 	defer a.cacheMu.Unlock()
 
-	keywordCache := flight.NewCache(func(key keywordCacheKey) ([]inkbunny.KeywordAutocomplete, error) {
-		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "keyword suggestions", func() ([]inkbunny.KeywordAutocomplete, error) {
+	keywordCache := flight.NewCache(func(ctx context.Context, key keywordCacheKey) ([]inkbunny.KeywordAutocomplete, error) {
+		return executeWithRateLimitRetry(ctx, a.rateLimiter, "keyword suggestions", func() ([]inkbunny.KeywordAutocomplete, error) {
 			ratings := inkbunny.ParseMask(key.RatingsMask)
 			return inkbunny.KeywordSuggestion(key.Query, ratings, key.Underscore)
 		})
 	})
-	usernameCache := flight.NewCache(func(key usernameCacheKey) ([]UsernameSuggestion, error) {
-		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "username suggestions", func() ([]UsernameSuggestion, error) {
+	usernameCache := flight.NewCache(func(ctx context.Context, key usernameCacheKey) ([]UsernameSuggestion, error) {
+		return executeWithRateLimitRetry(ctx, a.rateLimiter, "username suggestions", func() ([]UsernameSuggestion, error) {
 			current, err := a.ensureSearchSession()
 			if err != nil {
 				return nil, err
@@ -1142,13 +1181,13 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			return prependCurrentUserSuggestion(suggestions, current, avatar, key.Query), nil
 		})
 	})
-	avatarCache := flight.NewCache(func(key avatarCacheKey) (string, error) {
-		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "avatar lookups", func() (string, error) {
+	avatarCache := flight.NewCache(func(ctx context.Context, key avatarCacheKey) (string, error) {
+		return executeWithRateLimitRetry(ctx, a.rateLimiter, "avatar lookups", func() (string, error) {
 			current, err := a.ensureSearchSession()
 			if err != nil {
 				return "", err
 			}
-			member, ok, err := a.lookupUsernameSuggestion(current, key.Username)
+			member, ok, err := a.lookupUsernameSuggestion(ctx, current, key.Username)
 			if err != nil {
 				return "", err
 			}
@@ -1158,8 +1197,8 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			return defaultAvatarURL, nil
 		})
 	})
-	watchingCache := flight.NewCache(func(key watchingCacheKey) ([]UsernameSuggestion, error) {
-		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "watch list", func() ([]UsernameSuggestion, error) {
+	watchingCache := flight.NewCache(func(ctx context.Context, key watchingCacheKey) ([]UsernameSuggestion, error) {
+		return executeWithRateLimitRetry(ctx, a.rateLimiter, "watch list", func() ([]UsernameSuggestion, error) {
 			current, err := a.ensureSearchSession()
 			if err != nil {
 				return nil, err
@@ -1174,8 +1213,8 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			return mapWatchingSuggestions(items), nil
 		})
 	})
-	searchCache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
-		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
+	searchCache := flight.NewCache(func(ctx context.Context, key searchCacheKey) (cachedSearchResult, error) {
+		return executeWithRateLimitRetry(ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
 			req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
 			if err != nil {
 				return cachedSearchResult{}, err
@@ -1195,8 +1234,8 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			}, nil
 		})
 	})
-	loadMoreCache := flight.NewCache(func(key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
-		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
+	loadMoreCache := flight.NewCache(func(ctx context.Context, key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
+		return executeWithRateLimitRetry(ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
 			return inkbunny.SearchSubmissions(inkbunny.SubmissionSearchRequest{
 				SID:  key.SID,
 				RID:  key.RID,
@@ -1204,8 +1243,8 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			})
 		})
 	})
-	detailsCache := flight.NewCache(func(key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
-		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
+	detailsCache := flight.NewCache(func(ctx context.Context, key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
+		return executeWithRateLimitRetry(ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
 			current, err := a.ensureSearchSession()
 			if err != nil {
 				return inkbunny.SubmissionDetailsResponse{}, err
@@ -1281,9 +1320,13 @@ func minInt(a, b int) int {
 	return b
 }
 
-func (a *App) lookupUsernameSuggestion(user *inkbunny.User, username string) (UsernameSuggestion, bool, error) {
+func (a *App) lookupUsernameSuggestion(
+	ctx context.Context,
+	user *inkbunny.User,
+	username string,
+) (UsernameSuggestion, bool, error) {
 	a.ensureCaches(user)
-	items, err := a.usernameCache.Get(usernameCacheKey{
+	items, err := a.usernameCache.GetWithContext(ctx, usernameCacheKey{
 		Scope: sessionScope(user),
 		Query: normalizeUsername(username),
 	})
@@ -1298,28 +1341,37 @@ func (a *App) lookupUsernameSuggestion(user *inkbunny.User, username string) (Us
 	return UsernameSuggestion{}, false, nil
 }
 
-func (a *App) cachedSearchResponse(user *inkbunny.User, key searchCacheKey) (cachedSearchResult, error) {
+func (a *App) cachedSearchResponse(
+	ctx context.Context,
+	user *inkbunny.User,
+	key searchCacheKey,
+) (cachedSearchResult, error) {
 	a.ensureCaches(user)
-	entry, err := a.searchCache.Get(key)
+	entry, err := a.searchCache.GetWithContext(ctx, key)
 	if err != nil {
 		return cachedSearchResult{}, err
 	}
 	if !entry.Response.RIDExpiry.IsZero() && time.Now().After(entry.Response.RIDExpiry) {
 		a.searchCache.Delete(key)
-		return a.searchCache.Get(key)
+		return a.searchCache.GetWithContext(ctx, key)
 	}
 	return entry, nil
 }
 
-func (a *App) refreshSearchState(user *inkbunny.User, state *searchState) error {
-	return a.refreshSearchStateWithOptions(user, state, false)
+func (a *App) refreshSearchState(ctx context.Context, user *inkbunny.User, state *searchState) error {
+	return a.refreshSearchStateWithOptions(ctx, user, state, false)
 }
 
-func (a *App) refreshSearchStateForced(user *inkbunny.User, state *searchState) error {
-	return a.refreshSearchStateWithOptions(user, state, true)
+func (a *App) refreshSearchStateForced(ctx context.Context, user *inkbunny.User, state *searchState) error {
+	return a.refreshSearchStateWithOptions(ctx, user, state, true)
 }
 
-func (a *App) refreshSearchStateWithOptions(user *inkbunny.User, state *searchState, force bool) error {
+func (a *App) refreshSearchStateWithOptions(
+	ctx context.Context,
+	user *inkbunny.User,
+	state *searchState,
+	force bool,
+) error {
 	if state == nil {
 		return errors.New("search state is missing")
 	}
@@ -1331,7 +1383,7 @@ func (a *App) refreshSearchStateWithOptions(user *inkbunny.User, state *searchSt
 		a.ensureCaches(user)
 		a.searchCache.Delete(key)
 	}
-	entry, err := a.cachedSearchResponse(user, key)
+	entry, err := a.cachedSearchResponse(ctx, user, key)
 	if err != nil {
 		return err
 	}
@@ -1345,12 +1397,16 @@ func (a *App) refreshSearchStateWithOptions(user *inkbunny.User, state *searchSt
 	return nil
 }
 
-func (a *App) cachedLoadMore(state *searchState, page int) (inkbunny.SubmissionSearchResponse, error) {
+func (a *App) cachedLoadMore(
+	ctx context.Context,
+	state *searchState,
+	page int,
+) (inkbunny.SubmissionSearchResponse, error) {
 	if state == nil {
 		return inkbunny.SubmissionSearchResponse{}, errors.New("search state is missing")
 	}
 	a.ensureCaches(a.user)
-	return a.loadMoreCache.Get(loadMoreCacheKey{
+	return a.loadMoreCache.GetWithContext(ctx, loadMoreCacheKey{
 		SID:  state.SID,
 		RID:  state.RID,
 		Page: page,

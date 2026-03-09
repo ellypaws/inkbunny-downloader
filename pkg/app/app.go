@@ -22,12 +22,15 @@ type App struct {
 	mu              sync.RWMutex
 	cacheMu         sync.Mutex
 	searchIDMu      sync.Mutex
+	searchOpMu      sync.Mutex
 	user            *inkbunny.User
 	settings        AppSettings
 	sessionAvatar   string
 	searches        map[string]*searchState
 	lastSearchID    string
 	searchCounter   int
+	searchOpID      uint64
+	searchOpCancel  context.CancelFunc
 	keywordCache    *flight.Cache[keywordCacheKey, []inkbunny.KeywordAutocomplete]
 	usernameCache   *flight.Cache[usernameCacheKey, []UsernameSuggestion]
 	avatarCache     *flight.Cache[avatarCacheKey, string]
@@ -76,6 +79,42 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func (a *App) Shutdown(context.Context) {}
+
+func (a *App) beginSearchOperation() (context.Context, func()) {
+	base := a.ctx
+	if base == nil {
+		base = context.Background()
+	}
+
+	ctx, cancel := context.WithCancel(base)
+
+	a.searchOpMu.Lock()
+	a.searchOpID++
+	opID := a.searchOpID
+	a.searchOpCancel = cancel
+	a.searchOpMu.Unlock()
+
+	finish := func() {
+		a.searchOpMu.Lock()
+		if a.searchOpID == opID {
+			a.searchOpCancel = nil
+		}
+		a.searchOpMu.Unlock()
+		cancel()
+	}
+
+	return ctx, finish
+}
+
+func (a *App) CancelSearchRequests() {
+	a.searchOpMu.Lock()
+	cancel := a.searchOpCancel
+	a.searchOpCancel = nil
+	a.searchOpMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
 
 func (a *App) emitNotification(notification AppNotification) {
 	if a.ctx == nil {
@@ -483,6 +522,14 @@ func (a *App) syncSessionAvatar(user *inkbunny.User) {
 }
 
 func (a *App) cachedSubmissionDetails(user *inkbunny.User, submissionIDs []string) (inkbunny.SubmissionDetailsResponse, error) {
+	return a.cachedSubmissionDetailsWithContext(context.Background(), user, submissionIDs)
+}
+
+func (a *App) cachedSubmissionDetailsWithContext(
+	ctx context.Context,
+	user *inkbunny.User,
+	submissionIDs []string,
+) (inkbunny.SubmissionDetailsResponse, error) {
 	a.ensureCaches(user)
 
 	ids := slices.Clone(submissionIDs)
@@ -491,16 +538,24 @@ func (a *App) cachedSubmissionDetails(user *inkbunny.User, submissionIDs []strin
 		SID:           user.SID,
 		SubmissionIDs: strings.Join(ids, ","),
 	}
-	return a.detailsCache.Get(key)
+	return a.detailsCache.GetWithContext(ctx, key)
 }
 
 func (a *App) cachedSubmissionDetailsBatched(user *inkbunny.User, submissionIDs []string) (inkbunny.SubmissionDetailsResponse, error) {
+	return a.cachedSubmissionDetailsBatchedWithContext(context.Background(), user, submissionIDs)
+}
+
+func (a *App) cachedSubmissionDetailsBatchedWithContext(
+	ctx context.Context,
+	user *inkbunny.User,
+	submissionIDs []string,
+) (inkbunny.SubmissionDetailsResponse, error) {
 	ids := normalizeSubmissionIDs(submissionIDs)
 	if len(ids) == 0 {
 		return inkbunny.SubmissionDetailsResponse{}, nil
 	}
 	if len(ids) <= submissionDetailsBatchSize {
-		return a.cachedSubmissionDetails(user, ids)
+		return a.cachedSubmissionDetailsWithContext(ctx, user, ids)
 	}
 
 	response := inkbunny.SubmissionDetailsResponse{}
@@ -515,7 +570,7 @@ func (a *App) cachedSubmissionDetailsBatched(user *inkbunny.User, submissionIDs 
 			end = len(ids)
 		}
 
-		batch, err := a.cachedSubmissionDetails(user, ids[start:end])
+		batch, err := a.cachedSubmissionDetailsWithContext(ctx, user, ids[start:end])
 		if err != nil {
 			return inkbunny.SubmissionDetailsResponse{}, err
 		}

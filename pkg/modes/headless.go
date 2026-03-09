@@ -2,6 +2,7 @@ package modes
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -52,7 +53,9 @@ Login:
 	cleanup := prepareGuestSession(user, false)
 	defer cleanup()
 
-	usernameCache := flight.NewCache(user.SearchMembers)
+	usernameCache := flight.NewCache(func(_ context.Context, query string) ([]inkbunny.Autocomplete, error) {
+		return user.SearchMembers(query)
+	})
 	config.ApplyTo(&request, &searchIn, &favBy, &maxDownloads, nil, &downloadCaption)
 
 	request.SearchInKeywords = nil

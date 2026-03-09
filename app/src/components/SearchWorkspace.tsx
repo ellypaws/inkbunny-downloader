@@ -43,6 +43,7 @@ type SearchWorkspaceProps = {
   onRemoveArtist: (value: string) => void;
   onToggleMyWatches: () => void;
   onSearch: () => void;
+  onStopSearch: () => void;
   onToggleCollapse: () => void;
   onToggleRating: (index: number) => void;
 };
@@ -200,19 +201,18 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   </div>
                   <button
                     type="button"
-                    onClick={props.onSearch}
-                    disabled={props.loading}
+                    onClick={props.loading ? props.onStopSearch : props.onSearch}
                     className={`theme-button-accent flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-5 py-3.5 text-sm font-black shadow-xl transition-all sm:w-32 ${
                       props.loading ? "opacity-70" : ""
                     }`}
                     data-tour-anchor="search-action"
                   >
                     {props.loading ? (
-                      <LoaderCircle className="animate-spin" size={18} />
+                      <X size={18} />
                     ) : (
                       <SearchIcon size={18} />
                     )}
-                    Search
+                    {props.loading ? "Stop" : "Search"}
                   </button>
                   <div className="theme-muted text-sm leading-6 sm:col-span-2">
                     Separate words with spaces. Use{" "}
@@ -609,18 +609,17 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={props.onSearch}
-                  disabled={props.loading}
+                  onClick={props.loading ? props.onStopSearch : props.onSearch}
                   className={`theme-button-accent flex w-full items-center justify-center gap-2 rounded-2xl border-b-8 px-6 py-3.5 text-sm font-black shadow-xl transition-all xl:w-40 xl:self-end ${
                     props.loading ? "opacity-70" : ""
                   }`}
                 >
                   {props.loading ? (
-                    <LoaderCircle className="animate-spin" size={18} />
+                    <X size={18} />
                   ) : (
                     <SearchIcon size={18} />
                   )}
-                  Search
+                  {props.loading ? "Stop" : "Search"}
                 </button>
               </div>
             </div>

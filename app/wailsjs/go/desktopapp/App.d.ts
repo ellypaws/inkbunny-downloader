@@ -4,6 +4,8 @@ import {desktopapp} from '../models';
 
 export function CancelDownload(arg1:string):Promise<desktopapp.QueueSnapshot>;
 
+export function CancelSearchRequests():Promise<void>;
+
 export function CancelSubmission(arg1:string):Promise<desktopapp.QueueSnapshot>;
 
 export function ClearCompletedDownloads():Promise<desktopapp.QueueSnapshot>;

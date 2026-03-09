@@ -6,6 +6,10 @@ export function CancelDownload(arg1) {
   return window['go']['desktopapp']['App']['CancelDownload'](arg1);
 }
 
+export function CancelSearchRequests() {
+  return window['go']['desktopapp']['App']['CancelSearchRequests']();
+}
+
 export function DiagnosticState() {
   return window['go']['desktopapp']['App']['DiagnosticState']();
 }

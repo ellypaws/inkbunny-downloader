@@ -1,6 +1,7 @@
 package modes
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -54,8 +55,13 @@ Login:
 	cleanup := prepareGuestSession(user, true)
 	defer cleanup()
 
-	usernameCache := flight.NewCache(user.SearchMembers)
-	model := uitui.NewModel(user, user.Username, new(flight.NewCache(keywordCache(user.Ratings))), &usernameCache)
+	usernameCache := flight.NewCache(func(_ context.Context, query string) ([]inkbunny.Autocomplete, error) {
+		return user.SearchMembers(query)
+	})
+	keywordSuggestionsCache := flight.NewCache(func(_ context.Context, query string) ([]inkbunny.KeywordAutocomplete, error) {
+		return keywordCache(user.Ratings)(query)
+	})
+	model := uitui.NewModel(user, user.Username, &keywordSuggestionsCache, &usernameCache)
 
 	var (
 		p          *tea.Program

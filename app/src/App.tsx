@@ -145,6 +145,9 @@ export default function App() {
   const loadMoreControllersRef = useRef(
     new Map<string, { runId: number; stopRequested: boolean }>(),
   );
+  const searchRequestControllersRef = useRef(
+    new Map<string, { runId: number; stopRequested: boolean }>(),
+  );
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
@@ -311,6 +314,52 @@ export default function App() {
             loadMoreState: createIdleLoadMoreState(),
           },
     );
+  }
+
+  function startSearchRequestRun(tabId: string) {
+    const current = searchRequestControllersRef.current.get(tabId);
+    const runId = (current?.runId ?? 0) + 1;
+    searchRequestControllersRef.current.set(tabId, {
+      runId,
+      stopRequested: false,
+    });
+    return runId;
+  }
+
+  function isSearchRequestRunActive(tabId: string, runId: number) {
+    return searchRequestControllersRef.current.get(tabId)?.runId === runId;
+  }
+
+  function isSearchRequestStopRequested(tabId: string, runId: number) {
+    const controller = searchRequestControllersRef.current.get(tabId);
+    return !controller || controller.runId !== runId || controller.stopRequested;
+  }
+
+  function stopSearchRequest(tabId: string) {
+    const controller = searchRequestControllersRef.current.get(tabId);
+    if (!controller) {
+      return;
+    }
+    controller.stopRequested = true;
+  }
+
+  async function stopActiveSearch(targetTabId = activeTabIdRef.current) {
+    stopSearchRequest(targetTabId);
+    stopLoadMore(targetTabId);
+    cancelLoadMore(targetTabId);
+    updateTab(targetTabId, (currentTab) =>
+      currentTab.searchLoading
+        ? {
+            ...currentTab,
+            searchLoading: false,
+          }
+        : currentTab,
+    );
+    try {
+      await backend.cancelSearchRequests();
+    } catch {
+      // Ignore stop failures and let the local stop guard prevent stale updates.
+    }
   }
 
   function dismissToast(id: string) {
@@ -1103,6 +1152,7 @@ export default function App() {
       searchLoading: true,
       searchError: "",
     }));
+    const runId = startSearchRequestRun(targetTabId);
     try {
       const normalizedParams = normalizeSearchParamsForMode(
         finalizeArtistDraft(tab.searchParams, tab.artistDraft),
@@ -1118,6 +1168,9 @@ export default function App() {
               maxActive: settingsRef.current.maxActive,
             })
           : await backend.loadMoreResults(tab.searchResponse!.searchId, page);
+      if (isSearchRequestStopRequested(targetTabId, runId)) {
+        return undefined;
+      }
       if (tourOpen && tourStepId === "run-search" && page === 1) {
         setTourSearchAttempted(true);
       }
@@ -1162,12 +1215,20 @@ export default function App() {
       });
       return response;
     } catch (error) {
+      if (
+        isSearchRequestStopRequested(targetTabId, runId) ||
+        isSearchCancellationError(error)
+      ) {
+        return undefined;
+      }
       const message = getErrorMessage(error, "Search failed.");
       updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
       pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
       return undefined;
     } finally {
-      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+      if (isSearchRequestRunActive(targetTabId, runId)) {
+        updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+      }
     }
   }
 
@@ -1184,8 +1245,12 @@ export default function App() {
       searchLoading: true,
       searchError: "",
     }));
+    const runId = startSearchRequestRun(resolvedTabId);
     try {
       const response = await backend.refreshSearch(tab.searchResponse.searchId);
+      if (isSearchRequestStopRequested(resolvedTabId, runId)) {
+        return;
+      }
       applySession(response.session);
       startTransition(() => {
         setTabs((previous) =>
@@ -1210,11 +1275,19 @@ export default function App() {
         );
       });
     } catch (error) {
+      if (
+        isSearchRequestStopRequested(resolvedTabId, runId) ||
+        isSearchCancellationError(error)
+      ) {
+        return;
+      }
       const message = getErrorMessage(error, "Refresh failed.");
       updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchError: message }));
       pushErrorToast(message, "refresh-search-error");
     } finally {
-      updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+      if (isSearchRequestRunActive(resolvedTabId, runId)) {
+        updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+      }
     }
   }
 
@@ -1296,11 +1369,7 @@ export default function App() {
   }
 
   function handleStopLoadMore(targetTabId = activeTabIdRef.current) {
-    stopLoadMore(targetTabId);
-    const tab = tabsRef.current.find((item) => item.id === targetTabId);
-    if (!tab?.searchLoading) {
-      cancelLoadMore(targetTabId);
-    }
+    void stopActiveSearch(targetTabId);
   }
 
   async function handleQueueDownloads() {
@@ -1661,6 +1730,7 @@ export default function App() {
               }}
               onToggleMyWatches={() => void handleToggleWatchingArtists()}
               onSearch={() => void handleSearch(1)}
+              onStopSearch={() => void stopActiveSearch()}
               onToggleCollapse={() => {
                 if (!activeTab) {
                   return;
@@ -1847,6 +1917,15 @@ function getErrorMessage(error: unknown, fallback: string) {
 function isRateLimitMessage(message: string) {
   const value = message.toLowerCase();
   return value.includes("rate limiting") || (value.includes("429") && value.includes("inkbunny"));
+}
+
+function isSearchCancellationError(error: unknown) {
+  const message = getErrorMessage(error, "").toLowerCase();
+  return (
+    message === "context canceled" ||
+    message.includes("context canceled") ||
+    message.includes("operation was canceled")
+  );
 }
 
 function clampConcurrentDownloads(value: number) {
