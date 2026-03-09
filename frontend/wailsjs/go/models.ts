@@ -189,6 +189,7 @@ export namespace desktopapp {
 	    searchInTitle: boolean;
 	    searchInDescription: boolean;
 	    searchInMD5: boolean;
+	    unreadSubmissions: boolean;
 	    artistName: string;
 	    favoritesBy: string;
 	    timeRangeDays: number;
@@ -212,6 +213,7 @@ export namespace desktopapp {
 	        this.searchInTitle = source["searchInTitle"];
 	        this.searchInDescription = source["searchInDescription"];
 	        this.searchInMD5 = source["searchInMD5"];
+	        this.unreadSubmissions = source["unreadSubmissions"];
 	        this.artistName = source["artistName"];
 	        this.favoritesBy = source["favoritesBy"];
 	        this.timeRangeDays = source["timeRangeDays"];

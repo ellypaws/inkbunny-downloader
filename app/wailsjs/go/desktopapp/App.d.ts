@@ -24,6 +24,8 @@ export function GetReleaseStatus():Promise<desktopapp.ReleaseStatus>;
 
 export function GetSession():Promise<desktopapp.SessionInfo>;
 
+export function GetUnreadSubmissionCount():Promise<number>;
+
 export function GetUsernameSuggestions(arg1:string):Promise<Array<desktopapp.UsernameSuggestion>>;
 
 export function LoadMoreResults(arg1:string,arg2:number):Promise<desktopapp.SearchResponse>;

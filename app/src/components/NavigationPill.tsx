@@ -1,39 +1,65 @@
-import { Moon, PanelsTopLeft, Sun, Waves } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Moon, PanelsTopLeft, Sun, Waves } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
-import { DEFAULT_AVATAR_URL } from '../lib/constants'
-import type { SessionInfo } from '../lib/types'
+import { NewSubmissionsBadge } from "./NewSubmissionsBadge";
+import { DEFAULT_AVATAR_URL } from "../lib/constants";
+import type { SessionInfo } from "../lib/types";
 
 type NavigationPillProps = {
-  darkMode: boolean
-  motionEnabled: boolean
-  tabsOpen: boolean
-  session: SessionInfo
-  onToggleDarkMode: () => void
-  onToggleMotion: () => void
-  onToggleTabs: () => void
-  onOpenLogin: () => void
-  onLogout: () => void
-}
+  darkMode: boolean;
+  motionEnabled: boolean;
+  tabsOpen: boolean;
+  session: SessionInfo;
+  unreadTotal: number;
+  newUnreadCount: number;
+  unreadActive: boolean;
+  onToggleDarkMode: () => void;
+  onToggleMotion: () => void;
+  onToggleTabs: () => void;
+  onOpenUnread: () => void;
+  onOpenLogin: () => void;
+  onLogout: () => void;
+};
 
 export function NavigationPill(props: NavigationPillProps) {
-  const [isHidden, setIsHidden] = useState(false)
+  const [isHidden, setIsHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
 
   useEffect(() => {
-    const onScroll = () => setIsHidden(window.scrollY > 220)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+    const onScroll = () => {
+      const currentScrollY = window.scrollY;
+      const previousScrollY = lastScrollYRef.current;
+      const scrollingUp = currentScrollY < previousScrollY;
+
+      if (currentScrollY <= 120) {
+        setIsHidden(false);
+      } else if (scrollingUp) {
+        setIsHidden(false);
+      } else if (currentScrollY > previousScrollY + 8) {
+        setIsHidden(true);
+      }
+
+      lastScrollYRef.current = currentScrollY;
+    };
+
+    lastScrollYRef.current = window.scrollY;
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <nav
-      className={`theme-panel static md:fixed mt-5 md:mt-0 md:top-6 left-0 right-0 mx-auto flex w-[92%] max-w-6xl items-center justify-between rounded-full border px-6 py-3 backdrop-blur-xl shadow-pop transition-all duration-300 z-50 ${
-        isHidden ? 'opacity-0 -translate-y-10 pointer-events-none' : 'opacity-100'
+      className={`theme-panel static md:fixed mt-5 md:mt-0 md:top-6 left-0 right-0 mx-auto flex w-[92%] max-w-6xl items-center justify-between overflow-visible rounded-full border px-6 py-3 backdrop-blur-xl shadow-pop transition-all duration-500 ease-out z-50 ${
+        isHidden
+          ? "opacity-0 -translate-y-6 pointer-events-none scale-[0.985]"
+          : "opacity-100 translate-y-0 scale-100"
       }`}
     >
       <div className="absolute -top-3 -left-3 text-2xl drop-shadow-md">✨</div>
-      <div className="absolute -bottom-3 -right-3 text-2xl drop-shadow-md">🐇</div>
+      <div className="absolute -bottom-3 -right-3 text-2xl drop-shadow-md">
+        🐇
+      </div>
       <div className="flex items-center gap-3">
         <div className="relative flex items-center">
           <img
@@ -43,9 +69,11 @@ export function NavigationPill(props: NavigationPillProps) {
           />
           <img
             src={props.session.avatarUrl || DEFAULT_AVATAR_URL}
-            alt={props.session.hasSession ? props.session.username : 'signed out'}
+            alt={
+              props.session.hasSession ? props.session.username : "signed out"
+            }
             onError={(event) => {
-              event.currentTarget.src = DEFAULT_AVATAR_URL
+              event.currentTarget.src = DEFAULT_AVATAR_URL;
             }}
             className="absolute -bottom-1 -right-2 h-7 w-7 rounded-full border border-white bg-white object-cover shadow-md"
           />
@@ -55,15 +83,32 @@ export function NavigationPill(props: NavigationPillProps) {
             Inkbunny downloader
           </div>
           <div className="theme-muted text-xs font-bold">
-            {props.session.hasSession ? `Session: ${props.session.username}` : 'Search and queue downloads'}
+            {props.session.hasSession
+              ? `Session: ${props.session.username}`
+              : "Search and queue downloads"}
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-3 md:gap-4">
+      <div
+        className={`relative flex h-12 items-center gap-3 md:gap-4 ${
+          props.session.hasSession && !props.session.isGuest
+            ? "ml-[112px] sm:ml-[124px] md:ml-[140px]"
+            : ""
+        }`}
+      >
+        {props.session.hasSession && !props.session.isGuest ? (
+          <NewSubmissionsBadge
+            unreadTotal={props.unreadTotal}
+            newUnreadCount={props.newUnreadCount}
+            unreadActive={props.unreadActive}
+            onOpenUnread={props.onOpenUnread}
+            className="absolute right-[calc(100%-25.35rem)] top-0 scale-70"
+          />
+        ) : null}
         <button
           onClick={props.onToggleTabs}
           className={`theme-title theme-hover p-2 rounded-full transition-colors ${
-            props.tabsOpen ? 'theme-panel-soft' : ''
+            props.tabsOpen ? "theme-panel-soft" : ""
           }`}
           title="Toggle tabs"
           aria-pressed={props.tabsOpen}
@@ -74,7 +119,7 @@ export function NavigationPill(props: NavigationPillProps) {
         <button
           onClick={props.onToggleMotion}
           className={`theme-title theme-hover p-2 rounded-full transition-colors ${
-            !props.motionEnabled ? 'opacity-50' : ''
+            !props.motionEnabled ? "opacity-50" : ""
           }`}
           title="Toggle motion"
         >
@@ -104,5 +149,5 @@ export function NavigationPill(props: NavigationPillProps) {
         )}
       </div>
     </nav>
-  )
+  );
 }

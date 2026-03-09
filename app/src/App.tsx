@@ -38,6 +38,8 @@ import { GLOBAL_STYLES } from "./styles/globalStyles";
 const GUEST_DEFAULT_MAX_DOWNLOADS = 256;
 const RELEASE_UPDATE_TOAST_ID = "release-update-toast";
 const TOUR_STEP_DELAY_MS = 420;
+const UNREAD_POLL_INTERVAL_MS = 60_000;
+const LOAD_ALL_DELAY_MS = 500;
 
 declare global {
   interface Window {
@@ -50,8 +52,17 @@ type InkbunnyDebugControls = {
   showOnboarding: () => void;
 };
 
+type SearchTabMode = "default" | "unread";
+type SearchTabLoadMoreMode = "idle" | "more" | "all";
+
+type SearchTabLoadMoreState = {
+  mode: SearchTabLoadMoreMode;
+  pagesLoaded: number;
+};
+
 type SearchTabState = {
   id: string;
+  mode: SearchTabMode;
   searchParams: SearchParams;
   searchResponse: SearchResponse | null;
   results: SubmissionCard[];
@@ -61,6 +72,7 @@ type SearchTabState = {
   searchCollapsed: boolean;
   searchError: string;
   resultsRefreshToken: number;
+  loadMoreState: SearchTabLoadMoreState;
 };
 
 type TourStepId =
@@ -103,6 +115,8 @@ export default function App() {
   const [tourStepId, setTourStepId] = useState<TourStepId>("tabs-toggle");
   const [tourSearchAttempted, setTourSearchAttempted] = useState(false);
   const [tourAdvancing, setTourAdvancing] = useState(false);
+  const [unreadTotal, setUnreadTotal] = useState(0);
+  const [trackedUnreadBaseline, setTrackedUnreadBaseline] = useState(-1);
 
   const lagTextRef = useRef<HTMLHeadingElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
@@ -121,8 +135,12 @@ export default function App() {
   const activeTabIdRef = useRef(activeTabId);
   const sessionRef = useRef(session);
   const settingsRef = useRef(settings);
+  const unreadTotalRef = useRef(unreadTotal);
   const tourAdvanceTimeoutRef = useRef<number | null>(null);
   const scheduledTourAdvanceRef = useRef("");
+  const loadMoreControllersRef = useRef(
+    new Map<string, { runId: number; stopRequested: boolean }>(),
+  );
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
@@ -163,6 +181,12 @@ export default function App() {
   const activeSearchCollapsed = activeTab?.searchCollapsed ?? false;
   const activeSearchError = activeTab?.searchError ?? "";
   const activeResultsRefreshToken = activeTab?.resultsRefreshToken ?? 0;
+  const activeLoadMoreState = activeTab?.loadMoreState ?? createIdleLoadMoreState();
+  const activeSearchBusy =
+    activeSearchLoading || activeLoadMoreState.mode !== "idle";
+  const unreadModeActive = activeTab?.mode === "unread";
+  const newUnreadCount =
+    trackedUnreadBaseline < 0 ? 0 : Math.max(unreadTotal - trackedUnreadBaseline, 0);
   const hasSelectableActiveResult = activeResults.some(
     (item) => !downloadedSubmissionIds.has(item.submissionId),
   );
@@ -201,6 +225,20 @@ export default function App() {
         subtitle: getSearchTabSubtitle(tab),
         active: tab.id === activeTabId,
         ariaLabel: `Switch to ${getSearchTabLabel(tab, index)}`,
+        hoverStyles:
+          tab.mode === "unread"
+            ? {
+                bgColor: "#f5efb0",
+                textColor: "#21400f",
+              }
+            : undefined,
+        activeStyles:
+          tab.mode === "unread"
+            ? {
+                bgColor: "#f5efb0",
+                textColor: "#21400f",
+              }
+            : undefined,
       })),
     [activeTabId, tabs],
   );
@@ -213,13 +251,61 @@ export default function App() {
     setTabs((previous) =>
       previous.map((tab) => ({
         ...tab,
-        searchParams: syncSearchParamsWithSession(tab.searchParams, nextSession, nextSettings),
+        searchParams: syncSearchParamsWithSession(
+          tab.searchParams,
+          nextSession,
+          nextSettings,
+          tab.mode,
+        ),
       })),
     );
   }
 
   function updateTab(tabId: string, updater: (tab: SearchTabState) => SearchTabState) {
     setTabs((previous) => previous.map((tab) => (tab.id === tabId ? updater(tab) : tab)));
+  }
+
+  function startLoadMoreRun(tabId: string) {
+    const current = loadMoreControllersRef.current.get(tabId);
+    const runId = (current?.runId ?? 0) + 1;
+    loadMoreControllersRef.current.set(tabId, {
+      runId,
+      stopRequested: false,
+    });
+    return runId;
+  }
+
+  function isLoadMoreRunActive(tabId: string, runId: number) {
+    return loadMoreControllersRef.current.get(tabId)?.runId === runId;
+  }
+
+  function isLoadMoreStopRequested(tabId: string, runId: number) {
+    const controller = loadMoreControllersRef.current.get(tabId);
+    return !controller || controller.runId !== runId || controller.stopRequested;
+  }
+
+  function stopLoadMore(tabId: string) {
+    const controller = loadMoreControllersRef.current.get(tabId);
+    if (!controller) {
+      return;
+    }
+    controller.stopRequested = true;
+  }
+
+  function cancelLoadMore(tabId: string) {
+    const current = loadMoreControllersRef.current.get(tabId);
+    loadMoreControllersRef.current.set(tabId, {
+      runId: (current?.runId ?? 0) + 1,
+      stopRequested: true,
+    });
+    updateTab(tabId, (tab) =>
+      tab.loadMoreState.mode === "idle"
+        ? tab
+        : {
+            ...tab,
+            loadMoreState: createIdleLoadMoreState(),
+          },
+    );
   }
 
   function dismissToast(id: string) {
@@ -338,6 +424,46 @@ export default function App() {
     setActiveTabId(nextTab.id);
   }
 
+  async function resetUnreadBaseline() {
+    if (!sessionRef.current.hasSession || sessionRef.current.isGuest) {
+      setUnreadTotal(0);
+      setTrackedUnreadBaseline(-1);
+      return;
+    }
+
+    try {
+      const total = await backend.getUnreadSubmissionCount();
+      setUnreadTotal(total);
+      setTrackedUnreadBaseline(total);
+    } catch {
+      setTrackedUnreadBaseline(unreadTotalRef.current);
+    }
+  }
+
+  async function handleOpenUnreadTab() {
+    if (!sessionRef.current.hasSession || sessionRef.current.isGuest) {
+      return;
+    }
+
+    const currentTabs = tabsRef.current;
+    const currentTab = currentTabs.find((tab) => tab.id === activeTabIdRef.current) ?? null;
+    const reuseCurrentTab =
+      currentTab !== null && isSearchTabUntouched(currentTab, sessionRef.current, settingsRef.current);
+    const targetTab = reuseCurrentTab
+      ? switchSearchTabToUnread(currentTab!, sessionRef.current, settingsRef.current)
+      : createUnreadSearchTab(sessionRef.current, settingsRef.current);
+    const nextTabs = reuseCurrentTab
+      ? currentTabs.map((tab) => (tab.id === targetTab.id ? targetTab : tab))
+      : [...currentTabs, targetTab];
+
+    tabsRef.current = nextTabs;
+    activeTabIdRef.current = targetTab.id;
+    setTabs(nextTabs);
+    setActiveTabId(targetTab.id);
+    await resetUnreadBaseline();
+    void handleSearch(1, targetTab.id);
+  }
+
   function handleCloseTab(tabId: string) {
     const currentTabs = tabsRef.current;
     const closingIndex = currentTabs.findIndex((tab) => tab.id === tabId);
@@ -368,8 +494,44 @@ export default function App() {
   useEffect(() => void (activeTabIdRef.current = activeTabId), [activeTabId]);
   useEffect(() => void (sessionRef.current = session), [session]);
   useEffect(() => void (settingsRef.current = settings), [settings]);
+  useEffect(() => void (unreadTotalRef.current = unreadTotal), [unreadTotal]);
   useEffect(() => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds), [downloadedSubmissionIds]);
   useEffect(() => void (toastsRef.current = toasts), [toasts]);
+  useEffect(() => {
+    if (!session.hasSession || session.isGuest) {
+      setUnreadTotal(0);
+      setTrackedUnreadBaseline(-1);
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollUnreadCount = async () => {
+      if (apiCooldownUntil > Date.now()) {
+        return;
+      }
+      try {
+        const total = await backend.getUnreadSubmissionCount();
+        if (cancelled) {
+          return;
+        }
+        setUnreadTotal(total);
+        setTrackedUnreadBaseline((previous) => (previous < 0 ? total : previous));
+      } catch {
+        return;
+      }
+    };
+
+    void pollUnreadCount();
+    const intervalId = window.setInterval(() => {
+      void pollUnreadCount();
+    }, UNREAD_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [apiCooldownUntil, session.hasSession, session.isGuest, session.username]);
   useEffect(() => {
     if (!activeTab && tabs[0]) {
       setActiveTabId(tabs[0].id);
@@ -867,6 +1029,9 @@ export default function App() {
     if (!tab) {
       return;
     }
+    if (page === 1) {
+      cancelLoadMore(targetTabId);
+    }
     if (!sessionRef.current.hasSession) {
       const message = "Sign in to search.";
       updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
@@ -883,10 +1048,16 @@ export default function App() {
       searchError: "",
     }));
     try {
+      const normalizedParams = normalizeSearchParamsForMode(
+        tab.searchParams,
+        tab.mode,
+        sessionRef.current,
+        settingsRef.current,
+      );
       const response =
         page === 1
           ? await backend.search({
-              ...tab.searchParams,
+              ...normalizedParams,
               page,
               maxActive: settingsRef.current.maxActive,
             })
@@ -907,6 +1078,7 @@ export default function App() {
             if (page === 1) {
               return {
                 ...currentTab,
+                searchParams: normalizedParams,
                 searchResponse: response,
                 results: response.results,
                 selectedSubmissionIds: getAutoSelectedSubmissionIds(
@@ -931,10 +1103,12 @@ export default function App() {
           }),
         );
       });
+      return response;
     } catch (error) {
       const message = getErrorMessage(error, "Search failed.");
       updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
       pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
+      return undefined;
     } finally {
       updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
     }
@@ -947,6 +1121,7 @@ export default function App() {
     if (!tab?.searchResponse) {
       return;
     }
+    cancelLoadMore(resolvedTabId);
     updateTab(resolvedTabId, (currentTab) => ({
       ...currentTab,
       searchLoading: true,
@@ -983,6 +1158,91 @@ export default function App() {
       pushErrorToast(message, "refresh-search-error");
     } finally {
       updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+    }
+  }
+
+  async function handleLoadMore(
+    mode: Exclude<SearchTabLoadMoreMode, "idle">,
+    targetTabId = activeTabIdRef.current,
+  ) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (
+      !tab?.searchResponse ||
+      tab.searchLoading ||
+      tab.loadMoreState.mode !== "idle" ||
+      tab.searchResponse.page >= tab.searchResponse.pagesCount
+    ) {
+      return;
+    }
+
+    const runId = startLoadMoreRun(targetTabId);
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      searchError: "",
+      loadMoreState: {
+        mode,
+        pagesLoaded: 0,
+      },
+    }));
+
+    try {
+      await delay(LOAD_ALL_DELAY_MS);
+      if (isLoadMoreStopRequested(targetTabId, runId)) {
+        return;
+      }
+
+      let nextPage = tab.searchResponse.page + 1;
+      while (true) {
+        const currentTab = tabsRef.current.find((item) => item.id === targetTabId);
+        if (!currentTab?.searchResponse || nextPage > currentTab.searchResponse.pagesCount) {
+          return;
+        }
+
+        const response = await handleSearch(nextPage, targetTabId);
+        if (!response) {
+          return;
+        }
+
+        updateTab(targetTabId, (latestTab) => ({
+          ...latestTab,
+          loadMoreState:
+            latestTab.loadMoreState.mode === "idle"
+              ? latestTab.loadMoreState
+              : {
+                  ...latestTab.loadMoreState,
+                  pagesLoaded: latestTab.loadMoreState.pagesLoaded + 1,
+                },
+        }));
+
+        if (isLoadMoreStopRequested(targetTabId, runId)) {
+          return;
+        }
+
+        if (mode === "more" || response.page >= response.pagesCount) {
+          return;
+        }
+
+        nextPage = response.page + 1;
+        await delay(LOAD_ALL_DELAY_MS);
+        if (isLoadMoreStopRequested(targetTabId, runId)) {
+          return;
+        }
+      }
+    } finally {
+      if (isLoadMoreRunActive(targetTabId, runId)) {
+        updateTab(targetTabId, (currentTab) => ({
+          ...currentTab,
+          loadMoreState: createIdleLoadMoreState(),
+        }));
+      }
+    }
+  }
+
+  function handleStopLoadMore(targetTabId = activeTabIdRef.current) {
+    stopLoadMore(targetTabId);
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab?.searchLoading) {
+      cancelLoadMore(targetTabId);
     }
   }
 
@@ -1173,9 +1433,13 @@ export default function App() {
           motionEnabled={settings.motionEnabled}
           tabsOpen={tabMenuOpen}
           session={session}
+          unreadTotal={unreadTotal}
+          newUnreadCount={newUnreadCount}
+          unreadActive={unreadModeActive}
           onToggleDarkMode={() => void persistSettings({ darkMode: !settings.darkMode })}
           onToggleMotion={() => void persistSettings({ motionEnabled: !settings.motionEnabled })}
           onToggleTabs={() => setTabMenuOpen((current) => !current)}
+          onOpenUnread={() => void handleOpenUnreadTab()}
           onOpenLogin={() => setLoginOpen(true)}
           onLogout={() => void handleLogout()}
         />
@@ -1218,10 +1482,11 @@ export default function App() {
             <SearchWorkspace
               session={session}
               searchParams={activeSearchParams}
+              mode={activeTab?.mode ?? "default"}
               keywordSuggestions={keywordSuggestions}
               artistSuggestions={artistSuggestions}
               favoriteSuggestions={favoriteSuggestions}
-              loading={activeSearchLoading}
+              loading={activeSearchBusy}
               ratingUpdating={ratingUpdating}
               collapsed={activeSearchCollapsed}
               error={activeSearchError}
@@ -1231,7 +1496,12 @@ export default function App() {
                 }
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
-                  searchParams: updater(currentTab.searchParams),
+                  searchParams: normalizeSearchParamsForMode(
+                    updater(currentTab.searchParams),
+                    currentTab.mode,
+                    sessionRef.current,
+                    settingsRef.current,
+                  ),
                 }));
               }}
               onSearch={() => void handleSearch(1)}
@@ -1296,7 +1566,8 @@ export default function App() {
               activeSubmissionId={activeSubmissionId}
               selectedSubmissionIds={activeSelectedSubmissionIds}
               allSelected={allResultsSelected}
-              loading={activeSearchLoading}
+              loading={activeSearchBusy}
+              loadMoreState={activeLoadMoreState}
               resultsRefreshToken={activeResultsRefreshToken}
               queue={queue}
               canStopAll={canStopAllDownloads}
@@ -1328,7 +1599,9 @@ export default function App() {
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
               onQueueDownloads={() => void handleQueueDownloads()}
-              onLoadMore={() => void handleSearch((activeSearchResponse?.page ?? 1) + 1)}
+              onLoadMore={() => void handleLoadMore("more")}
+              onLoadAll={() => void handleLoadMore("all")}
+              onStopLoadMore={() => void handleStopLoadMore()}
             />
           </div>
           <DownloadQueuePanel
@@ -1538,8 +1811,16 @@ function buildDefaultSearch(session: SessionInfo, settings: AppSettings) {
   return {
     ...DEFAULT_SEARCH,
     submissionTypes: [...DEFAULT_SEARCH.submissionTypes],
+    unreadSubmissions: false,
     maxActive: settings.maxActive || DEFAULT_SEARCH.maxActive,
     maxDownloads: session.isGuest ? GUEST_DEFAULT_MAX_DOWNLOADS : 0,
+  };
+}
+
+function buildUnreadSearch(session: SessionInfo, settings: AppSettings) {
+  return {
+    ...buildDefaultSearch(session, settings),
+    unreadSubmissions: true,
   };
 }
 
@@ -1551,9 +1832,32 @@ function syncSearchParamsWithSession(
   searchParams: SearchParams,
   session: SessionInfo,
   settings: AppSettings,
+  mode: SearchTabMode = "default",
+) {
+  return normalizeSearchParamsForMode(
+    {
+      ...cloneSearchParams(searchParams),
+      maxActive: settings.maxActive || searchParams.maxActive || DEFAULT_SEARCH.maxActive,
+      maxDownloads:
+        session.isGuest && searchParams.maxDownloads <= 0
+          ? GUEST_DEFAULT_MAX_DOWNLOADS
+          : searchParams.maxDownloads,
+    },
+    mode,
+    session,
+    settings,
+  );
+}
+
+function normalizeSearchParamsForMode(
+  searchParams: SearchParams,
+  mode: SearchTabMode,
+  session: SessionInfo,
+  settings: AppSettings,
 ) {
   return {
     ...cloneSearchParams(searchParams),
+    unreadSubmissions: mode === "unread",
     maxActive: settings.maxActive || searchParams.maxActive || DEFAULT_SEARCH.maxActive,
     maxDownloads:
       session.isGuest && searchParams.maxDownloads <= 0
@@ -1565,6 +1869,7 @@ function syncSearchParamsWithSession(
 function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTabState {
   return {
     id: createTabId(),
+    mode: "default",
     searchParams: buildDefaultSearch(session, settings),
     searchResponse: null,
     results: [],
@@ -1574,6 +1879,27 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     searchCollapsed: false,
     searchError: "",
     resultsRefreshToken: 0,
+    loadMoreState: createIdleLoadMoreState(),
+  };
+}
+
+function createUnreadSearchTab(session: SessionInfo, settings: AppSettings): SearchTabState {
+  return {
+    ...createSearchTab(session, settings),
+    mode: "unread",
+    searchParams: buildUnreadSearch(session, settings),
+    searchCollapsed: true,
+  };
+}
+
+function switchSearchTabToUnread(
+  tab: SearchTabState,
+  session: SessionInfo,
+  settings: AppSettings,
+): SearchTabState {
+  return {
+    ...createUnreadSearchTab(session, settings),
+    id: tab.id,
   };
 }
 
@@ -1592,7 +1918,23 @@ function createTabId() {
   return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function createIdleLoadMoreState(): SearchTabLoadMoreState {
+  return {
+    mode: "idle",
+    pagesLoaded: 0,
+  };
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 function getSearchTabLabel(tab: SearchTabState, index: number) {
+  if (tab.mode === "unread") {
+    return "Unread";
+  }
   const { query, artistName, favoritesBy, poolId } = tab.searchParams;
   if (query.trim()) {
     return truncateLabel(query.trim(), 26);
@@ -1613,6 +1955,9 @@ function getSearchTabLabel(tab: SearchTabState, index: number) {
 }
 
 function getSearchTabSubtitle(tab: SearchTabState) {
+  if (tab.mode === "unread") {
+    return "new submissions";
+  }
   if (tab.searchParams.artistName.trim()) {
     return "artist search";
   }
@@ -1629,6 +1974,48 @@ function getSearchTabSubtitle(tab: SearchTabState) {
     return `${tab.results.length} loaded`;
   }
   return "new search";
+}
+
+function isSearchTabUntouched(
+  tab: SearchTabState,
+  session: SessionInfo,
+  settings: AppSettings,
+) {
+  return (
+    tab.mode === "default" &&
+    areSearchParamsEqual(tab.searchParams, buildDefaultSearch(session, settings)) &&
+    tab.searchResponse === null &&
+    tab.results.length === 0 &&
+    tab.activeSubmissionId === "" &&
+    tab.selectedSubmissionIds.length === 0 &&
+    !tab.searchLoading &&
+    tab.searchError === ""
+  );
+}
+
+function areSearchParamsEqual(left: SearchParams, right: SearchParams) {
+  return (
+    left.query === right.query &&
+    left.joinType === right.joinType &&
+    left.searchInKeywords === right.searchInKeywords &&
+    left.searchInTitle === right.searchInTitle &&
+    left.searchInDescription === right.searchInDescription &&
+    left.searchInMD5 === right.searchInMD5 &&
+    left.unreadSubmissions === right.unreadSubmissions &&
+    left.artistName === right.artistName &&
+    left.favoritesBy === right.favoritesBy &&
+    left.poolId === right.poolId &&
+    left.scraps === right.scraps &&
+    left.timeRangeDays === right.timeRangeDays &&
+    left.orderBy === right.orderBy &&
+    left.page === right.page &&
+    left.perPage === right.perPage &&
+    left.maxDownloads === right.maxDownloads &&
+    left.maxActive === right.maxActive &&
+    left.saveKeywords === right.saveKeywords &&
+    left.submissionTypes.length === right.submissionTypes.length &&
+    left.submissionTypes.every((value, index) => value === right.submissionTypes[index])
+  );
 }
 
 function truncateLabel(value: string, maxLength: number) {

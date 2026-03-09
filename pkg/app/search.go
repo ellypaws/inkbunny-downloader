@@ -332,6 +332,9 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 		SubmissionsPerPage: inkbunny.IntString(perPage),
 		Scraps:             normalizeScrapsMode(params.Scraps),
 	}
+	if params.UnreadSubmissions {
+		req.UnreadSubmissions = inkbunny.Yes
+	}
 	if params.PoolID > 0 {
 		req.PoolID = inkbunny.IntString(params.PoolID)
 	}
@@ -616,7 +619,10 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 			rawResultsCount = int(response.ResultsCountAll)
 		}
 		pagesCount = int(response.PagesCount)
-		filtered := filterSubmissionsByRatings(response.Submissions, ratingsMask)
+		filtered := response.Submissions
+		if state.Request.UnreadSubmissions != inkbunny.Yes {
+			filtered = filterSubmissionsByRatings(response.Submissions, ratingsMask)
+		}
 		remaining := target - len(visible)
 		if remaining <= 0 {
 			pendingResults = append(pendingResults, filtered...)
@@ -653,6 +659,47 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 	}
 
 	return visible, nextServerPage, hasMore, nil
+}
+
+func (a *App) GetUnreadSubmissionCount() (int, error) {
+	user, err := a.ensureSearchSession()
+	if err != nil {
+		return 0, err
+	}
+
+	req := inkbunny.SubmissionSearchRequest{
+		SID:                user.SID,
+		UnreadSubmissions:  inkbunny.Yes,
+		NoSubmissions:      inkbunny.Yes,
+		SubmissionsPerPage: 1,
+		Page:               1,
+	}
+
+	response, err := executeWithRateLimitRetry(a.ctx, a.rateLimiter, "unread submissions", func() (inkbunny.SubmissionSearchResponse, error) {
+		current, ensureErr := a.ensureSearchSession()
+		if ensureErr != nil {
+			return inkbunny.SubmissionSearchResponse{}, ensureErr
+		}
+		req.SID = current.SID
+		return current.SearchSubmissions(req)
+	})
+	if err != nil {
+		if a.handleSessionError(err) {
+			user, err = a.ensureSearchSession()
+			if err != nil {
+				return 0, err
+			}
+			req.SID = user.SID
+			response, err = executeWithRateLimitRetry(a.ctx, a.rateLimiter, "unread submissions", func() (inkbunny.SubmissionSearchResponse, error) {
+				return user.SearchSubmissions(req)
+			})
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return int(response.ResultsCountAll), nil
 }
 
 func remainingVisibleLimit(state *searchState) int {

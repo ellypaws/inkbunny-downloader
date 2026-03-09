@@ -66,6 +66,7 @@ export const DEFAULT_SEARCH: SearchParams = {
   searchInTitle: true,
   searchInDescription: false,
   searchInMD5: false,
+  unreadSubmissions: false,
   artistName: '',
   favoritesBy: '',
   poolId: 0,

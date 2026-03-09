@@ -35,6 +35,7 @@ type SearchParams struct {
 	SearchInTitle       bool   `json:"searchInTitle"`
 	SearchInDescription bool   `json:"searchInDescription"`
 	SearchInMD5         bool   `json:"searchInMD5"`
+	UnreadSubmissions   bool   `json:"unreadSubmissions"`
 	ArtistName          string `json:"artistName"`
 	FavoritesBy         string `json:"favoritesBy"`
 	PoolID              int    `json:"poolId"`

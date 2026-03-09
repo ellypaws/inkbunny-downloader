@@ -46,6 +46,10 @@ export function GetSession() {
   return window['go']['desktopapp']['App']['GetSession']();
 }
 
+export function GetUnreadSubmissionCount() {
+  return window['go']['desktopapp']['App']['GetUnreadSubmissionCount']();
+}
+
 export function GetUsernameSuggestions(arg1) {
   return window['go']['desktopapp']['App']['GetUsernameSuggestions'](arg1);
 }

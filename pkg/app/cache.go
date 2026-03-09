@@ -72,6 +72,9 @@ func makeSearchCacheKey(user *inkbunny.User, ratingsMask string, req inkbunny.Su
 	if user != nil {
 		normalized.SID = user.SID
 	}
+	if normalized.UnreadSubmissions == inkbunny.Yes {
+		ratingsMask = ""
+	}
 	data, err := json.Marshal(normalized)
 	if err != nil {
 		return searchCacheKey{}, inkbunny.SubmissionSearchRequest{}, fmt.Errorf("marshal search cache key: %w", err)

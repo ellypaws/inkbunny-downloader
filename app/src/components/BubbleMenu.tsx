@@ -14,6 +14,10 @@ export type BubbleMenuItem = {
     bgColor?: string;
     textColor?: string;
   };
+  activeStyles?: {
+    bgColor?: string;
+    textColor?: string;
+  };
 };
 
 export type BubbleMenuProps = {
@@ -399,11 +403,11 @@ export default function BubbleMenu({
                         ["--item-rot"]: `${item.rotation ?? 0}deg`,
                         ["--pill-bg"]:
                           item.kind === "tab" && item.active
-                            ? "#eff7d2"
+                            ? item.activeStyles?.bgColor || "#eff7d2"
                             : menuBg,
                         ["--pill-color"]:
                           item.kind === "tab" && item.active
-                            ? "#21400f"
+                            ? item.activeStyles?.textColor || "#21400f"
                             : menuContentColor,
                         ["--hover-bg"]: hoverStyles.bgColor || "#f3f4f6",
                         ["--hover-color"]:

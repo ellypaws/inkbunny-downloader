@@ -33,6 +33,7 @@ export type SearchParams = {
   searchInTitle: boolean
   searchInDescription: boolean
   searchInMD5: boolean
+  unreadSubmissions: boolean
   artistName: string
   favoritesBy: string
   poolId: number

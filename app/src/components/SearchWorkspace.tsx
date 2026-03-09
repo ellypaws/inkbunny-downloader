@@ -24,6 +24,7 @@ import type {
 type SearchWorkspaceProps = {
   session: SessionInfo;
   searchParams: SearchParams;
+  mode: "default" | "unread";
   keywordSuggestions: string[];
   artistSuggestions: UsernameSuggestion[];
   favoriteSuggestions: UsernameSuggestion[];
@@ -73,10 +74,15 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
           className="theme-divider theme-hover group flex w-full items-center justify-between border-b px-5 py-4 text-left transition-colors sm:px-6"
           aria-expanded={!props.collapsed}
         >
-          <div>
+          <div className="flex items-center gap-3">
             <h2 className="font-display text-3xl font-black text-[var(--theme-accent-strong)] sm:text-[2.1rem]">
               Search
             </h2>
+            {props.mode === "unread" ? (
+              <span className="rounded-full border border-[var(--inkbunny-green)] px-3 py-1 text-[11px] font-black text-[var(--inkbunny-slate)] shadow-sm">
+                Unread Mode
+              </span>
+            ) : null}
           </div>
           <span
             className={`theme-panel-strong flex h-11 w-11 items-center justify-center rounded-full border text-[var(--theme-info)] shadow-sm backdrop-blur-md transition-all duration-300 group-hover:scale-105 ${

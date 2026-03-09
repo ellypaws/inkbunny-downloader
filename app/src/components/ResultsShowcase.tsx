@@ -1,7 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Check,
-  ChevronDown,
   Download,
   File,
   FileImage,
@@ -21,6 +20,7 @@ import {
 } from "react";
 
 import ElasticSlider from "./ElasticSlider";
+import { LoadMoreControl, type LoadMoreControlState } from "./LoadMoreControl";
 import { accentClass } from "../lib/format";
 import type {
   DownloadJobSnapshot,
@@ -36,6 +36,7 @@ type ResultsShowcaseProps = {
   selectedSubmissionIds: string[];
   allSelected: boolean;
   loading: boolean;
+  loadMoreState: LoadMoreControlState;
   resultsRefreshToken: number;
   queue: QueueSnapshot;
   canStopAll: boolean;
@@ -50,6 +51,8 @@ type ResultsShowcaseProps = {
   onRefresh: () => void;
   onQueueDownloads: () => void;
   onLoadMore: () => void;
+  onLoadAll: () => void;
+  onStopLoadMore: () => void;
 };
 
 type SubmissionDownloadState = "idle" | "queued" | "downloading" | "downloaded";
@@ -98,7 +101,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         props.downloadedSubmissionIds,
         props.pendingDownloadSubmissionIds,
       ),
-    [props.downloadedSubmissionIds, props.pendingDownloadSubmissionIds, props.queue],
+    [
+      props.downloadedSubmissionIds,
+      props.pendingDownloadSubmissionIds,
+      props.queue,
+    ],
   );
   const downloadedCount = useMemo(
     () =>
@@ -218,7 +225,13 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   useEffect(() => {
     resultRowVirtualizer.measure();
-  }, [estimatedResultRowHeight, gridCardWidth, props.results.length, resultColumnCount, resultRowVirtualizer]);
+  }, [
+    estimatedResultRowHeight,
+    gridCardWidth,
+    props.results.length,
+    resultColumnCount,
+    resultRowVirtualizer,
+  ]);
 
   useEffect(() => {
     if (activeIndex < 0 || props.results.length === 0) {
@@ -228,7 +241,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       Math.floor(activeIndex / resultColumnCount),
       { align: "auto" },
     );
-  }, [activeIndex, props.results.length, resultColumnCount, resultRowVirtualizer]);
+  }, [
+    activeIndex,
+    props.results.length,
+    resultColumnCount,
+    resultRowVirtualizer,
+  ]);
 
   return (
     <section className="relative mt-4">
@@ -391,7 +409,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
                       downloaded
                         ? "pointer-events-none w-0 scale-75 opacity-0"
-                      : selected
+                        : selected
                           ? "bg-[#73D216] text-white"
                           : "bg-[#D9DDD3]/92 text-[#555753] hover:bg-[#CFE8AE] hover:text-[#4E9A06]"
                     }`}
@@ -410,7 +428,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span
                       className={`inline-block rounded-full bg-white px-4 py-1 text-sm font-black shadow-sm transform ${
-                        index % 2 === 0 ? "-rotate-3 text-[#3465A4]" : "rotate-2 text-[#CC5E00]"
+                        index % 2 === 0
+                          ? "-rotate-3 text-[#3465A4]"
+                          : "rotate-2 text-[#CC5E00]"
                       }`}
                     >
                       {item.badgeText || item.typeName || "Submission"}
@@ -465,7 +485,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   className="theme-button-danger flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
                   title="Stop every queued or active download"
                 >
-                  <Square size={12} className="fill-current" strokeWidth={2.5} />
+                  <Square
+                    size={12}
+                    className="fill-current"
+                    strokeWidth={2.5}
+                  />
                   Stop All
                 </button>
                 <button
@@ -530,7 +554,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       >
                         {rowItems.map((item) => {
                           const isActive =
-                            item.submissionId === activeSubmission?.submissionId;
+                            item.submissionId ===
+                            activeSubmission?.submissionId;
                           const selected = props.selectedSubmissionIds.includes(
                             item.submissionId,
                           );
@@ -663,22 +688,15 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       ) : null}
 
-      {canLoadMore ? (
-        <div className="mt-6 flex justify-center">
-          <button
-            onClick={props.onLoadMore}
-            disabled={props.loading}
-            className="theme-button-accent flex items-center gap-2 rounded-xl border px-6 py-3 font-bold shadow-pop transition-all hover:shadow-pop-hover"
-          >
-            {props.loading ? (
-              <LoaderCircle className="animate-spin" size={18} />
-            ) : (
-              <ChevronDown size={18} />
-            )}
-            Load More Results
-          </button>
-        </div>
-      ) : null}
+      <LoadMoreControl
+        canLoadMore={canLoadMore}
+        disabled={props.loading}
+        state={props.loadMoreState}
+        onLoadMore={props.onLoadMore}
+        onLoadAll={props.onLoadAll}
+        onStop={props.onStopLoadMore}
+        className="mt-6"
+      />
     </section>
   );
 }
@@ -760,7 +778,9 @@ function getPreviewSources(
           submission.fullUrl,
         ];
 
-  return [...new Set(ordered.filter((value): value is string => Boolean(value)))];
+  return [
+    ...new Set(ordered.filter((value): value is string => Boolean(value))),
+  ];
 }
 
 function PreviewFallback(props: {
@@ -823,13 +843,18 @@ function formatFileCount(pageCount: number) {
   return `${count} file${count === 1 ? "" : "s"}`;
 }
 
-function getVirtualGridColumnCount(containerWidth: number, targetCardWidth: number) {
+function getVirtualGridColumnCount(
+  containerWidth: number,
+  targetCardWidth: number,
+) {
   if (containerWidth <= 0) {
     return 1;
   }
   return Math.max(
     1,
-    Math.floor((containerWidth + RESULT_GRID_GAP) / (targetCardWidth + RESULT_GRID_GAP)),
+    Math.floor(
+      (containerWidth + RESULT_GRID_GAP) / (targetCardWidth + RESULT_GRID_GAP),
+    ),
   );
 }
 
@@ -931,12 +956,11 @@ function buildSubmissionDownloadSummaries(
 
     const anyActive = relevantJobs.some((job) => job.status === "active");
     const anyQueued = relevantJobs.some((job) => job.status === "queued");
-    const state =
-      anyActive
-        ? "downloading"
-        : anyQueued || pendingSubmissionIds.has(submissionId)
-          ? "queued"
-          : "idle";
+    const state = anyActive
+      ? "downloading"
+      : anyQueued || pendingSubmissionIds.has(submissionId)
+        ? "queued"
+        : "idle";
 
     summaries.set(submissionId, {
       state,
