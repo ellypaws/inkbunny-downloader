@@ -237,8 +237,12 @@ export default function App() {
         ? false
         : !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
   const unreadModeActive = activeTab?.mode === "unread";
-  const folderPreviewImages = dedupePreviewImageSets(
-    panelPreviewImages.length > 0 ? panelPreviewImages : recentDownloadedImages,
+  const folderPreviewImages = useMemo(
+    () =>
+      dedupePreviewImageSets(
+        panelPreviewImages.length > 0 ? panelPreviewImages : recentDownloadedImages,
+      ),
+    [panelPreviewImages, recentDownloadedImages],
   );
   const newUnreadCount =
     trackedUnreadBaseline < 0 ? 0 : Math.max(unreadTotal - trackedUnreadBaseline, 0);
@@ -965,19 +969,23 @@ export default function App() {
       queue,
       pendingDownloadSubmissionIds,
     );
-    setTabs((previous) =>
-      previous.map((tab) => {
+    setTabs((previous) => {
+      let changed = false;
+      const nextTabs = previous.map((tab) => {
         const nextTracked = tab.trackedDownloadSubmissionIds.filter((submissionId) =>
           activeSubmissionIds.has(submissionId),
         );
-        return areStringArraysEqual(nextTracked, tab.trackedDownloadSubmissionIds)
-          ? tab
-          : {
-              ...tab,
-              trackedDownloadSubmissionIds: nextTracked,
-            };
-      }),
-    );
+        if (areStringArraysEqual(nextTracked, tab.trackedDownloadSubmissionIds)) {
+          return tab;
+        }
+        changed = true;
+        return {
+          ...tab,
+          trackedDownloadSubmissionIds: nextTracked,
+        };
+      });
+      return changed ? nextTabs : previous;
+    });
   }, [pendingDownloadSubmissionIds, queue]);
 
   useEffect(() => {
