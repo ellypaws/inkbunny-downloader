@@ -67,6 +67,7 @@ type SavedSearchTab struct {
 	SearchParams                 SearchParams      `json:"searchParams"`
 	ArtistDraft                  string            `json:"artistDraft"`
 	ArtistAvatars                map[string]string `json:"artistAvatars"`
+	ArtistValidation             map[string]string `json:"artistValidation,omitempty"`
 	SearchResponse               *SearchResponse   `json:"searchResponse,omitempty"`
 	Results                      []SubmissionCard  `json:"results"`
 	ActiveSubmissionID           string            `json:"activeSubmissionId"`

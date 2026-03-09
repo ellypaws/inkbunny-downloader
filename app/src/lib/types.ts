@@ -29,6 +29,8 @@ export type UsernameSuggestion = {
   avatarUrl: string
 }
 
+export type ArtistValidationState = 'pending' | 'valid' | 'invalid'
+
 export type SearchParams = {
   query: string
   joinType: string
@@ -92,6 +94,7 @@ export type SavedSearchTab = {
   searchParams: SearchParams
   artistDraft: string
   artistAvatars: Record<string, string>
+  artistValidation: Record<string, ArtistValidationState>
   searchResponse: SearchResponse | null
   results: SubmissionCard[]
   activeSubmissionId: string

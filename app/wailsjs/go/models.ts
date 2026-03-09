@@ -384,6 +384,7 @@ export namespace desktopapp {
 	    searchParams: SearchParams;
 	    artistDraft: string;
 	    artistAvatars: Record<string, string>;
+	    artistValidation?: Record<string, string>;
 	    searchResponse?: SearchResponse;
 	    results: SubmissionCard[];
 	    activeSubmissionId: string;
@@ -404,6 +405,7 @@ export namespace desktopapp {
 	        this.searchParams = this.convertValues(source["searchParams"], SearchParams);
 	        this.artistDraft = source["artistDraft"];
 	        this.artistAvatars = source["artistAvatars"];
+	        this.artistValidation = source["artistValidation"];
 	        this.searchResponse = this.convertValues(source["searchResponse"], SearchResponse);
 	        this.results = this.convertValues(source["results"], SubmissionCard);
 	        this.activeSubmissionId = source["activeSubmissionId"];
