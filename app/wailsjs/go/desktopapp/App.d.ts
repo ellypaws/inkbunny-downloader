@@ -46,9 +46,15 @@ export function OpenDownloadDirectory():Promise<void>;
 
 export function OpenExternalURL(arg1:string):Promise<void>;
 
+export function PauseAllDownloads():Promise<desktopapp.QueueSnapshot>;
+
 export function PickDownloadDirectory():Promise<string>;
 
 export function RefreshSearch(arg1:string):Promise<desktopapp.SearchResponse>;
+
+export function ResumeAllDownloads():Promise<desktopapp.QueueSnapshot>;
+
+export function RetryAllDownloads():Promise<desktopapp.QueueSnapshot>;
 
 export function RetryDownload(arg1:string):Promise<desktopapp.QueueSnapshot>;
 

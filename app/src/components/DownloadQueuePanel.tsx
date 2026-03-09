@@ -5,6 +5,8 @@ import {
   Download,
   FileImage,
   FolderOpen,
+  Pause,
+  Play,
   RefreshCw,
   Square,
   Trash2,
@@ -36,12 +38,18 @@ type DownloadQueuePanelProps = {
   selectedCount: number;
   canQueueDownloads: boolean;
   canStopAll: boolean;
+  canPauseAll: boolean;
+  canResumeAll: boolean;
+  canRetryAll: boolean;
   allSelected: boolean;
   autoClearCompleted: boolean;
   onOpenDownloadFolder: () => void;
   onClearQueue: () => void;
   onClearCompleted: () => void;
   onQueueDownloads: () => void;
+  onRetryAll: () => void;
+  onPauseAll: () => void;
+  onResumeAll: () => void;
   onStopAll: () => void;
   onToggleSelectAll: () => void;
   onToggleAutoClearCompleted: (enabled: boolean) => void;
@@ -185,7 +193,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               disabled={props.queue.jobs.length === 0}
               className="theme-button-secondary rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
             >
-              Clear List
+              Clear
             </button>
             <button
               type="button"
@@ -193,7 +201,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               disabled={props.selectedCount === 0 && props.allSelected}
               className="theme-button-secondary rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
             >
-              {props.allSelected ? "Deselect All" : "Select All"}
+              {props.allSelected ? "Deselect" : "Select All"}
             </button>
             <button
               type="button"
@@ -207,13 +215,39 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             </button>
             <button
               type="button"
+              onClick={props.onRetryAll}
+              disabled={!props.canRetryAll}
+              className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
+              title="Retry every failed download"
+            >
+              <RefreshCw size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={props.onPauseAll}
+              disabled={!props.canPauseAll}
+              className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
+              title="Pause queued and active downloads"
+            >
+              <Pause size={15} strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={props.onResumeAll}
+              disabled={!props.canResumeAll}
+              className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
+              title="Resume paused downloads"
+            >
+              <Play size={15} className="fill-current" strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
               onClick={props.onStopAll}
               disabled={!props.canStopAll}
               className="theme-button-danger flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-50"
               title="Stop every queued or active download"
             >
               <Square size={15} className="fill-current" strokeWidth={2.5} />
-              Stop All
             </button>
 
             <AutoClearToggle
@@ -353,7 +387,7 @@ function QueueRow(props: {
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-wrap items-start gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="theme-title truncate text-sm font-black md:text-[0.95rem]">
@@ -395,10 +429,10 @@ function QueueRow(props: {
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center">
+            <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
               <StatusBadge status={job.status} />
               {retryable ? (
-                <div className="ml-2 flex items-center">
+                <div className="flex items-center">
                   <button
                     type="button"
                     onClick={() => props.onRetry(job.id)}
@@ -410,7 +444,7 @@ function QueueRow(props: {
                   </button>
                 </div>
               ) : (
-                <div className="ml-0 flex max-w-0 items-center gap-2 overflow-hidden opacity-0 transition-[max-width,opacity,transform,margin] motion-safe:duration-300 motion-safe:ease-out motion-safe:translate-x-2 group-hover:ml-2 group-hover:max-w-48 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:ml-2 group-focus-within:max-w-48 group-focus-within:translate-x-0 group-focus-within:opacity-100">
+                <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
                   {actionable ? (
                     <>
                       <button

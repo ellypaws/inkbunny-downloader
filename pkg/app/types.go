@@ -126,6 +126,7 @@ type DownloadOptions struct {
 
 type QueueSnapshot struct {
 	Jobs           []DownloadJobSnapshot `json:"jobs"`
+	Paused         bool                  `json:"paused"`
 	QueuedCount    int                   `json:"queuedCount"`
 	ActiveCount    int                   `json:"activeCount"`
 	CompletedCount int                   `json:"completedCount"`

@@ -35,11 +35,12 @@ type downloadTask struct {
 }
 
 type downloadJob struct {
-	snapshot DownloadJobSnapshot
-	task     downloadTask
-	cancel   context.CancelFunc
-	created  time.Time
-	order    uint64
+	snapshot       DownloadJobSnapshot
+	task           downloadTask
+	cancel         context.CancelFunc
+	resumeOnCancel bool
+	created        time.Time
+	order          uint64
 }
 
 type DownloadManager struct {
@@ -50,6 +51,7 @@ type DownloadManager struct {
 	mu        sync.Mutex
 	nextID    atomic.Uint64
 	maxActive int
+	paused    bool
 	active    int
 	jobs      map[string]*downloadJob
 	pending   []string
@@ -225,6 +227,67 @@ func (m *DownloadManager) RetrySubmission(submissionID string) QueueSnapshot {
 	return snapshot
 }
 
+func (m *DownloadManager) RetryAll() QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	changed := false
+	for jobID, job := range m.jobs {
+		if job == nil || job.snapshot.Status != "failed" {
+			continue
+		}
+		m.retryJobLocked(jobID, job)
+		changed = true
+	}
+	if !changed {
+		return m.snapshotLocked()
+	}
+
+	m.maybeStartLocked()
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	return snapshot
+}
+
+func (m *DownloadManager) PauseAll() QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.paused {
+		return m.snapshotLocked()
+	}
+
+	m.paused = true
+	for _, job := range m.jobs {
+		if job == nil || job.snapshot.Status != "active" {
+			continue
+		}
+		job.resumeOnCancel = true
+		if job.cancel != nil {
+			job.cancel()
+		}
+	}
+
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	return snapshot
+}
+
+func (m *DownloadManager) ResumeAll() QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.paused {
+		return m.snapshotLocked()
+	}
+
+	m.paused = false
+	m.maybeStartLocked()
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	return snapshot
+}
+
 func (m *DownloadManager) CancelAll() QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -339,6 +402,9 @@ func (m *DownloadManager) ClearCompletedSubmissions(submissionIDs []string) Queu
 }
 
 func (m *DownloadManager) maybeStartLocked() {
+	if m.paused {
+		return
+	}
 	for m.active < m.maxActive && len(m.pending) > 0 {
 		jobID := m.pending[0]
 		m.pending = m.pending[1:]
@@ -368,8 +434,12 @@ func (m *DownloadManager) runJob(ctx context.Context, jobID string) {
 	job.snapshot.UpdatedAt = time.Now().Format(time.RFC3339Nano)
 	switch {
 	case errors.Is(err, context.Canceled):
-		job.snapshot.Status = "cancelled"
-		job.snapshot.Error = ""
+		if job.resumeOnCancel {
+			m.requeueJobLocked(jobID, job)
+		} else {
+			job.snapshot.Status = "cancelled"
+			job.snapshot.Error = ""
+		}
 	case err != nil:
 		job.snapshot.Status = "failed"
 		job.snapshot.Error = err.Error()
@@ -631,6 +701,7 @@ func (m *DownloadManager) snapshotLocked() QueueSnapshot {
 	}
 	return QueueSnapshot{
 		Jobs:           snapshots,
+		Paused:         m.paused,
 		QueuedCount:    queued,
 		ActiveCount:    active,
 		CompletedCount: completed,
@@ -654,6 +725,14 @@ func (m *DownloadManager) retryJobLocked(jobID string, job *downloadJob) {
 		return
 	}
 
+	m.requeueJobLocked(jobID, job)
+}
+
+func (m *DownloadManager) requeueJobLocked(jobID string, job *downloadJob) {
+	if job == nil {
+		return
+	}
+
 	now := time.Now().Format(time.RFC3339Nano)
 	job.snapshot.Status = "queued"
 	job.snapshot.BytesWritten = 0
@@ -663,6 +742,7 @@ func (m *DownloadManager) retryJobLocked(jobID string, job *downloadJob) {
 	job.snapshot.Attempt = 0
 	job.snapshot.UpdatedAt = now
 	job.cancel = nil
+	job.resumeOnCancel = false
 	if !slices.Contains(m.pending, jobID) {
 		m.pending = append(m.pending, jobID)
 	}

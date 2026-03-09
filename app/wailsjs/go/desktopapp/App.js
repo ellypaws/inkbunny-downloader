@@ -90,12 +90,24 @@ export function OpenExternalURL(arg1) {
   return window['go']['desktopapp']['App']['OpenExternalURL'](arg1);
 }
 
+export function PauseAllDownloads() {
+  return window['go']['desktopapp']['App']['PauseAllDownloads']();
+}
+
 export function PickDownloadDirectory() {
   return window['go']['desktopapp']['App']['PickDownloadDirectory']();
 }
 
 export function RefreshSearch(arg1) {
   return window['go']['desktopapp']['App']['RefreshSearch'](arg1);
+}
+
+export function ResumeAllDownloads() {
+  return window['go']['desktopapp']['App']['ResumeAllDownloads']();
+}
+
+export function RetryAllDownloads() {
+  return window['go']['desktopapp']['App']['RetryAllDownloads']();
 }
 
 export function RetryDownload(arg1) {

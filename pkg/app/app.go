@@ -330,6 +330,27 @@ func (a *App) RetrySubmission(submissionID string) QueueSnapshot {
 	return a.downloadManager.RetrySubmission(submissionID)
 }
 
+func (a *App) RetryAllDownloads() QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.RetryAll()
+}
+
+func (a *App) PauseAllDownloads() QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.PauseAll()
+}
+
+func (a *App) ResumeAllDownloads() QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.ResumeAll()
+}
+
 func (a *App) StopAllDownloads() QueueSnapshot {
 	if a.downloadManager == nil {
 		return QueueSnapshot{}

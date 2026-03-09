@@ -40,6 +40,9 @@ type BackendApi = {
   CancelSubmission(submissionId: string): Promise<QueueSnapshot>
   RetryDownload(jobId: string): Promise<QueueSnapshot>
   RetrySubmission(submissionId: string): Promise<QueueSnapshot>
+  RetryAllDownloads(): Promise<QueueSnapshot>
+  PauseAllDownloads(): Promise<QueueSnapshot>
+  ResumeAllDownloads(): Promise<QueueSnapshot>
   StopAllDownloads(): Promise<QueueSnapshot>
   ClearQueue(): Promise<QueueSnapshot>
   ClearCompletedDownloads(): Promise<QueueSnapshot>
@@ -156,6 +159,15 @@ export const backend = {
   },
   async retrySubmission(submissionId: string): Promise<QueueSnapshot> {
     return getBackend().RetrySubmission(submissionId)
+  },
+  async retryAllDownloads(): Promise<QueueSnapshot> {
+    return getBackend().RetryAllDownloads()
+  },
+  async pauseAllDownloads(): Promise<QueueSnapshot> {
+    return getBackend().PauseAllDownloads()
+  },
+  async resumeAllDownloads(): Promise<QueueSnapshot> {
+    return getBackend().ResumeAllDownloads()
   },
   async stopAllDownloads(): Promise<QueueSnapshot> {
     return getBackend().StopAllDownloads()

@@ -103,6 +103,7 @@ export const EMPTY_SESSION: SessionInfo = {
 
 export const EMPTY_QUEUE: QueueSnapshot = {
   jobs: [],
+  paused: false,
   queuedCount: 0,
   activeCount: 0,
   completedCount: 0,

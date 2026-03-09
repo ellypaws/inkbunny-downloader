@@ -245,6 +245,10 @@ export default function App() {
   const canStopAllDownloads = queue.jobs.some(
     (job) => job.status === "queued" || job.status === "active",
   );
+  const canPauseAllDownloads = canStopAllDownloads && !queue.paused;
+  const canResumeAllDownloads =
+    queue.paused && (queue.queuedCount > 0 || queue.activeCount > 0);
+  const canRetryAllDownloads = queue.failedCount > 0;
   const currentTourStep = getTourStepPresentation(tourStepId, {
     tabMenuOpen,
     hasSelectableActiveResult,
@@ -1956,6 +1960,60 @@ export default function App() {
     }
   }
 
+  async function handleRetryAllDownloads() {
+    if (!canRetryAllDownloads) {
+      return;
+    }
+    try {
+      setQueue(await backend.retryAllDownloads());
+      updateQueueMessage(
+        "Retrying all failed downloads.",
+        "success",
+        "retry-all-downloads-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to retry all downloads.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "retry-all-downloads-error");
+    }
+  }
+
+  async function handlePauseAllDownloads() {
+    if (!canPauseAllDownloads) {
+      return;
+    }
+    try {
+      setQueue(await backend.pauseAllDownloads());
+      updateQueueMessage(
+        "Pausing queued and active downloads.",
+        "success",
+        "pause-all-downloads-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to pause downloads.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "pause-all-downloads-error");
+    }
+  }
+
+  async function handleResumeAllDownloads() {
+    if (!canResumeAllDownloads) {
+      return;
+    }
+    try {
+      setQueue(await backend.resumeAllDownloads());
+      updateQueueMessage(
+        "Resuming queued downloads.",
+        "success",
+        "resume-all-downloads-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to resume downloads.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "resume-all-downloads-error");
+    }
+  }
+
   async function handleStopAllDownloads() {
     if (!canStopAllDownloads) {
       return;
@@ -2333,6 +2391,9 @@ export default function App() {
             selectedCount={activeSelectedSubmissionIds.length}
             canQueueDownloads={Boolean(activeSearchResponse) && activeSelectedSubmissionIds.length > 0}
             canStopAll={canStopAllDownloads}
+            canPauseAll={canPauseAllDownloads}
+            canResumeAll={canResumeAllDownloads}
+            canRetryAll={canRetryAllDownloads}
             allSelected={allResultsSelected}
             autoClearCompleted={settings.autoClearCompleted}
             onOpenDownloadFolder={() => {
@@ -2358,6 +2419,9 @@ export default function App() {
             }}
             onClearCompleted={() => void handleClearCompleted()}
             onQueueDownloads={() => void handleQueueDownloads()}
+            onRetryAll={() => void handleRetryAllDownloads()}
+            onPauseAll={() => void handlePauseAllDownloads()}
+            onResumeAll={() => void handleResumeAllDownloads()}
             onStopAll={() => void handleStopAllDownloads()}
             onToggleSelectAll={handleToggleSelectAll}
             onToggleAutoClearCompleted={(enabled) =>

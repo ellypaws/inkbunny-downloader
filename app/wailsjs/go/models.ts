@@ -132,6 +132,7 @@ export namespace desktopapp {
 	}
 	export class QueueSnapshot {
 	    jobs: DownloadJobSnapshot[];
+	    paused: boolean;
 	    queuedCount: number;
 	    activeCount: number;
 	    completedCount: number;
@@ -145,6 +146,7 @@ export namespace desktopapp {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.jobs = this.convertValues(source["jobs"], DownloadJobSnapshot);
+	        this.paused = source["paused"];
 	        this.queuedCount = source["queuedCount"];
 	        this.activeCount = source["activeCount"];
 	        this.completedCount = source["completedCount"];

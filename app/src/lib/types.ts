@@ -147,6 +147,7 @@ export type DownloadJobSnapshot = {
 
 export type QueueSnapshot = {
   jobs: DownloadJobSnapshot[]
+  paused: boolean
   queuedCount: number
   activeCount: number
   completedCount: number
