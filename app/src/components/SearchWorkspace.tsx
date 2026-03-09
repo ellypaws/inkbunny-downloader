@@ -146,7 +146,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
               Search
             </h2>
             {props.mode === "unread" ? (
-              <span className="rounded-full border border-[var(--inkbunny-green)] px-3 py-1 text-[11px] font-black text-[var(--inkbunny-slate)] shadow-sm">
+              <span className="rounded-full border border-[var(--inkbunny-green)] px-3 py-1 text-[11px] font-black dark:text-white text-[var(--inkbunny-slate)] shadow-sm">
                 Unread Mode
               </span>
             ) : null}
