@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   collectUnknownDownloadTokens,
@@ -19,23 +13,42 @@ type DownloadPatternInputProps = {
   onCommit: (value: string) => void;
 };
 
+const MIN_EDITOR_HEIGHT = 44;
+const MAX_EDITOR_HEIGHT = 144;
+
 export function DownloadPatternInput(props: DownloadPatternInputProps) {
-  const editorRef = useRef<HTMLDivElement | null>(null);
-  const selectionOffsetRef = useRef<number | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const mirrorRef = useRef<HTMLDivElement | null>(null);
+  const nextSelectionRef = useRef<number | null>(null);
   const [draft, setDraft] = useState(props.value || "");
   const [tokensExpanded, setTokensExpanded] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setDraft(props.value || "");
   }, [props.value]);
 
   useLayoutEffect(() => {
-    const editor = editorRef.current;
-    const offset = selectionOffsetRef.current;
-    if (!editor || offset === null || document.activeElement !== editor) {
+    const textarea = textareaRef.current;
+    if (!textarea) {
       return;
     }
-    setCaretOffset(editor, offset);
+
+    textarea.style.height = "0px";
+    const height = Math.min(
+      MAX_EDITOR_HEIGHT,
+      Math.max(MIN_EDITOR_HEIGHT, textarea.scrollHeight),
+    );
+    textarea.style.height = `${height}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > MAX_EDITOR_HEIGHT ? "auto" : "hidden";
+
+    if (nextSelectionRef.current !== null) {
+      const offset = nextSelectionRef.current;
+      textarea.focus();
+      textarea.setSelectionRange(offset, offset);
+      nextSelectionRef.current = null;
+    }
   }, [draft]);
 
   const activePattern = draft || DEFAULT_DOWNLOAD_PATTERN;
@@ -52,94 +65,124 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     () => collectUnknownDownloadTokens(draft),
     [draft],
   );
+  const isModified = useMemo(
+    () => normalizePatternDraft(draft) !== normalizePatternDraft(props.value),
+    [draft, props.value],
+  );
 
-  function updateDraftFromEditor() {
-    const editor = editorRef.current;
-    if (!editor) {
-      return;
-    }
-    selectionOffsetRef.current = getCaretOffset(editor);
-    setDraft(normalizeEditorText(readEditorValue(editor)));
+  function handleChange(value: string) {
+    setDraft(normalizeEditorText(value));
   }
 
-  function handleBlur() {
-    const nextValue = draft.trim() || DEFAULT_DOWNLOAD_PATTERN;
-    selectionOffsetRef.current = null;
-    if (nextValue !== draft) {
-      setDraft(nextValue);
-    }
-    if (nextValue !== props.value) {
+  function handleSave() {
+    const nextValue = normalizePatternDraft(draft);
+    setDraft(nextValue);
+    if (nextValue !== normalizePatternDraft(props.value)) {
       props.onCommit(nextValue);
     }
   }
 
+  function handleUndo() {
+    const nextValue = props.value || "";
+    setDraft(nextValue);
+    nextSelectionRef.current = nextValue.length;
+  }
+
   function handleTokenInsert(tokenName: string) {
+    const textarea = textareaRef.current;
     const tokenText = `{${tokenName}}`;
-    const editor = editorRef.current;
-    if (!editor) {
+    if (!textarea) {
+      setDraft((current) => `${current}${tokenText}`);
       return;
     }
 
-    editor.focus();
-    if (insertTextAtCursor(tokenText)) {
-      updateDraftFromEditor();
-      return;
-    }
-
-    const next = `${draft}${tokenText}`;
-    selectionOffsetRef.current = next.length;
-    setDraft(next);
+    const start = textarea.selectionStart ?? draft.length;
+    const end = textarea.selectionEnd ?? draft.length;
+    const nextValue = `${draft.slice(0, start)}${tokenText}${draft.slice(end)}`;
+    nextSelectionRef.current = start + tokenText.length;
+    setDraft(nextValue);
   }
 
   return (
     <div className="space-y-2.5 rounded-[1.75rem] border border-[#2D2D44]/10 bg-white/58 p-3 dark:border-white/10 dark:bg-[#1A1733]/60">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-sm font-black text-[#2D2D44] dark:text-white">
-            Download pattern
-          </div>
+        <div className="text-sm font-black text-[#2D2D44] dark:text-white">
+          Download pattern
         </div>
         <div className="rounded-full bg-[#2A7FA6]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#2A7FA6] dark:bg-[#89CFF0]/12 dark:text-[#89CFF0]">
           Default
         </div>
       </div>
 
-      <div className="relative rounded-[1.35rem] border border-[#2D2D44]/12 bg-[#FCFBF7]/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:border-white/10 dark:bg-[#120F28]/88">
-        {draft ? null : (
-          <div className="pointer-events-none absolute inset-0 overflow-hidden px-3 py-2">
-            <EditorContent segments={placeholderSegments} muted />
+      <div className="rounded-[1.35rem] border border-[#2D2D44]/12 bg-[#FCFBF7]/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:border-white/10 dark:bg-[#120F28]/88">
+        <div className="relative">
+          <div
+            ref={mirrorRef}
+            aria-hidden
+            className={`pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-left text-sm font-semibold leading-6 text-[#2D2D44] transition-opacity dark:text-white ${
+              isEditing ? "opacity-0" : "opacity-100"
+            }`}
+          >
+            {draft ? (
+              <EditorContent segments={segments} />
+            ) : (
+              <EditorContent segments={placeholderSegments} muted />
+            )}
           </div>
-        )}
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          spellCheck={false}
-          onInput={updateDraftFromEditor}
-          onBlur={handleBlur}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-            }
-          }}
-          onPaste={(event) => {
-            event.preventDefault();
-            const text = normalizeEditorText(
-              event.clipboardData.getData("text/plain"),
-            );
-            if (!text) {
-              return;
-            }
-            if (insertTextAtCursor(text)) {
-              updateDraftFromEditor();
-            }
-          }}
-          className="relative min-h-[2.75rem] whitespace-pre-wrap break-words bg-transparent text-left text-sm font-semibold leading-6 text-[#2D2D44] outline-none dark:text-white"
-          aria-label="Download naming pattern"
-        >
-          <EditorContent segments={segments} />
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            spellCheck={false}
+            rows={2}
+            onChange={(event) => handleChange(event.target.value)}
+            onFocus={() => setIsEditing(true)}
+            onBlur={() => setIsEditing(false)}
+            onScroll={(event) => {
+              if (!mirrorRef.current) {
+                return;
+              }
+              mirrorRef.current.scrollTop = event.currentTarget.scrollTop;
+              mirrorRef.current.scrollLeft = event.currentTarget.scrollLeft;
+            }}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+                event.preventDefault();
+                handleSave();
+                return;
+              }
+              if (event.key === "Escape" && isModified) {
+                event.preventDefault();
+                handleUndo();
+              }
+            }}
+            className={`relative z-10 block w-full resize-none overflow-hidden bg-transparent text-sm font-semibold leading-6 outline-none selection:bg-[#2A7FA6]/18 ${
+              isEditing
+                ? "text-[#2D2D44] caret-[#2D2D44] dark:text-white dark:caret-white"
+                : "text-transparent caret-[#2D2D44] dark:caret-white"
+            }`}
+            aria-label="Download pattern editor"
+          />
         </div>
       </div>
+
+      {isModified ? (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            className="rounded-full bg-[#2A7FA6] px-3 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-[#204A87] dark:bg-[#89CFF0] dark:text-[#0F172A] dark:hover:bg-[#B6E5FF]"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={handleUndo}
+            className="rounded-full border border-[#2D2D44]/14 px-3 py-1 text-[11px] font-semibold text-[#2D2D44]/75 transition-colors hover:border-[#2D2D44]/24 hover:bg-white/60 dark:border-white/12 dark:text-white/70 dark:hover:bg-white/8"
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <div className="text-[11px] font-semibold text-[#2D2D44]/55 dark:text-white/45">
@@ -211,8 +254,6 @@ function EditorContent(props: {
           return (
             <span
               key={`invalid-${index}`}
-              data-pattern-value={segment.value}
-              contentEditable={false}
               title={`Unknown token ${segment.value}`}
               className={`inline-flex rounded-full border px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
                 props.muted
@@ -228,8 +269,6 @@ function EditorContent(props: {
         return (
           <span
             key={`token-${segment.token.name}-${index}`}
-            data-pattern-value={segment.value}
-            contentEditable={false}
             title={`${segment.token.description} Example: ${segment.token.example}`}
             className={`inline-flex rounded-full border px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
               props.muted
@@ -249,153 +288,7 @@ function normalizeEditorText(value: string) {
   return value.replace(/\r?\n/g, "").replaceAll("\u00A0", " ");
 }
 
-function getCaretOffset(element: HTMLElement) {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    return null;
-  }
-
-  return getLogicalOffset(
-    element,
-    selection.anchorNode ?? element,
-    selection.anchorOffset,
-  );
-}
-
-function setCaretOffset(element: HTMLElement, offset: number) {
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-
-  const position = findCaretPosition(element, offset);
-
-  const range = document.createRange();
-  range.setStart(position.container, position.offset);
-  range.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
-function insertTextAtCursor(text: string) {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    return false;
-  }
-
-  const range = selection.getRangeAt(0);
-  range.deleteContents();
-  const node = document.createTextNode(text);
-  range.insertNode(node);
-
-  range.setStartAfter(node);
-  range.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(range);
-  return true;
-}
-
-function readEditorValue(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent ?? "";
-  }
-
-  if (!(node instanceof HTMLElement)) {
-    return "";
-  }
-
-  if (node.dataset.patternValue) {
-    return node.dataset.patternValue;
-  }
-
-  let output = "";
-  for (const child of node.childNodes) {
-    output += readEditorValue(child);
-  }
-  return output;
-}
-
-function getLogicalOffset(
-  root: Node,
-  target: Node,
-  targetOffset: number,
-): number | null {
-  if (root === target) {
-    if (root.nodeType === Node.TEXT_NODE) {
-      return targetOffset;
-    }
-
-    let offset = 0;
-    for (let index = 0; index < targetOffset; index += 1) {
-      offset += getLogicalLength(root.childNodes[index]);
-    }
-    return offset;
-  }
-
-  if (root instanceof HTMLElement && root.dataset.patternValue) {
-    return null;
-  }
-
-  let total = 0;
-  for (const child of root.childNodes) {
-    const result = getLogicalOffset(child, target, targetOffset);
-    if (result !== null) {
-      return total + result;
-    }
-    total += getLogicalLength(child);
-  }
-  return null;
-}
-
-function getLogicalLength(node: Node | undefined): number {
-  if (!node) {
-    return 0;
-  }
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent?.length ?? 0;
-  }
-  if (node instanceof HTMLElement && node.dataset.patternValue) {
-    return node.dataset.patternValue.length;
-  }
-
-  let total = 0;
-  for (const child of node.childNodes) {
-    total += getLogicalLength(child);
-  }
-  return total;
-}
-
-function findCaretPosition(
-  node: Node,
-  requestedOffset: number,
-): { container: Node; offset: number } {
-  const offset = Math.max(0, requestedOffset);
-
-  if (node.nodeType === Node.TEXT_NODE) {
-    const length = node.textContent?.length ?? 0;
-    return { container: node, offset: Math.min(offset, length) };
-  }
-
-  if (node instanceof HTMLElement && node.dataset.patternValue) {
-    const parent = node.parentNode;
-    if (!parent) {
-      return { container: node, offset: 0 };
-    }
-    const index = Array.prototype.indexOf.call(parent.childNodes, node);
-    return {
-      container: parent,
-      offset: offset <= 0 ? index : index + 1,
-    };
-  }
-
-  let remaining = offset;
-  for (const child of node.childNodes) {
-    const length = getLogicalLength(child);
-    if (remaining <= length) {
-      return findCaretPosition(child, remaining);
-    }
-    remaining -= length;
-  }
-
-  return { container: node, offset: node.childNodes.length };
+function normalizePatternDraft(value: string) {
+  const trimmed = value.trim();
+  return trimmed || DEFAULT_DOWNLOAD_PATTERN;
 }
