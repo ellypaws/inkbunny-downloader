@@ -13,6 +13,7 @@ import type {
 } from "../lib/downloadPattern";
 
 type DownloadPatternInputProps = {
+  downloadDirectory: string;
   value: string;
   onCommit: (value: string) => void;
 };
@@ -68,9 +69,13 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     () => tokenizeDownloadPattern(DEFAULT_DOWNLOAD_PATTERN),
     [],
   );
-  const previewPaths = useMemo(
-    () => renderDownloadPatternPreview(activePattern),
-    [activePattern],
+  const combinedPreviewPaths = useMemo(
+    () =>
+      renderDownloadPatternPreviewWithBase(
+        props.downloadDirectory,
+        activePattern,
+      ),
+    [activePattern, props.downloadDirectory],
   );
   const unknownTokens = useMemo(
     () => collectUnknownDownloadTokens(draft),
@@ -216,10 +221,19 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
 
       <div className="space-y-2">
         <div className="text-[11px] font-semibold text-[#2D2D44]/55 dark:text-white/45">
+          Download folder
+        </div>
+        <div className="break-all rounded-[1.2rem] bg-white/60 px-3 py-2.5 font-mono text-xs font-semibold text-[#2D2D44]/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:bg-[#120F28]/88 dark:text-white/72">
+          {props.downloadDirectory || "No download folder selected yet."}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-[11px] font-semibold text-[#2D2D44]/55 dark:text-white/45">
           Preview
         </div>
         <div className="space-y-1.5 rounded-[1.2rem] bg-[#0F172A] px-3 py-2.5 font-mono text-xs text-[#D8F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-          {previewPaths.map((previewPath: string) => (
+          {combinedPreviewPaths.map((previewPath: string) => (
             <div key={previewPath} className="break-all">
               {previewPath}
             </div>
@@ -321,4 +335,22 @@ function normalizeEditorText(value: string) {
 function normalizePatternDraft(value: string) {
   const trimmed = value.trim();
   return trimmed || DEFAULT_DOWNLOAD_PATTERN;
+}
+
+function renderDownloadPatternPreviewWithBase(
+  downloadDirectory: string,
+  pattern: string,
+) {
+  const normalizedBase = normalizePreviewBase(downloadDirectory);
+  if (!normalizedBase) {
+    return renderDownloadPatternPreview(pattern);
+  }
+
+  return renderDownloadPatternPreview(pattern).map(
+    (previewPath) => `${normalizedBase}/${previewPath}`,
+  );
+}
+
+function normalizePreviewBase(value: string) {
+  return value.trim().replaceAll("\\", "/").replace(/\/+$/g, "");
 }

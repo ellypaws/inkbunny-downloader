@@ -83,11 +83,8 @@ export function AccountSidebar(props: AccountSidebarProps) {
               <FolderOpen size={18} />
               Choose Download Folder
             </button>
-            <div className="break-all rounded-2xl bg-white/55 px-4 py-3 text-xs font-bold text-[#2D2D44]/75 dark:bg-[#1A1733]/60 dark:text-white/70">
-              {props.settings.downloadDirectory ||
-                "No download folder selected yet."}
-            </div>
             <DownloadPatternInput
+              downloadDirectory={props.settings.downloadDirectory}
               value={props.settings.downloadPattern}
               onCommit={props.onDownloadPatternCommit}
             />

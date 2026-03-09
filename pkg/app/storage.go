@@ -125,9 +125,9 @@ func normalizeMaxActive(value int) int {
 func defaultDownloadDirectory() string {
 	base, err := resolveDownloadsDirectory()
 	if err != nil || strings.TrimSpace(base) == "" {
-		return "inkbunny"
+		return "Downloads"
 	}
-	return filepath.Join(base, "inkbunny")
+	return filepath.Clean(base)
 }
 
 func resolveDownloadPickerDirectory(current string) string {
