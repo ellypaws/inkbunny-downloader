@@ -10,7 +10,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import ElasticSlider from "./ElasticSlider";
 import {
@@ -19,6 +19,15 @@ import {
 } from "../lib/constants";
 import { formatBytes } from "../lib/format";
 import type { QueueSnapshot } from "../lib/types";
+
+const FILTERABLE_QUEUE_STATUSES = [
+  "active",
+  "queued",
+  "completed",
+  "failed",
+] as const;
+
+type QueueFilterStatus = (typeof FILTERABLE_QUEUE_STATUSES)[number];
 
 type DownloadQueuePanelProps = {
   queue: QueueSnapshot;
@@ -46,13 +55,31 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const autoScrollIgnoreUntilRef = useRef(0);
   const [followActiveDownload, setFollowActiveDownload] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<QueueFilterStatus[]>(
+    [],
+  );
+  const selectedStatusSet = useMemo(
+    () => new Set<QueueFilterStatus>(selectedStatuses),
+    [selectedStatuses],
+  );
+  const showAllJobs =
+    selectedStatuses.length === 0 ||
+    selectedStatuses.length === FILTERABLE_QUEUE_STATUSES.length;
+  const visibleJobs = useMemo(() => {
+    if (showAllJobs) {
+      return props.queue.jobs;
+    }
+    return props.queue.jobs.filter((job) =>
+      selectedStatusSet.has(job.status as QueueFilterStatus),
+    );
+  }, [props.queue.jobs, selectedStatusSet, showAllJobs]);
   const rowVirtualizer = useVirtualizer({
-    count: props.queue.jobs.length,
+    count: visibleJobs.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 78,
     overscan: 8,
   });
-  const firstActiveIndex = props.queue.jobs.findIndex(
+  const firstActiveIndex = visibleJobs.findIndex(
     (job) => job.status === "active",
   );
   const hasActiveDownload = firstActiveIndex >= 0;
@@ -84,6 +111,14 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
     setFollowActiveDownload(false);
   }
 
+  function handleToggleStatus(status: QueueFilterStatus) {
+    setSelectedStatuses((current) =>
+      current.includes(status)
+        ? current.filter((value) => value !== status)
+        : [...current, status],
+    );
+  }
+
   return (
     <section
       className="theme-panel relative overflow-hidden rounded-toy-sm border p-5 shadow-pop backdrop-blur-2xl md:min-h-[95vh] md:p-6"
@@ -101,13 +136,27 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           <StatChip
             tone="active"
             label={`${props.queue.activeCount} downloading`}
+            pressed={selectedStatusSet.has("active")}
+            onClick={() => handleToggleStatus("active")}
           />
-          <StatChip tone="queued" label={`${props.queue.queuedCount} queued`} />
+          <StatChip
+            tone="queued"
+            label={`${props.queue.queuedCount} queued`}
+            pressed={selectedStatusSet.has("queued")}
+            onClick={() => handleToggleStatus("queued")}
+          />
           <StatChip
             tone="completed"
             label={`${props.queue.completedCount} completed`}
+            pressed={selectedStatusSet.has("completed")}
+            onClick={() => handleToggleStatus("completed")}
           />
-          <StatChip tone="failed" label={`${props.queue.failedCount} failed`} />
+          <StatChip
+            tone="failed"
+            label={`${props.queue.failedCount} failed`}
+            pressed={selectedStatusSet.has("failed")}
+            onClick={() => handleToggleStatus("failed")}
+          />
         </div>
       </div>
 
@@ -227,6 +276,10 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           <div className="theme-panel-soft theme-muted rounded-toy-sm border px-5 py-12 text-center font-bold">
             No queued downloads yet.
           </div>
+        ) : visibleJobs.length === 0 ? (
+          <div className="theme-panel-soft theme-muted rounded-toy-sm border px-5 py-12 text-center font-bold">
+            No downloads match the selected filters.
+          </div>
         ) : (
           <div
             ref={parentRef}
@@ -238,7 +291,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
             >
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const job = props.queue.jobs[virtualRow.index];
+                const job = visibleJobs[virtualRow.index];
                 if (!job) {
                   return null;
                 }
@@ -461,6 +514,8 @@ function AutoClearToggle(props: {
 function StatChip(props: {
   tone: "active" | "queued" | "completed" | "failed";
   label: string;
+  pressed: boolean;
+  onClick: () => void;
 }) {
   const className =
     props.tone === "active"
@@ -472,7 +527,19 @@ function StatChip(props: {
           : "bg-[#FFB7B2]/20 text-[#CC5E00]";
 
   return (
-    <span className={`rounded-full px-3 py-2 ${className}`}>{props.label}</span>
+    <button
+      type="button"
+      aria-pressed={props.pressed}
+      onClick={props.onClick}
+      className={`cursor-pointer rounded-full border px-3 py-2 transition-all motion-safe:duration-200 motion-safe:hover:scale-[1.04] ${
+        props.pressed
+          ? `${className} border-current shadow-sm`
+          : `${className} border-transparent opacity-75 hover:opacity-100`
+      }`}
+      title={`Filter by ${props.label}`}
+    >
+      {props.label}
+    </button>
   );
 }
 
