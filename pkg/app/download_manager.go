@@ -287,6 +287,53 @@ func (m *DownloadManager) ClearCompleted() QueueSnapshot {
 	return snapshot
 }
 
+func (m *DownloadManager) ClearCompletedSubmissions(submissionIDs []string) QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	targets := make(map[string]struct{}, len(submissionIDs))
+	for _, submissionID := range submissionIDs {
+		if submissionID == "" {
+			continue
+		}
+		targets[submissionID] = struct{}{}
+	}
+	if len(targets) == 0 {
+		return m.snapshotLocked()
+	}
+
+	completed := make(map[string]bool, len(targets))
+	for submissionID := range targets {
+		hasJobs := false
+		allCompleted := true
+		for _, job := range m.jobs {
+			if job == nil || job.snapshot.SubmissionID != submissionID {
+				continue
+			}
+			hasJobs = true
+			if job.snapshot.Status != "completed" {
+				allCompleted = false
+				break
+			}
+		}
+		completed[submissionID] = hasJobs && allCompleted
+	}
+
+	for jobID, job := range m.jobs {
+		if job == nil || job.snapshot.Status != "completed" {
+			continue
+		}
+		if !completed[job.snapshot.SubmissionID] {
+			continue
+		}
+		delete(m.jobs, jobID)
+	}
+
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	return snapshot
+}
+
 func (m *DownloadManager) maybeStartLocked() {
 	for m.active < m.maxActive && len(m.pending) > 0 {
 		jobID := m.pending[0]

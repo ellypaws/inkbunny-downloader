@@ -127,7 +127,9 @@ export default function App() {
   const requestRef = useRef<number | null>(null);
   const shouldScrollToResultsRef = useRef(false);
   const ratingDebounceRef = useRef<number | null>(null);
-  const autoClearTimeoutRef = useRef<number | null>(null);
+  const autoClearTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const autoClearPendingSubmissionIdsRef = useRef<Set<string>>(new Set());
+  const autoClearRunningRef = useRef(false);
   const pendingRatingsMaskRef = useRef("");
   const currentY = useRef(0);
   const toastTimeoutsRef = useRef<Map<string, number>>(new Map());
@@ -156,14 +158,6 @@ export default function App() {
   const completedQueueSubmissionIds = useMemo(
     () => getCompletedQueueSubmissionIds(queue),
     [queue],
-  );
-  const completedJobIds = useMemo(
-    () =>
-      queue.jobs
-        .filter((job) => job.status === "completed")
-        .map((job) => job.id)
-        .join(","),
-    [queue.jobs],
   );
   const downloadedSubmissionIds = useMemo(
     () => getDownloadedSubmissionIds(tabs, completedQueueSubmissionIds),
@@ -702,9 +696,11 @@ export default function App() {
         window.clearTimeout(timeoutId);
       }
       toastTimeoutsRef.current.clear();
-      if (autoClearTimeoutRef.current !== null) {
-        window.clearTimeout(autoClearTimeoutRef.current);
+      for (const timeoutId of autoClearTimeoutsRef.current.values()) {
+        window.clearTimeout(timeoutId);
       }
+      autoClearTimeoutsRef.current.clear();
+      autoClearPendingSubmissionIdsRef.current.clear();
       clearScheduledTourAdvance();
     },
     [],
@@ -806,24 +802,31 @@ export default function App() {
   }, [settings.darkMode]);
 
   useEffect(() => {
-    if (autoClearTimeoutRef.current !== null) {
-      window.clearTimeout(autoClearTimeoutRef.current);
-      autoClearTimeoutRef.current = null;
-    }
-    if (!settings.autoClearCompleted || !completedJobIds) {
+    const timeouts = autoClearTimeoutsRef.current;
+
+    if (!settings.autoClearCompleted) {
+      for (const timeoutId of timeouts.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      timeouts.clear();
+      autoClearPendingSubmissionIdsRef.current.clear();
+      autoClearRunningRef.current = false;
       return;
     }
-    autoClearTimeoutRef.current = window.setTimeout(() => {
-      autoClearTimeoutRef.current = null;
-      void handleClearCompleted(true);
-    }, 3000);
-    return () => {
-      if (autoClearTimeoutRef.current !== null) {
-        window.clearTimeout(autoClearTimeoutRef.current);
-        autoClearTimeoutRef.current = null;
+
+    for (const submissionId of completedQueueSubmissionIds) {
+      scheduleAutoClearSubmission(submissionId);
+    }
+
+    for (const [submissionId, timeoutId] of timeouts.entries()) {
+      if (completedQueueSubmissionIds.has(submissionId)) {
+        continue;
       }
-    };
-  }, [completedJobIds, settings.autoClearCompleted]);
+      window.clearTimeout(timeoutId);
+      timeouts.delete(submissionId);
+      autoClearPendingSubmissionIdsRef.current.delete(submissionId);
+    }
+  }, [completedQueueSubmissionIds, settings.autoClearCompleted]);
 
   useEffect(() => {
     pendingRatingsMaskRef.current = session.ratingsMask;
@@ -1026,6 +1029,60 @@ export default function App() {
     }
     const nextStep = getNextTourStep(tourStepId);
     scheduleTourAdvance(nextStep ?? "stop");
+  }
+
+  function scheduleAutoClearSubmission(submissionId: string) {
+    if (!submissionId || autoClearTimeoutsRef.current.has(submissionId)) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      autoClearTimeoutsRef.current.delete(submissionId);
+      autoClearPendingSubmissionIdsRef.current.add(submissionId);
+      void flushAutoClearCompletedSubmissions();
+    }, 3000);
+    autoClearTimeoutsRef.current.set(submissionId, timeoutId);
+  }
+
+  async function flushAutoClearCompletedSubmissions() {
+    if (autoClearRunningRef.current) {
+      return;
+    }
+
+    const submissionIds = [...autoClearPendingSubmissionIdsRef.current];
+    if (submissionIds.length === 0) {
+      return;
+    }
+
+    autoClearRunningRef.current = true;
+    autoClearPendingSubmissionIdsRef.current.clear();
+    let cleared = false;
+
+    try {
+      const snapshot = await backend.clearCompletedSubmissions(submissionIds);
+      setQueue(snapshot);
+      cleared = true;
+      updateQueueMessage(
+        `${formatCountLabel(submissionIds.length, "submission")} cleared automatically.`,
+        "success",
+        "queue-auto-clear-completed",
+      );
+    } catch (error) {
+      for (const submissionId of submissionIds) {
+        autoClearPendingSubmissionIdsRef.current.delete(submissionId);
+        scheduleAutoClearSubmission(submissionId);
+      }
+      const message = getErrorMessage(
+        error,
+        "Could not clear completed submissions automatically.",
+      );
+      updateQueueMessage(message);
+      pushErrorToast(message, "queue-auto-clear-completed-error");
+    } finally {
+      autoClearRunningRef.current = false;
+      if (cleared && autoClearPendingSubmissionIdsRef.current.size > 0) {
+        void flushAutoClearCompletedSubmissions();
+      }
+    }
   }
 
   async function handleClearCompleted(auto = false) {
@@ -1993,6 +2050,10 @@ function getCompletedQueueSubmissionIds(queue: QueueSnapshot) {
       .filter(([, completed]) => completed)
       .map(([submissionId]) => submissionId),
   );
+}
+
+function formatCountLabel(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function getUnavailableSubmissionIds(

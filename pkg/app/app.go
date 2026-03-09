@@ -315,6 +315,13 @@ func (a *App) ClearCompletedDownloads() QueueSnapshot {
 	return a.downloadManager.ClearCompleted()
 }
 
+func (a *App) ClearCompletedSubmissions(submissionIDs []string) QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.ClearCompletedSubmissions(submissionIDs)
+}
+
 func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, options DownloadOptions) (QueueSnapshot, error) {
 	user, err := a.ensureSearchSession()
 	if err != nil {

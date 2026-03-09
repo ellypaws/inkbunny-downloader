@@ -18,6 +18,10 @@ export function ClearCompletedDownloads() {
   return window['go']['desktopapp']['App']['ClearCompletedDownloads']();
 }
 
+export function ClearCompletedSubmissions(arg1) {
+  return window['go']['desktopapp']['App']['ClearCompletedSubmissions'](arg1);
+}
+
 export function ClearQueue() {
   return window['go']['desktopapp']['App']['ClearQueue']();
 }

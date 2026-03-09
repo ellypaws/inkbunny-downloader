@@ -10,6 +10,8 @@ export function CancelSubmission(arg1:string):Promise<desktopapp.QueueSnapshot>;
 
 export function ClearCompletedDownloads():Promise<desktopapp.QueueSnapshot>;
 
+export function ClearCompletedSubmissions(arg1:Array<string>):Promise<desktopapp.QueueSnapshot>;
+
 export function ClearQueue():Promise<desktopapp.QueueSnapshot>;
 
 export function DiagnosticState():Promise<string>;
