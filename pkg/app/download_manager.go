@@ -171,6 +171,54 @@ func (m *DownloadManager) CancelSubmission(submissionID string) QueueSnapshot {
 	return snapshot
 }
 
+func (m *DownloadManager) Retry(jobID string) QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job := m.jobs[jobID]
+	if job == nil || job.snapshot.Status != "failed" {
+		return m.snapshotLocked()
+	}
+
+	m.retryJobLocked(jobID, job)
+	m.maybeStartLocked()
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, job.snapshot)
+	return snapshot
+}
+
+func (m *DownloadManager) RetrySubmission(submissionID string) QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if submissionID == "" {
+		return m.snapshotLocked()
+	}
+
+	retryIDs := make([]string, 0)
+	relevantCount := 0
+	for jobID, job := range m.jobs {
+		if job == nil || job.snapshot.SubmissionID != submissionID || job.snapshot.Status == "cancelled" {
+			continue
+		}
+		relevantCount++
+		if job.snapshot.Status == "failed" {
+			retryIDs = append(retryIDs, jobID)
+		}
+	}
+	if relevantCount == 0 || len(retryIDs) == 0 || len(retryIDs) != relevantCount {
+		return m.snapshotLocked()
+	}
+
+	for _, jobID := range retryIDs {
+		m.retryJobLocked(jobID, m.jobs[jobID])
+	}
+	m.maybeStartLocked()
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	return snapshot
+}
+
 func (m *DownloadManager) CancelAll() QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -519,6 +567,25 @@ func (m *DownloadManager) emitLocked(snapshot QueueSnapshot, job DownloadJobSnap
 		Job:   job,
 		Queue: snapshot,
 	})
+}
+
+func (m *DownloadManager) retryJobLocked(jobID string, job *downloadJob) {
+	if job == nil || job.snapshot.Status != "failed" {
+		return
+	}
+
+	now := time.Now().Format(time.RFC3339Nano)
+	job.snapshot.Status = "queued"
+	job.snapshot.BytesWritten = 0
+	job.snapshot.TotalBytes = 0
+	job.snapshot.Progress = 0
+	job.snapshot.Error = ""
+	job.snapshot.Attempt = 0
+	job.snapshot.UpdatedAt = now
+	job.cancel = nil
+	if !slices.Contains(m.pending, jobID) {
+		m.pending = append(m.pending, jobID)
+	}
 }
 
 func removeString(items []string, target string) []string {

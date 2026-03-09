@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from "react";
-
 type NewSubmissionsBadgeProps = {
   unreadTotal?: number;
   newUnreadCount?: number;
@@ -15,34 +13,16 @@ export function NewSubmissionsBadge({
   onOpenUnread,
   className,
 }: NewSubmissionsBadgeProps) {
-  const [spinDegrees, setSpinDegrees] = useState(0);
-  const [isFlashing, setIsFlashing] = useState(false);
-  const prevTotal = useRef(unreadTotal);
-  const prevNewCount = useRef(newUnreadCount);
-
-  useEffect(() => {
-    if (unreadTotal !== prevTotal.current) {
-      setSpinDegrees((prev) => prev + 360);
-      prevTotal.current = unreadTotal;
-    }
-  }, [unreadTotal]);
-
-  useEffect(() => {
-    if (newUnreadCount !== prevNewCount.current) {
-      setIsFlashing(true);
-      const timer = window.setTimeout(() => setIsFlashing(false), 300);
-      prevNewCount.current = newUnreadCount;
-      return () => window.clearTimeout(timer);
-    }
-  }, [newUnreadCount]);
+  const spinDegrees = unreadTotal * 360;
 
   return (
     <div
       className={`relative z-10 flex flex-col items-center ${className ?? ""}`}
     >
       <button
+        type="button"
         onClick={onOpenUnread}
-        className={`group relative flex min-w-[148px] cursor-default items-start justify-start bg-transparent px-0 pt-1 text-left transition-transform duration-500 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] hover:scale-[1.1] active:scale-[1.1] ${
+        className={`group relative flex min-w-[148px] cursor-pointer items-start justify-start bg-transparent px-0 pt-1 text-left transition-transform duration-500 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] hover:scale-[1.1] active:scale-[1.1] ${
           unreadActive ? "scale-[1.03]" : ""
         }`}
         title="Open unread submissions"
@@ -113,9 +93,7 @@ export function NewSubmissionsBadge({
           {newUnreadCount > 0 ? (
             <span className="absolute left-[36px] top-[48px] cursor-pointer drop-shadow-[0_3px_4px_rgba(0,0,0,0.35)] transition-transform duration-500 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-[1.08] md:left-[42px] md:top-[52px]">
               <span
-                className={`flex items-center justify-center rounded-full border-[2px] border-[#fdf0a6]/60 px-[10px] py-[2px] transition-colors duration-300 md:px-[12px] md:py-[2px] ${
-                  isFlashing ? "bg-[#ffe975]" : "bg-[#cbb859]/95"
-                }`}
+                className="flex items-center justify-center rounded-full border-[2px] border-[#fdf0a6]/60 bg-[#ffe975] px-[10px] py-[2px] transition-colors duration-300 md:px-[12px] md:py-[2px]"
               >
                 <span className="font-sans text-[12px] font-bold leading-none text-[#4c5361] drop-shadow-[0_1px_1px_rgba(255,255,255,0.2)] md:text-[14px]">
                   {newUnreadCount}

@@ -240,6 +240,20 @@ func (a *App) CancelSubmission(submissionID string) QueueSnapshot {
 	return a.downloadManager.CancelSubmission(submissionID)
 }
 
+func (a *App) RetryDownload(jobID string) QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.Retry(jobID)
+}
+
+func (a *App) RetrySubmission(submissionID string) QueueSnapshot {
+	if a.downloadManager == nil {
+		return QueueSnapshot{}
+	}
+	return a.downloadManager.RetrySubmission(submissionID)
+}
+
 func (a *App) StopAllDownloads() QueueSnapshot {
 	if a.downloadManager == nil {
 		return QueueSnapshot{}

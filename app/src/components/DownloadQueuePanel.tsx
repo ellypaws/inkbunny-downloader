@@ -4,6 +4,7 @@ import {
   Download,
   FileImage,
   FolderOpen,
+  RefreshCw,
   Square,
   Trash2,
   X,
@@ -37,6 +38,7 @@ type DownloadQueuePanelProps = {
   onMaxActiveChange: (value: number) => void;
   onCancel: (jobId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
+  onRetry: (jobId: string) => void;
 };
 
 export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
@@ -197,6 +199,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                       job={job}
                       onCancel={props.onCancel}
                       onCancelSubmission={props.onCancelSubmission}
+                      onRetry={props.onRetry}
                     />
                   </div>
                 );
@@ -213,9 +216,11 @@ function QueueRow(props: {
   job: QueueSnapshot["jobs"][number];
   onCancel: (jobId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
+  onRetry: (jobId: string) => void;
 }) {
   const { job } = props;
   const actionable = job.status === "queued" || job.status === "active";
+  const retryable = job.status === "failed";
   const showAttemptChip =
     job.status === "queued" || (actionable && (job.attempt || 1) > 1);
   const submissionUrl = `https://inkbunny.net/s/${job.submissionId}`;
@@ -308,6 +313,16 @@ function QueueRow(props: {
                       File
                     </button>
                   </>
+                ) : retryable ? (
+                  <button
+                    type="button"
+                    onClick={() => props.onRetry(job.id)}
+                    className="theme-button-secondary flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
+                    title={`Retry ${job.fileName}`}
+                  >
+                    <RefreshCw size={11} strokeWidth={2.4} />
+                    Retry
+                  </button>
                 ) : null}
               </div>
             </div>

@@ -42,6 +42,10 @@ export function PickDownloadDirectory():Promise<string>;
 
 export function RefreshSearch(arg1:string):Promise<desktopapp.SearchResponse>;
 
+export function RetryDownload(arg1:string):Promise<desktopapp.QueueSnapshot>;
+
+export function RetrySubmission(arg1:string):Promise<desktopapp.QueueSnapshot>;
+
 export function Search(arg1:desktopapp.SearchParams):Promise<desktopapp.SearchResponse>;
 
 export function SkipReleaseTag(arg1:string):Promise<desktopapp.AppSettings>;

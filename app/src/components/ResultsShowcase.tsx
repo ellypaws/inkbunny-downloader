@@ -47,6 +47,7 @@ type ResultsShowcaseProps = {
   onToggleSelection: (submissionId: string) => void;
   onDownloadSubmission: (submissionId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
+  onRetrySubmission: (submissionId: string) => void;
   onStopAll: () => void;
   onRefresh: () => void;
   onQueueDownloads: () => void;
@@ -55,7 +56,12 @@ type ResultsShowcaseProps = {
   onStopLoadMore: () => void;
 };
 
-type SubmissionDownloadState = "idle" | "queued" | "downloading" | "downloaded";
+type SubmissionDownloadState =
+  | "idle"
+  | "queued"
+  | "downloading"
+  | "downloaded"
+  | "failed";
 
 type SubmissionDownloadSummary = {
   state: SubmissionDownloadState;
@@ -318,6 +324,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
               downloadSummaries.get(item.submissionId) ?? IDLE_DOWNLOAD_SUMMARY;
             const downloaded = downloadSummary.state === "downloaded";
             const cancellable = isSubmissionCancellable(downloadSummary.state);
+            const retryable = isSubmissionRetryable(downloadSummary.state);
 
             return (
               <div
@@ -361,17 +368,25 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                         props.onCancelSubmission(item.submissionId);
                         return;
                       }
+                      if (retryable) {
+                        props.onRetrySubmission(item.submissionId);
+                        return;
+                      }
                       props.onDownloadSubmission(item.submissionId);
                     }}
                     aria-label={
                       cancellable
                         ? `Cancel download for ${item.title}`
-                        : `Download ${item.title}`
+                        : retryable
+                          ? `Retry download for ${item.title}`
+                          : `Download ${item.title}`
                     }
                     disabled={downloaded}
                     className={`group/download-action flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
                       downloadSummary.state === "downloaded"
                         ? "translate-x-[3.25rem] bg-[#73D216]/85 text-white"
+                        : retryable
+                          ? "bg-[#CC5E00] text-white hover:bg-[#A84600]"
                         : cancellable
                           ? "bg-[#2A7FA6] text-white hover:bg-[#CC5E00]"
                           : "bg-[#14112C]/72 text-white hover:scale-105"
@@ -390,6 +405,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                           />
                         </span>
                       </span>
+                    ) : retryable ? (
+                      <RefreshCw size={18} />
                     ) : (
                       renderDownloadIcon(downloadSummary.state, 18)
                     )}
@@ -567,6 +584,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                           const cancellable = isSubmissionCancellable(
                             downloadSummary.state,
                           );
+                          const retryable = isSubmissionRetryable(
+                            downloadSummary.state,
+                          );
 
                           return (
                             <article
@@ -623,10 +643,17 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                       title={item.title}
                                       summary={downloadSummary}
                                       cancellable={cancellable}
+                                      retryable={retryable}
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         if (cancellable) {
                                           props.onCancelSubmission(
+                                            item.submissionId,
+                                          );
+                                          return;
+                                        }
+                                        if (retryable) {
+                                          props.onRetrySubmission(
                                             item.submissionId,
                                           );
                                           return;
@@ -709,22 +736,43 @@ function SubmissionPreview(props: {
   refreshToken: number;
 }) {
   const sources = getPreviewSources(props.submission, props.variant);
+
+  if (sources.length === 0) {
+    return (
+      <PreviewFallback
+        submission={props.submission}
+        className={props.className}
+      />
+    );
+  }
+
+  return (
+    <SubmissionPreviewImage
+      key={getSubmissionPreviewKey(props.submission, props.refreshToken)}
+      submission={props.submission}
+      sources={sources}
+      alt={props.alt}
+      className={props.className}
+      sizes={
+        props.variant === "full"
+          ? "(min-width: 768px) 60vw, 100vw"
+          : "(min-width: 1280px) 26vw, (min-width: 768px) 42vw, 100vw"
+      }
+      refreshToken={props.refreshToken}
+    />
+  );
+}
+
+function SubmissionPreviewImage(props: {
+  submission: SubmissionCard;
+  sources: string[];
+  alt: string;
+  className: string;
+  sizes: string;
+  refreshToken: number;
+}) {
   const [sourceIndex, setSourceIndex] = useState(0);
-
-  useEffect(() => {
-    setSourceIndex(0);
-  }, [
-    props.submission.submissionId,
-    props.submission.thumbnailUrl,
-    props.submission.previewUrl,
-    props.submission.screenUrl,
-    props.submission.fullUrl,
-    props.submission.latestPreviewUrl,
-    props.submission.latestThumbnailUrl,
-    props.refreshToken,
-  ]);
-
-  const source = sources[sourceIndex];
+  const source = props.sources[sourceIndex];
 
   if (!source) {
     return (
@@ -739,11 +787,7 @@ function SubmissionPreview(props: {
     <img
       key={`${props.submission.submissionId}-${props.refreshToken}-${sourceIndex}`}
       src={source}
-      sizes={
-        props.variant === "full"
-          ? "(min-width: 768px) 60vw, 100vw"
-          : "(min-width: 1280px) 26vw, (min-width: 768px) 42vw, 100vw"
-      }
+      sizes={props.sizes}
       alt={props.alt}
       loading="lazy"
       referrerPolicy="no-referrer"
@@ -781,6 +825,22 @@ function getPreviewSources(
   return [
     ...new Set(ordered.filter((value): value is string => Boolean(value))),
   ];
+}
+
+function getSubmissionPreviewKey(
+  submission: SubmissionCard,
+  refreshToken: number,
+) {
+  return [
+    submission.submissionId,
+    submission.thumbnailUrl,
+    submission.previewUrl,
+    submission.screenUrl,
+    submission.fullUrl,
+    submission.latestPreviewUrl,
+    submission.latestThumbnailUrl,
+    refreshToken,
+  ].join("|");
 }
 
 function PreviewFallback(props: {
@@ -953,6 +1013,13 @@ function buildSubmissionDownloadSummaries(
       });
       continue;
     }
+    if (relevantJobs.every((job) => job.status === "failed")) {
+      summaries.set(submissionId, {
+        state: "failed",
+        progress: 0,
+      });
+      continue;
+    }
 
     const anyActive = relevantJobs.some((job) => job.status === "active");
     const anyQueued = relevantJobs.some((job) => job.status === "queued");
@@ -1010,6 +1077,9 @@ function formatDownloadStatus(summary: SubmissionDownloadSummary) {
   if (summary.state === "downloaded") {
     return "Downloaded";
   }
+  if (summary.state === "failed") {
+    return "Failed";
+  }
   return "Ready";
 }
 
@@ -1020,11 +1090,18 @@ function renderDownloadIcon(state: SubmissionDownloadState, size: number) {
   if (state === "downloaded") {
     return <Check size={size} />;
   }
+  if (state === "failed") {
+    return <RefreshCw size={size} />;
+  }
   return <Download size={size} />;
 }
 
 function isSubmissionCancellable(state: SubmissionDownloadState) {
   return state === "queued" || state === "downloading";
+}
+
+function isSubmissionRetryable(state: SubmissionDownloadState) {
+  return state === "failed";
 }
 
 function clampProgress(value: number) {
@@ -1038,6 +1115,7 @@ function GridDownloadButton(props: {
   title: string;
   summary: SubmissionDownloadSummary;
   cancellable: boolean;
+  retryable: boolean;
   onClick: MouseEventHandler<HTMLButtonElement>;
 }) {
   const progress =
@@ -1056,12 +1134,16 @@ function GridDownloadButton(props: {
       aria-label={
         props.cancellable
           ? `Cancel download for ${props.title}`
-          : `Download ${props.title}`
+          : props.retryable
+            ? `Retry download for ${props.title}`
+            : `Download ${props.title}`
       }
       disabled={props.summary.state === "downloaded"}
       className={`group/grid-download relative flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ${
         props.summary.state === "downloaded"
           ? "translate-x-10 bg-[var(--theme-accent)] text-white"
+          : props.retryable
+            ? "bg-[var(--theme-danger)] text-white hover:bg-[#A84600]"
           : props.cancellable
             ? "bg-[var(--theme-info)] text-white hover:bg-[var(--theme-danger)]"
             : "bg-[var(--theme-info)] text-white hover:scale-105"
@@ -1078,6 +1160,8 @@ function GridDownloadButton(props: {
         </>
       ) : props.summary.state === "downloaded" ? (
         <Check size={14} />
+      ) : props.retryable ? (
+        <RefreshCw size={14} />
       ) : (
         <Download size={14} />
       )}

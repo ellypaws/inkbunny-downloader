@@ -29,17 +29,63 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
     return null;
   }
 
+  const moreLabel = props.moreLabel ?? "More";
+  const moreHoverLabel = props.moreHoverLabel ?? "Load More";
+  const allLabel = props.allLabel ?? "All";
+  const allHoverLabel = props.allHoverLabel ?? "Load All";
+  const stopLabel = props.stopLabel ?? "Stop";
+  const loadingLabel =
+    props.loadedLabel?.(props.state.pagesLoaded) ??
+    (props.state.mode === "more"
+      ? "Loading"
+      : `Loading ${props.state.pagesLoaded} ${
+          props.state.pagesLoaded === 1 ? "page" : "pages"
+        }`);
+
   const isIdle = props.state.mode === "idle";
   const containerClassName = props.className
     ? `flex justify-center ${props.className}`
     : "flex justify-center";
 
-  // Carefully tuned pixel widths to ensure smooth flex transitions
-  const LEFT_IDLE_W = 84;
-  const LEFT_HOVER_W = 124;
-  const RIGHT_IDLE_W = 52;
-  const RIGHT_HOVER_W = 110;
-  const STOP_W = 160;
+  // Scale widths with the active labels so longer counts don't clip.
+  const LEFT_IDLE_W = estimateButtonWidth(moreLabel, {
+    iconWidth: 18,
+    gapWidth: 6,
+    paddingWidth: 32,
+    minWidth: 84,
+  });
+  const LEFT_HOVER_W = estimateButtonWidth(moreHoverLabel, {
+    iconWidth: 18,
+    gapWidth: 6,
+    paddingWidth: 32,
+    minWidth: 124,
+  });
+  const RIGHT_IDLE_W = estimateButtonWidth(allLabel, {
+    iconWidth: 0,
+    gapWidth: 0,
+    paddingWidth: 28,
+    minWidth: 52,
+  });
+  const RIGHT_HOVER_W = estimateButtonWidth(allHoverLabel, {
+    iconWidth: 18,
+    gapWidth: 6,
+    paddingWidth: 30,
+    minWidth: 110,
+  });
+  const STOP_W = Math.max(
+    estimateButtonWidth(loadingLabel, {
+      iconWidth: 18,
+      gapWidth: 8,
+      paddingWidth: 38,
+      minWidth: 160,
+    }),
+    estimateButtonWidth(stopLabel, {
+      iconWidth: 18,
+      gapWidth: 8,
+      paddingWidth: 38,
+      minWidth: 160,
+    }),
+  );
 
   const leftWidth = hovered === "more" ? LEFT_HOVER_W : LEFT_IDLE_W;
   const rightWidth = hovered === "all" ? RIGHT_HOVER_W : RIGHT_IDLE_W;
@@ -88,7 +134,7 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
                 <div
                   className="relative h-6 overflow-hidden"
                   style={{
-                    width: hovered === "more" ? "80px" : "36px",
+                    width: hovered === "more" ? `${LEFT_HOVER_W - 44}px` : `${LEFT_IDLE_W - 44}px`,
                     transition: "width 400ms cubic-bezier(0.22,1,0.36,1)",
                   }}
                 >
@@ -99,7 +145,7 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
                         : "translate-y-0 opacity-100"
                     }`}
                   >
-                    {props.moreLabel ?? "More"}
+                    {moreLabel}
                   </span>
                   <span
                     className={`absolute inset-0 flex items-center justify-start whitespace-nowrap transition-all duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
@@ -108,7 +154,7 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
                         : "translate-y-6 opacity-0"
                     }`}
                   >
-                    {props.moreHoverLabel ?? "Load More"}
+                    {moreHoverLabel}
                   </span>
                 </div>
               </div>
@@ -146,7 +192,7 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
                 <div
                   className="relative h-6 overflow-hidden"
                   style={{
-                    width: hovered === "all" ? "62px" : "24px",
+                    width: hovered === "all" ? `${RIGHT_HOVER_W - 36}px` : `${RIGHT_IDLE_W - 28}px`,
                     transition: "width 400ms cubic-bezier(0.22,1,0.36,1)",
                   }}
                 >
@@ -157,7 +203,7 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
                         : "translate-y-0 opacity-100"
                     }`}
                   >
-                    {props.allLabel ?? "All"}
+                    {allLabel}
                   </span>
                   <span
                     className={`absolute inset-0 flex items-center justify-start whitespace-nowrap transition-all duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
@@ -166,7 +212,7 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
                         : "translate-y-6 opacity-0"
                     }`}
                   >
-                    {props.allHoverLabel ?? "Load All"}
+                    {allHoverLabel}
                   </span>
                 </div>
               </div>
@@ -194,15 +240,10 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
               </span>
               <span className="relative inline-flex h-5 items-center justify-center overflow-hidden whitespace-nowrap">
                 <span className="transition-all duration-200 group-hover/stop:-translate-y-5 group-hover/stop:opacity-0">
-                  {props.loadedLabel?.(props.state.pagesLoaded) ??
-                    (props.state.mode === "more"
-                      ? "Loading"
-                      : `Loading ${props.state.pagesLoaded} ${
-                          props.state.pagesLoaded === 1 ? "page" : "pages"
-                        }`)}
+                  {loadingLabel}
                 </span>
                 <span className="absolute inset-0 translate-y-5 opacity-0 transition-all duration-200 group-hover/stop:translate-y-0 group-hover/stop:opacity-100">
-                  {props.stopLabel ?? "Stop"}
+                  {stopLabel}
                 </span>
               </span>
             </button>
@@ -210,5 +251,21 @@ export function LoadMoreControl(props: LoadMoreControlProps) {
         )}
       </div>
     </div>
+  );
+}
+
+function estimateButtonWidth(
+  label: string,
+  options: {
+    iconWidth: number;
+    gapWidth: number;
+    paddingWidth: number;
+    minWidth: number;
+  },
+) {
+  const textWidth = Math.ceil(label.length * 7.6);
+  return Math.max(
+    options.minWidth,
+    textWidth + options.iconWidth + options.gapWidth + options.paddingWidth,
   );
 }

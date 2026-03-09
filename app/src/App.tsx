@@ -1318,6 +1318,42 @@ export default function App() {
     }
   }
 
+  async function handleRetryDownload(jobId: string) {
+    if (!jobId) {
+      return;
+    }
+    try {
+      setQueue(await backend.retryDownload(jobId));
+      updateQueueMessage(
+        "Retrying failed download.",
+        "success",
+        "retry-download-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to retry download.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "retry-download-error");
+    }
+  }
+
+  async function handleRetrySubmission(submissionId: string) {
+    if (!submissionId) {
+      return;
+    }
+    try {
+      setQueue(await backend.retrySubmission(submissionId));
+      updateQueueMessage(
+        "Retrying failed submission.",
+        "success",
+        "retry-submission-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to retry submission.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "retry-submission-error");
+    }
+  }
+
   async function handleStopAllDownloads() {
     if (!canStopAllDownloads) {
       return;
@@ -1596,6 +1632,7 @@ export default function App() {
               }}
               onDownloadSubmission={(submissionId) => void handleDownloadSubmissions([submissionId])}
               onCancelSubmission={(submissionId) => void handleCancelSubmission(submissionId)}
+              onRetrySubmission={(submissionId) => void handleRetrySubmission(submissionId)}
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
               onQueueDownloads={() => void handleQueueDownloads()}
@@ -1646,6 +1683,7 @@ export default function App() {
               backend.cancelDownload(jobId).then(setQueue).catch(() => undefined);
             }}
             onCancelSubmission={(submissionId) => void handleCancelSubmission(submissionId)}
+            onRetry={(jobId) => void handleRetryDownload(jobId)}
           />
         </main>
       </div>
