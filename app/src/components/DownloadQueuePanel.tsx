@@ -12,7 +12,17 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type TouchEvent,
+  type UIEvent,
+  type WheelEvent,
+} from "react";
 
 import ElasticSlider from "./ElasticSlider";
 import {
@@ -30,6 +40,19 @@ const FILTERABLE_QUEUE_STATUSES = [
 ] as const;
 
 type QueueFilterStatus = (typeof FILTERABLE_QUEUE_STATUSES)[number];
+
+const AUTO_SCROLL_IGNORE_MS = 400;
+const USER_SCROLL_INTENT_WINDOW_MS = 1200;
+const USER_SCROLL_DISABLE_THRESHOLD_PX = 4;
+const SCROLL_KEYS = new Set([
+  "ArrowDown",
+  "ArrowUp",
+  "PageDown",
+  "PageUp",
+  "Home",
+  "End",
+  " ",
+]);
 
 type DownloadQueuePanelProps = {
   queue: QueueSnapshot;
@@ -62,6 +85,8 @@ type DownloadQueuePanelProps = {
 export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const autoScrollIgnoreUntilRef = useRef(0);
+  const userScrollIntentUntilRef = useRef(0);
+  const lastObservedScrollTopRef = useRef(0);
   const [followActiveDownload, setFollowActiveDownload] = useState(false);
   const [highlightedSubmissionId, setHighlightedSubmissionId] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<QueueFilterStatus[]>(
@@ -120,18 +145,57 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
     if (!followActiveDownload || firstActiveIndex < 0) {
       return;
     }
-    autoScrollIgnoreUntilRef.current = performance.now() + 400;
+    autoScrollIgnoreUntilRef.current = performance.now() + AUTO_SCROLL_IGNORE_MS;
     rowVirtualizer.scrollToIndex(firstActiveIndex, {
       align: "start",
       behavior: "smooth",
     });
   }, [firstActiveIndex, followActiveDownload, rowVirtualizer]);
 
-  function handleQueueScroll() {
+  useEffect(() => {
+    lastObservedScrollTopRef.current = parentRef.current?.scrollTop ?? 0;
+  }, [followActiveDownload, visibleJobs.length]);
+
+  function markUserScrollIntent() {
+    userScrollIntentUntilRef.current =
+      performance.now() + USER_SCROLL_INTENT_WINDOW_MS;
+  }
+
+  function handleQueuePointerDown(event: PointerEvent<HTMLDivElement>) {
+    const currentTarget = event.currentTarget;
+    const verticalScrollbarWidth =
+      currentTarget.offsetWidth - currentTarget.clientWidth;
+    if (verticalScrollbarWidth <= 0) {
+      return;
+    }
+    const bounds = currentTarget.getBoundingClientRect();
+    if (event.clientX >= bounds.right - verticalScrollbarWidth - 2) {
+      markUserScrollIntent();
+    }
+  }
+
+  function handleQueueKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!SCROLL_KEYS.has(event.key)) {
+      return;
+    }
+    markUserScrollIntent();
+  }
+
+  function handleQueueScroll(event: UIEvent<HTMLDivElement>) {
+    const nextScrollTop = event.currentTarget.scrollTop;
+    const scrollDelta = Math.abs(nextScrollTop - lastObservedScrollTopRef.current);
+    lastObservedScrollTopRef.current = nextScrollTop;
+
     if (!followActiveDownload) {
       return;
     }
     if (performance.now() <= autoScrollIgnoreUntilRef.current) {
+      return;
+    }
+    if (scrollDelta < USER_SCROLL_DISABLE_THRESHOLD_PX) {
+      return;
+    }
+    if (performance.now() > userScrollIntentUntilRef.current) {
       return;
     }
     setFollowActiveDownload(false);
@@ -336,6 +400,14 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           <div
             ref={parentRef}
             onScroll={handleQueueScroll}
+            onWheelCapture={(_event: WheelEvent<HTMLDivElement>) =>
+              markUserScrollIntent()
+            }
+            onTouchMoveCapture={(_event: TouchEvent<HTMLDivElement>) =>
+              markUserScrollIntent()
+            }
+            onPointerDownCapture={handleQueuePointerDown}
+            onKeyDownCapture={handleQueueKeyDown}
             className="theme-panel-muted h-[75vh] min-h-[26rem] overflow-y-auto rounded-toy-sm border p-2 backdrop-blur-md"
           >
             <div
