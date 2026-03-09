@@ -237,8 +237,9 @@ export default function App() {
         ? false
         : !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
   const unreadModeActive = activeTab?.mode === "unread";
-  const folderPreviewImages =
-    panelPreviewImages.length > 0 ? panelPreviewImages : recentDownloadedImages;
+  const folderPreviewImages = dedupePreviewImageSets(
+    panelPreviewImages.length > 0 ? panelPreviewImages : recentDownloadedImages,
+  );
   const newUnreadCount =
     trackedUnreadBaseline < 0 ? 0 : Math.max(unreadTotal - trackedUnreadBaseline, 0);
   const hasSelectableActiveResult = activeResults.some(
@@ -2675,15 +2676,35 @@ function compareIsoDates(left: string, right: string) {
   return Date.parse(left || "") - Date.parse(right || "");
 }
 
-function dedupePreviewSources(sources: string[]) {
-  return [...new Set(sources.filter(Boolean))];
+function dedupePreviewSources(sources: unknown) {
+  if (!Array.isArray(sources)) {
+    return typeof sources === "string" && sources ? [sources] : [];
+  }
+
+  return [
+    ...new Set(
+      sources.filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      ),
+    ),
+  ];
 }
 
-function dedupePreviewImageSets(imageSets: string[][]) {
+function dedupePreviewImageSets(imageSets: unknown) {
+  if (!Array.isArray(imageSets)) {
+    return [];
+  }
+
   const seen = new Set<string>();
   const unique: string[][] = [];
+  const legacyFlatSources: string[] = [];
 
   for (const imageSet of imageSets) {
+    if (typeof imageSet === "string") {
+      legacyFlatSources.push(imageSet);
+      continue;
+    }
+
     const normalized = dedupePreviewSources(imageSet);
     if (normalized.length === 0) {
       continue;
@@ -2694,6 +2715,14 @@ function dedupePreviewImageSets(imageSets: string[][]) {
     }
     seen.add(key);
     unique.push(normalized);
+  }
+
+  const normalizedLegacySet = dedupePreviewSources(legacyFlatSources);
+  if (normalizedLegacySet.length > 0) {
+    const legacyKey = normalizedLegacySet.join("|");
+    if (!seen.has(legacyKey)) {
+      unique.push(normalizedLegacySet);
+    }
   }
 
   return unique;
