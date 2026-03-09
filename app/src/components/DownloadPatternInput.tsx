@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   collectUnknownDownloadTokens,
@@ -7,26 +7,37 @@ import {
   renderDownloadPatternPreview,
   tokenizeDownloadPattern,
 } from "../lib/downloadPattern";
+import type {
+  DownloadPatternSegment,
+  DownloadPatternToken,
+} from "../lib/downloadPattern";
 
 type DownloadPatternInputProps = {
   value: string;
   onCommit: (value: string) => void;
 };
 
+type DraftState = {
+  value: string;
+  syncedValue: string;
+};
+
 const MIN_EDITOR_HEIGHT = 44;
 const MAX_EDITOR_HEIGHT = 144;
 
 export function DownloadPatternInput(props: DownloadPatternInputProps) {
+  const externalValue = props.value || "";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mirrorRef = useRef<HTMLDivElement | null>(null);
   const nextSelectionRef = useRef<number | null>(null);
-  const [draft, setDraft] = useState(props.value || "");
+  const [draftState, setDraftState] = useState<DraftState>(() => ({
+    value: externalValue,
+    syncedValue: externalValue,
+  }));
   const [tokensExpanded, setTokensExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-
-  useEffect(() => {
-    setDraft(props.value || "");
-  }, [props.value]);
+  const draft =
+    draftState.syncedValue === externalValue ? draftState.value : externalValue;
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -71,20 +82,29 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
   );
 
   function handleChange(value: string) {
-    setDraft(normalizeEditorText(value));
+    setDraftState({
+      value: normalizeEditorText(value),
+      syncedValue: externalValue,
+    });
   }
 
   function handleSave() {
     const nextValue = normalizePatternDraft(draft);
-    setDraft(nextValue);
+    setDraftState({
+      value: nextValue,
+      syncedValue: externalValue,
+    });
     if (nextValue !== normalizePatternDraft(props.value)) {
       props.onCommit(nextValue);
     }
   }
 
   function handleUndo() {
-    const nextValue = props.value || "";
-    setDraft(nextValue);
+    setDraftState({
+      value: externalValue,
+      syncedValue: externalValue,
+    });
+    const nextValue = externalValue;
     nextSelectionRef.current = nextValue.length;
   }
 
@@ -92,7 +112,14 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     const textarea = textareaRef.current;
     const tokenText = `{${tokenName}}`;
     if (!textarea) {
-      setDraft((current) => `${current}${tokenText}`);
+      setDraftState((current) => {
+        const currentDraft =
+          current.syncedValue === externalValue ? current.value : externalValue;
+        return {
+          value: `${currentDraft}${tokenText}`,
+          syncedValue: externalValue,
+        };
+      });
       return;
     }
 
@@ -100,7 +127,10 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     const end = textarea.selectionEnd ?? draft.length;
     const nextValue = `${draft.slice(0, start)}${tokenText}${draft.slice(end)}`;
     nextSelectionRef.current = start + tokenText.length;
-    setDraft(nextValue);
+    setDraftState({
+      value: nextValue,
+      syncedValue: externalValue,
+    });
   }
 
   return (
@@ -189,7 +219,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
           Preview
         </div>
         <div className="space-y-1.5 rounded-[1.2rem] bg-[#0F172A] px-3 py-2.5 font-mono text-xs text-[#D8F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-          {previewPaths.map((previewPath) => (
+          {previewPaths.map((previewPath: string) => (
             <div key={previewPath} className="break-all">
               {previewPath}
             </div>
@@ -210,7 +240,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
               tokensExpanded ? "max-h-96" : "max-h-[4rem]"
             }`}
           >
-            {DOWNLOAD_PATTERN_TOKENS.map((token) => (
+            {DOWNLOAD_PATTERN_TOKENS.map((token: DownloadPatternToken) => (
               <button
                 key={token.name}
                 type="button"
@@ -240,12 +270,12 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
 }
 
 function EditorContent(props: {
-  segments: ReturnType<typeof tokenizeDownloadPattern>;
+  segments: DownloadPatternSegment[];
   muted?: boolean;
 }) {
   return (
     <>
-      {props.segments.map((segment, index) => {
+      {props.segments.map((segment: DownloadPatternSegment, index: number) => {
         if (segment.kind === "text") {
           return <span key={`text-${index}`}>{segment.value}</span>;
         }
