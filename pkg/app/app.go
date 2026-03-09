@@ -31,6 +31,7 @@ type App struct {
 	keywordCache    *flight.Cache[keywordCacheKey, []inkbunny.KeywordAutocomplete]
 	usernameCache   *flight.Cache[usernameCacheKey, []UsernameSuggestion]
 	avatarCache     *flight.Cache[avatarCacheKey, string]
+	watchingCache   *flight.Cache[watchingCacheKey, []UsernameSuggestion]
 	searchCache     *flight.Cache[searchCacheKey, cachedSearchResult]
 	loadMoreCache   *flight.Cache[loadMoreCacheKey, inkbunny.SubmissionSearchResponse]
 	detailsCache    *flight.Cache[detailsCacheKey, inkbunny.SubmissionDetailsResponse]

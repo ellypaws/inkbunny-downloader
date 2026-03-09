@@ -29,25 +29,26 @@ type AppSettings struct {
 }
 
 type SearchParams struct {
-	Query               string `json:"query"`
-	JoinType            string `json:"joinType"`
-	SearchInKeywords    bool   `json:"searchInKeywords"`
-	SearchInTitle       bool   `json:"searchInTitle"`
-	SearchInDescription bool   `json:"searchInDescription"`
-	SearchInMD5         bool   `json:"searchInMD5"`
-	UnreadSubmissions   bool   `json:"unreadSubmissions"`
-	ArtistName          string `json:"artistName"`
-	FavoritesBy         string `json:"favoritesBy"`
-	PoolID              int    `json:"poolId"`
-	Scraps              string `json:"scraps"`
-	TimeRangeDays       int    `json:"timeRangeDays"`
-	SubmissionTypes     []int  `json:"submissionTypes"`
-	OrderBy             string `json:"orderBy"`
-	Page                int    `json:"page"`
-	PerPage             int    `json:"perPage"`
-	MaxDownloads        int    `json:"maxDownloads"`
-	MaxActive           int    `json:"maxActive"`
-	SaveKeywords        bool   `json:"saveKeywords"`
+	Query               string   `json:"query"`
+	JoinType            string   `json:"joinType"`
+	SearchInKeywords    bool     `json:"searchInKeywords"`
+	SearchInTitle       bool     `json:"searchInTitle"`
+	SearchInDescription bool     `json:"searchInDescription"`
+	SearchInMD5         bool     `json:"searchInMD5"`
+	UnreadSubmissions   bool     `json:"unreadSubmissions"`
+	ArtistNames         []string `json:"artistNames"`
+	UseWatchingArtists  bool     `json:"useWatchingArtists"`
+	FavoritesBy         string   `json:"favoritesBy"`
+	PoolID              int      `json:"poolId"`
+	Scraps              string   `json:"scraps"`
+	TimeRangeDays       int      `json:"timeRangeDays"`
+	SubmissionTypes     []int    `json:"submissionTypes"`
+	OrderBy             string   `json:"orderBy"`
+	Page                int      `json:"page"`
+	PerPage             int      `json:"perPage"`
+	MaxDownloads        int      `json:"maxDownloads"`
+	MaxActive           int      `json:"maxActive"`
+	SaveKeywords        bool     `json:"saveKeywords"`
 }
 
 type SearchResponse struct {

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   LoaderCircle,
   Search as SearchIcon,
+  X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -26,13 +27,20 @@ type SearchWorkspaceProps = {
   searchParams: SearchParams;
   mode: "default" | "unread";
   keywordSuggestions: string[];
+  artistDraft: string;
   artistSuggestions: UsernameSuggestion[];
   favoriteSuggestions: UsernameSuggestion[];
+  watchingCount: number;
+  watchingLoading: boolean;
   loading: boolean;
   ratingUpdating: boolean;
   collapsed: boolean;
   error: string;
   onChange: (updater: (previous: SearchParams) => SearchParams) => void;
+  onArtistDraftChange: (value: string) => void;
+  onAddArtist: (value: string) => void;
+  onRemoveArtist: (value: string) => void;
+  onToggleMyWatches: () => void;
   onSearch: () => void;
   onToggleCollapse: () => void;
   onToggleRating: (index: number) => void;
@@ -254,14 +262,20 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
               <SectionDivider />
 
               <div className="grid gap-5 lg:grid-cols-2">
-                <SuggestionFieldBlock
+                <ArtistSuggestionFieldBlock
                   title="Artist name"
-                  subtitle="Search only submissions by this user"
+                  subtitle="Search only submissions by these users"
                   optionalText="optional"
-                  value={props.searchParams.artistName}
+                  artistNames={props.searchParams.artistNames}
+                  useWatchingArtists={props.searchParams.useWatchingArtists}
+                  watchingCount={props.watchingCount}
+                  watchingLoading={props.watchingLoading}
+                  draftValue={props.artistDraft}
                   suggestions={props.artistSuggestions}
-                  useMyNameLabel="Search my uploads only"
                   allowUseMyName={canUseMyName}
+                  allowUseWatching={
+                    props.session.hasSession && !props.session.isGuest
+                  }
                   focused={focusedField === "artistName"}
                   onFocus={() => setFocusedField("artistName")}
                   onBlur={() =>
@@ -273,19 +287,12 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       100,
                     )
                   }
-                  onChange={(value) =>
-                    props.onChange((previous) => ({
-                      ...previous,
-                      artistName: value,
-                    }))
-                  }
+                  onDraftChange={props.onArtistDraftChange}
+                  onAddArtist={props.onAddArtist}
+                  onRemoveArtist={props.onRemoveArtist}
+                  onToggleMyWatches={props.onToggleMyWatches}
                   inputTourAnchor="artist-name"
-                  onUseMyName={() =>
-                    props.onChange((previous) => ({
-                      ...previous,
-                      artistName: props.session.username,
-                    }))
-                  }
+                  onUseMyName={() => props.onAddArtist(props.session.username)}
                 />
                 <SuggestionFieldBlock
                   title="Search favorites by"
@@ -661,6 +668,185 @@ type SuggestionFieldBlockProps = {
   onChange: (value: string) => void;
   onUseMyName: () => void;
 };
+
+type ArtistSuggestionFieldBlockProps = {
+  title: string;
+  subtitle: string;
+  optionalText: string;
+  artistNames: string[];
+  useWatchingArtists: boolean;
+  watchingCount: number;
+  watchingLoading: boolean;
+  draftValue: string;
+  suggestions: UsernameSuggestion[];
+  allowUseMyName: boolean;
+  allowUseWatching: boolean;
+  inputTourAnchor?: string;
+  focused: boolean;
+  onFocus: () => void;
+  onBlur: () => void;
+  onDraftChange: (value: string) => void;
+  onAddArtist: (value: string) => void;
+  onRemoveArtist: (value: string) => void;
+  onToggleMyWatches: () => void;
+  onUseMyName: () => void;
+};
+
+function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
+  const watchingLabel = props.watchingLoading
+    ? "Loading watch list..."
+    : `Searching through ${props.watchingCount} watched users`;
+
+  const commitDraft = () => {
+    if (!props.draftValue.trim()) {
+      return;
+    }
+    props.onAddArtist(props.draftValue);
+  };
+
+  return (
+    <div>
+      <label className="theme-title block text-sm font-semibold">
+        {props.title}:
+      </label>
+      <div className="theme-muted mt-1 text-sm leading-5">
+        {props.subtitle}{" "}
+        <span className="theme-subtle">
+          ({props.optionalText})
+        </span>
+      </div>
+      <div className="relative mt-3" data-tour-anchor={props.inputTourAnchor}>
+        <div className="theme-input min-h-[3.125rem] rounded-xl border px-4 py-3 backdrop-blur-md">
+          {!props.useWatchingArtists && props.artistNames.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {props.artistNames.map((artist) => (
+                <span
+                  key={artist}
+                  className="group inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] px-3 py-1 text-sm font-semibold text-[var(--theme-title)]"
+                >
+                  <span>{artist}</span>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      props.onRemoveArtist(artist);
+                    }}
+                    className="opacity-0 transition-opacity group-hover:opacity-100"
+                    aria-label={`Remove ${artist}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <input
+            value={props.useWatchingArtists ? watchingLabel : props.draftValue}
+            onFocus={props.useWatchingArtists ? undefined : props.onFocus}
+            onBlur={props.useWatchingArtists ? undefined : props.onBlur}
+            onChange={(event) => props.onDraftChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (props.useWatchingArtists) {
+                return;
+              }
+              if (
+                (event.key === "Enter" ||
+                  event.key === "," ||
+                  (event.key === "Tab" && props.draftValue.trim() !== "")) &&
+                props.draftValue.trim() !== ""
+              ) {
+                event.preventDefault();
+                commitDraft();
+                return;
+              }
+              if (
+                event.key === "Backspace" &&
+                props.draftValue === "" &&
+                props.artistNames.length > 0
+              ) {
+                props.onRemoveArtist(
+                  props.artistNames[props.artistNames.length - 1] ?? "",
+                );
+              }
+            }}
+            disabled={props.useWatchingArtists}
+            placeholder={
+              props.artistNames.length > 0 ? "add another username" : "username"
+            }
+            className="w-full bg-transparent text-[15px] leading-6 outline-none"
+          />
+        </div>
+        <UsernameSuggestionList
+          open={
+            !props.useWatchingArtists &&
+            props.focused &&
+            props.suggestions.length > 0
+          }
+          suggestions={props.suggestions}
+          onPick={(suggestion) =>
+            props.onAddArtist(suggestion.username || suggestion.value)
+          }
+        />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        {!props.useWatchingArtists ? (
+          <>
+            <button
+              type="button"
+              onClick={props.onUseMyName}
+              disabled={!props.allowUseMyName}
+              className={`font-semibold underline underline-offset-2 ${
+                props.allowUseMyName
+                  ? "text-[var(--theme-info)] hover:text-[var(--theme-info-strong)]"
+                  : "cursor-not-allowed text-[var(--theme-subtle)] no-underline opacity-60"
+              }`}
+            >
+              Use my name
+            </button>
+            <span className="theme-muted">
+              (Add my uploads)
+            </span>
+          </>
+        ) : null}
+        <button
+          type="button"
+          onClick={props.onToggleMyWatches}
+          disabled={
+            props.watchingLoading ||
+            (!props.allowUseWatching && !props.useWatchingArtists)
+          }
+          className={`inline-flex items-center gap-1.5 ${
+            props.useWatchingArtists
+              ? "font-black text-[#76B900]"
+              : props.allowUseWatching
+                ? "text-[var(--theme-info)]"
+                : "cursor-not-allowed text-[var(--theme-subtle)] opacity-60"
+          }`}
+        >
+          {props.watchingLoading ? (
+            <LoaderCircle size={12} className="animate-spin" />
+          ) : props.useWatchingArtists ? (
+            <Check size={12} />
+          ) : null}
+          <span
+            className={`underline underline-offset-2 ${
+              props.useWatchingArtists
+                ? "font-black no-underline"
+                : props.allowUseWatching
+                  ? "hover:text-[var(--theme-info-strong)]"
+                  : "no-underline"
+            }`}
+          >
+            My watches
+          </span>
+          <span className={props.useWatchingArtists ? "font-black" : "theme-muted"}>
+            (Search my follow list)
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
   return (

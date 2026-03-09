@@ -54,6 +54,10 @@ export function GetUsernameSuggestions(arg1) {
   return window['go']['desktopapp']['App']['GetUsernameSuggestions'](arg1);
 }
 
+export function GetWatching() {
+  return window['go']['desktopapp']['App']['GetWatching']();
+}
+
 export function LoadMoreResults(arg1, arg2) {
   return window['go']['desktopapp']['App']['LoadMoreResults'](arg1, arg2);
 }

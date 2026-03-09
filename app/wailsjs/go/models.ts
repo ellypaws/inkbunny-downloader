@@ -194,7 +194,8 @@ export namespace desktopapp {
 	    searchInDescription: boolean;
 	    searchInMD5: boolean;
 	    unreadSubmissions: boolean;
-	    artistName: string;
+	    artistNames: string[];
+	    useWatchingArtists: boolean;
 	    favoritesBy: string;
 	    poolId: number;
 	    scraps: string;
@@ -220,7 +221,8 @@ export namespace desktopapp {
 	        this.searchInDescription = source["searchInDescription"];
 	        this.searchInMD5 = source["searchInMD5"];
 	        this.unreadSubmissions = source["unreadSubmissions"];
-	        this.artistName = source["artistName"];
+	        this.artistNames = source["artistNames"];
+	        this.useWatchingArtists = source["useWatchingArtists"];
 	        this.favoritesBy = source["favoritesBy"];
 	        this.poolId = source["poolId"];
 	        this.scraps = source["scraps"];

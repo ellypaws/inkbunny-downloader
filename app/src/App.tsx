@@ -64,6 +64,7 @@ type SearchTabState = {
   id: string;
   mode: SearchTabMode;
   searchParams: SearchParams;
+  artistDraft: string;
   searchResponse: SearchResponse | null;
   results: SubmissionCard[];
   activeSubmissionId: string;
@@ -106,6 +107,8 @@ export default function App() {
   const [keywordSuggestions, setKeywordSuggestions] = useState<string[]>([]);
   const [artistSuggestions, setArtistSuggestions] = useState<UsernameSuggestion[]>([]);
   const [favoriteSuggestions, setFavoriteSuggestions] = useState<UsernameSuggestion[]>([]);
+  const [watchingUsers, setWatchingUsers] = useState<UsernameSuggestion[] | null>(null);
+  const [watchingLoading, setWatchingLoading] = useState(false);
   const [queue, setQueue] = useState<QueueSnapshot>(EMPTY_QUEUE);
   const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] = useState<string[]>([]);
   const [queueMessage, setQueueMessage] = useState("");
@@ -173,6 +176,7 @@ export default function App() {
     [downloadedSubmissionIds, pendingDownloadSubmissionIds, queue],
   );
   const activeSearchParams = activeTab?.searchParams ?? buildDefaultSearch(session, settings);
+  const activeArtistDraft = activeTab?.artistDraft ?? "";
   const activeSearchResponse = activeTab?.searchResponse ?? null;
   const activeResults = activeTab?.results ?? [];
   const activeSubmissionId = activeTab?.activeSubmissionId ?? "";
@@ -497,6 +501,10 @@ export default function App() {
   useEffect(() => void (unreadTotalRef.current = unreadTotal), [unreadTotal]);
   useEffect(() => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds), [downloadedSubmissionIds]);
   useEffect(() => void (toastsRef.current = toasts), [toasts]);
+  useEffect(() => {
+    setWatchingUsers(null);
+    setWatchingLoading(false);
+  }, [session.hasSession, session.isGuest, session.username]);
   useEffect(() => {
     if (!session.hasSession || session.isGuest) {
       setUnreadTotal(0);
@@ -845,12 +853,12 @@ export default function App() {
         setArtistSuggestions([]);
         return;
       }
-      if (!activeSearchParams.artistName.trim()) {
+      if (activeSearchParams.useWatchingArtists || !activeArtistDraft.trim()) {
         setArtistSuggestions([]);
         return;
       }
       backend
-        .getUsernameSuggestions(activeSearchParams.artistName)
+        .getUsernameSuggestions(activeArtistDraft)
         .then((suggestions) => {
           if (requestId === artistRequestRef.current) {
             setArtistSuggestions(suggestions);
@@ -863,7 +871,7 @@ export default function App() {
         });
     }, 200);
     return () => window.clearTimeout(timeout);
-  }, [activeSearchParams.artistName, apiCooldownUntil]);
+  }, [activeArtistDraft, activeSearchParams.useWatchingArtists, apiCooldownUntil]);
 
   useEffect(() => {
     const requestId = ++favoritesRequestRef.current;
@@ -1024,6 +1032,53 @@ export default function App() {
     }
   }
 
+  async function handleToggleWatchingArtists(targetTabId = activeTabIdRef.current) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab) {
+      return;
+    }
+    if (watchingLoading) {
+      return;
+    }
+    if (tab.searchParams.useWatchingArtists) {
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        searchParams: {
+          ...currentTab.searchParams,
+          useWatchingArtists: false,
+        },
+      }));
+      return;
+    }
+    if (!sessionRef.current.hasSession || sessionRef.current.isGuest) {
+      const message = "Sign in with a member account to use My watches.";
+      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      pushToast({ level: "warning", message, dedupeKey: "my-watches-sign-in" });
+      return;
+    }
+
+    try {
+      if (watchingUsers === null) {
+        setWatchingLoading(true);
+        setWatchingUsers(await backend.getWatching());
+      }
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        searchError: "",
+        searchParams: {
+          ...currentTab.searchParams,
+          useWatchingArtists: true,
+        },
+      }));
+    } catch (error) {
+      const message = getErrorMessage(error, "Could not load your watch list.");
+      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      pushErrorToast(message, "my-watches-error");
+    } finally {
+      setWatchingLoading(false);
+    }
+  }
+
   async function handleSearch(page = 1, targetTabId = activeTabIdRef.current) {
     const tab = tabsRef.current.find((item) => item.id === targetTabId);
     if (!tab) {
@@ -1049,7 +1104,7 @@ export default function App() {
     }));
     try {
       const normalizedParams = normalizeSearchParamsForMode(
-        tab.searchParams,
+        finalizeArtistDraft(tab.searchParams, tab.artistDraft),
         tab.mode,
         sessionRef.current,
         settingsRef.current,
@@ -1079,6 +1134,7 @@ export default function App() {
               return {
                 ...currentTab,
                 searchParams: normalizedParams,
+                artistDraft: "",
                 searchResponse: response,
                 results: response.results,
                 selectedSubmissionIds: getAutoSelectedSubmissionIds(
@@ -1518,10 +1574,13 @@ export default function App() {
             <SearchWorkspace
               session={session}
               searchParams={activeSearchParams}
+              artistDraft={activeArtistDraft}
               mode={activeTab?.mode ?? "default"}
               keywordSuggestions={keywordSuggestions}
               artistSuggestions={artistSuggestions}
               favoriteSuggestions={favoriteSuggestions}
+              watchingCount={watchingUsers?.length ?? 0}
+              watchingLoading={watchingLoading}
               loading={activeSearchBusy}
               ratingUpdating={ratingUpdating}
               collapsed={activeSearchCollapsed}
@@ -1540,6 +1599,48 @@ export default function App() {
                   ),
                 }));
               }}
+              onArtistDraftChange={(value) => {
+                if (!activeTab) {
+                  return;
+                }
+                updateTab(activeTab.id, (currentTab) => ({
+                  ...currentTab,
+                  artistDraft: value,
+                }));
+              }}
+              onAddArtist={(value) => {
+                if (!activeTab) {
+                  return;
+                }
+                updateTab(activeTab.id, (currentTab) => ({
+                  ...currentTab,
+                  artistDraft: "",
+                  searchParams: {
+                    ...currentTab.searchParams,
+                    artistNames: appendArtistNames(
+                      currentTab.searchParams.artistNames,
+                      value,
+                    ),
+                    useWatchingArtists: false,
+                  },
+                }));
+              }}
+              onRemoveArtist={(value) => {
+                if (!activeTab) {
+                  return;
+                }
+                updateTab(activeTab.id, (currentTab) => ({
+                  ...currentTab,
+                  searchParams: {
+                    ...currentTab.searchParams,
+                    artistNames: currentTab.searchParams.artistNames.filter(
+                      (artist) =>
+                        normalizeArtistToken(artist) !== normalizeArtistToken(value),
+                    ),
+                  },
+                }));
+              }}
+              onToggleMyWatches={() => void handleToggleWatchingArtists()}
               onSearch={() => void handleSearch(1)}
               onToggleCollapse={() => {
                 if (!activeTab) {
@@ -1845,6 +1946,52 @@ function mergeDownloadedSubmissionIds(
   return merged;
 }
 
+function normalizeArtistToken(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function appendArtistNames(existing: string[], rawValue: string) {
+  const tokens = rawValue
+    .split(/[\s,]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return existing;
+  }
+
+  const seen = new Set(existing.map(normalizeArtistToken));
+  const next = [...existing];
+  for (const token of tokens) {
+    const normalized = normalizeArtistToken(token);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    next.push(token);
+  }
+  return next;
+}
+
+function finalizeArtistDraft(searchParams: SearchParams, artistDraft: string) {
+  if (searchParams.useWatchingArtists || !artistDraft.trim()) {
+    return searchParams;
+  }
+  return {
+    ...searchParams,
+    artistNames: appendArtistNames(searchParams.artistNames, artistDraft),
+  };
+}
+
+function formatArtistFilterLabel(artistNames: string[]) {
+  if (artistNames.length === 0) {
+    return "";
+  }
+  if (artistNames.length === 1) {
+    return `@${truncateLabel(artistNames[0], 22)}`;
+  }
+  return `@${truncateLabel(artistNames[0], 14)} +${artistNames.length - 1}`;
+}
+
 function buildDefaultSearch(session: SessionInfo, settings: AppSettings) {
   return {
     ...DEFAULT_SEARCH,
@@ -1863,7 +2010,11 @@ function buildUnreadSearch(session: SessionInfo, settings: AppSettings) {
 }
 
 function cloneSearchParams(searchParams: SearchParams): SearchParams {
-  return { ...searchParams, submissionTypes: [...searchParams.submissionTypes] };
+  return {
+    ...searchParams,
+    artistNames: [...searchParams.artistNames],
+    submissionTypes: [...searchParams.submissionTypes],
+  };
 }
 
 function syncSearchParamsWithSession(
@@ -1909,6 +2060,7 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     id: createTabId(),
     mode: "default",
     searchParams: buildDefaultSearch(session, settings),
+    artistDraft: "",
     searchResponse: null,
     results: [],
     activeSubmissionId: "",
@@ -1973,12 +2125,15 @@ function getSearchTabLabel(tab: SearchTabState, index: number) {
   if (tab.mode === "unread") {
     return "Unread";
   }
-  const { query, artistName, favoritesBy, poolId } = tab.searchParams;
+  const { query, artistNames, useWatchingArtists, favoritesBy, poolId } = tab.searchParams;
   if (query.trim()) {
     return truncateLabel(query.trim(), 26);
   }
-  if (artistName.trim()) {
-    return `@${truncateLabel(artistName.trim(), 22)}`;
+  if (useWatchingArtists) {
+    return "My watches";
+  }
+  if (artistNames.length > 0) {
+    return formatArtistFilterLabel(artistNames);
   }
   if (favoritesBy.trim()) {
     return `Fav ${truncateLabel(favoritesBy.trim(), 18)}`;
@@ -1996,7 +2151,10 @@ function getSearchTabSubtitle(tab: SearchTabState) {
   if (tab.mode === "unread") {
     return "new submissions";
   }
-  if (tab.searchParams.artistName.trim()) {
+  if (tab.searchParams.useWatchingArtists) {
+    return "watch list";
+  }
+  if (tab.searchParams.artistNames.length > 0) {
     return "artist search";
   }
   if (tab.searchParams.favoritesBy.trim()) {
@@ -2022,6 +2180,7 @@ function isSearchTabUntouched(
   return (
     tab.mode === "default" &&
     areSearchParamsEqual(tab.searchParams, buildDefaultSearch(session, settings)) &&
+    tab.artistDraft === "" &&
     tab.searchResponse === null &&
     tab.results.length === 0 &&
     tab.activeSubmissionId === "" &&
@@ -2040,7 +2199,7 @@ function areSearchParamsEqual(left: SearchParams, right: SearchParams) {
     left.searchInDescription === right.searchInDescription &&
     left.searchInMD5 === right.searchInMD5 &&
     left.unreadSubmissions === right.unreadSubmissions &&
-    left.artistName === right.artistName &&
+    left.useWatchingArtists === right.useWatchingArtists &&
     left.favoritesBy === right.favoritesBy &&
     left.poolId === right.poolId &&
     left.scraps === right.scraps &&
@@ -2051,6 +2210,8 @@ function areSearchParamsEqual(left: SearchParams, right: SearchParams) {
     left.maxDownloads === right.maxDownloads &&
     left.maxActive === right.maxActive &&
     left.saveKeywords === right.saveKeywords &&
+    left.artistNames.length === right.artistNames.length &&
+    left.artistNames.every((value, index) => value === right.artistNames[index]) &&
     left.submissionTypes.length === right.submissionTypes.length &&
     left.submissionTypes.every((value, index) => value === right.submissionTypes[index])
   );

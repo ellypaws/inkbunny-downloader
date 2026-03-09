@@ -24,6 +24,7 @@ type BackendApi = {
   LoadMoreResults(searchId: string, page: number): Promise<SearchResponse>
   GetKeywordSuggestions(query: string): Promise<string[]>
   GetUsernameSuggestions(query: string): Promise<UsernameSuggestion[]>
+  GetWatching(): Promise<UsernameSuggestion[]>
   GetReleaseStatus(): Promise<ReleaseStatus>
   EnqueueDownloads(
     searchId: string,
@@ -113,6 +114,9 @@ export const backend = {
   },
   async getUsernameSuggestions(query: string): Promise<UsernameSuggestion[]> {
     return getBackend().GetUsernameSuggestions(query)
+  },
+  async getWatching(): Promise<UsernameSuggestion[]> {
+    return getBackend().GetWatching()
   },
   async getReleaseStatus(): Promise<ReleaseStatus> {
     return getBackend().GetReleaseStatus()

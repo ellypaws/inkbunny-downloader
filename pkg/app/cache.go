@@ -26,6 +26,10 @@ type avatarCacheKey struct {
 	Username string
 }
 
+type watchingCacheKey struct {
+	Scope string
+}
+
 type searchCacheKey struct {
 	Scope       string
 	RatingsMask string

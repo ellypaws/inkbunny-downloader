@@ -27,6 +27,8 @@ type searchState struct {
 	PerPage         int
 	PendingResults  []inkbunny.SubmissionSearch
 	RawResultsCount int
+	ArtistFilters   []string
+	ArtistFilterSet map[string]struct{}
 	Request         inkbunny.SubmissionSearchRequest
 	CacheKey        searchCacheKey
 }
@@ -38,7 +40,11 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 	if err != nil {
 		return SearchResponse{}, err
 	}
-	req, err := a.buildSearchRequest(user, params)
+	artistFilters, err := a.resolveArtistFilters(user, params)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+	req, err := a.buildSearchRequest(user, params, artistFilters)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -82,6 +88,8 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 		MaxDownloads:    max(params.MaxDownloads, 0),
 		PerPage:         perPage,
 		RawResultsCount: int(response.ResultsCountAll),
+		ArtistFilters:   artistFilters,
+		ArtistFilterSet: buildArtistFilterSet(artistFilters),
 		Request:         normalizedReq,
 		CacheKey:        key,
 	}
@@ -107,7 +115,7 @@ func (a *App) Search(params SearchParams) (SearchResponse, error) {
 		SearchID:     searchID,
 		Page:         state.ClientPage,
 		PagesCount:   searchPageCount(state.ClientPage, hasMore),
-		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
+		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
 	}, nil
@@ -164,6 +172,7 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 	state.DeliveredCount = 0
 	state.PendingResults = nil
 	state.RawResultsCount = int(entry.Response.ResultsCountAll)
+	state.ArtistFilterSet = buildArtistFilterSet(state.ArtistFilters)
 	state.Request = normalizedReq
 	state.CacheKey = key
 	a.mu.Unlock()
@@ -188,7 +197,7 @@ func (a *App) RefreshSearch(searchID string) (SearchResponse, error) {
 		SearchID:     searchID,
 		Page:         1,
 		PagesCount:   searchPageCount(1, hasMore),
-		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
+		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
 	}, nil
@@ -251,7 +260,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (SearchResponse, error)
 		SearchID:     searchID,
 		Page:         page,
 		PagesCount:   searchPageCount(page, hasMore),
-		ResultsCount: limitedResultsCount(state.RawResultsCount, state.MaxDownloads),
+		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
 	}, nil
@@ -312,7 +321,38 @@ func (a *App) GetUsernameSuggestions(query string) ([]UsernameSuggestion, error)
 	return values, nil
 }
 
-func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkbunny.SubmissionSearchRequest, error) {
+func (a *App) GetWatching() ([]UsernameSuggestion, error) {
+	user, err := a.ensureSearchSession()
+	if err != nil {
+		return nil, err
+	}
+	if strings.EqualFold(user.Username, "guest") {
+		return nil, errors.New("sign in with a member account to use My watches")
+	}
+
+	a.ensureCaches(user)
+	items, err := a.watchingCache.Get(watchingCacheKey{
+		Scope: sessionScope(user),
+	})
+	if err != nil {
+		if a.handleSessionError(err) {
+			user, err = a.ensureSearchSession()
+			if err != nil {
+				return nil, err
+			}
+			a.ensureCaches(user)
+			items, err = a.watchingCache.Get(watchingCacheKey{
+				Scope: sessionScope(user),
+			})
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
+}
+
+func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams, artistFilters []string) (inkbunny.SubmissionSearchRequest, error) {
 	perPage := params.PerPage
 	if perPage <= 0 || perPage > 100 {
 		perPage = defaultSearchPerPage
@@ -324,7 +364,6 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	req := inkbunny.SubmissionSearchRequest{
 		SID:                user.SID,
 		Text:               strings.TrimSpace(params.Query),
-		Username:           strings.TrimSpace(params.ArtistName),
 		StringJoinType:     strings.ToLower(strings.TrimSpace(params.JoinType)),
 		DaysLimit:          inkbunny.IntString(params.TimeRangeDays),
 		OrderBy:            params.OrderBy,
@@ -344,6 +383,9 @@ func (a *App) buildSearchRequest(user *inkbunny.User, params SearchParams) (inkb
 	}
 	if req.OrderBy == "" {
 		req.OrderBy = inkbunny.OrderByCreateDatetime
+	}
+	if !params.UseWatchingArtists && len(artistFilters) == 1 {
+		req.Username = artistFilters[0]
 	}
 
 	if params.SearchInKeywords {
@@ -619,10 +661,12 @@ func (a *App) collectVisibleSearchPage(user *inkbunny.User, state *searchState, 
 			rawResultsCount = int(response.ResultsCountAll)
 		}
 		pagesCount = int(response.PagesCount)
-		filtered := response.Submissions
-		if state.Request.UnreadSubmissions != inkbunny.Yes {
-			filtered = filterSubmissionsByRatings(response.Submissions, ratingsMask)
-		}
+		filtered := filterSearchSubmissions(
+			response.Submissions,
+			ratingsMask,
+			state.ArtistFilterSet,
+			state.Request.UnreadSubmissions == inkbunny.Yes,
+		)
 		remaining := target - len(visible)
 		if remaining <= 0 {
 			pendingResults = append(pendingResults, filtered...)
@@ -723,6 +767,23 @@ func limitedResultsCount(raw, limit int) int {
 	return raw
 }
 
+func searchResultsCount(state *searchState, hasMore bool) int {
+	if state == nil {
+		return 0
+	}
+	if len(state.ArtistFilterSet) == 0 || strings.TrimSpace(state.Request.Username) != "" {
+		return limitedResultsCount(state.RawResultsCount, state.MaxDownloads)
+	}
+	count := state.DeliveredCount + len(state.PendingResults)
+	if state.MaxDownloads > 0 && count > state.MaxDownloads {
+		count = state.MaxDownloads
+	}
+	if !hasMore {
+		return count
+	}
+	return max(count, state.DeliveredCount)
+}
+
 func searchPageCount(currentPage int, hasMore bool) int {
 	if !hasMore {
 		return currentPage
@@ -779,13 +840,24 @@ func effectiveRatingsMask(mask string) string {
 	return string(canonical[:])
 }
 
-func filterSubmissionsByRatings(submissions []inkbunny.SubmissionSearch, mask string) []inkbunny.SubmissionSearch {
+func filterSearchSubmissions(
+	submissions []inkbunny.SubmissionSearch,
+	mask string,
+	artistFilters map[string]struct{},
+	skipRatings bool,
+) []inkbunny.SubmissionSearch {
 	allowed := allowedRatings(mask)
 	filtered := make([]inkbunny.SubmissionSearch, 0, len(submissions))
 	for _, submission := range submissions {
-		if submissionAllowedByRatings(submission, allowed) {
-			filtered = append(filtered, submission)
+		if len(artistFilters) > 0 {
+			if _, ok := artistFilters[normalizeUsername(submission.Username)]; !ok {
+				continue
+			}
 		}
+		if !skipRatings && !submissionAllowedByRatings(submission, allowed) {
+			continue
+		}
+		filtered = append(filtered, submission)
 	}
 	return filtered
 }
@@ -854,6 +926,84 @@ func submissionPreviewURL(raw string, sid string) string {
 	return parsed.String()
 }
 
+func normalizeArtistFilters(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		key := normalizeUsername(trimmed)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
+}
+
+func buildArtistFilterSet(values []string) map[string]struct{} {
+	if len(values) == 0 {
+		return nil
+	}
+	filters := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		key := normalizeUsername(value)
+		if key == "" {
+			continue
+		}
+		filters[key] = struct{}{}
+	}
+	if len(filters) == 0 {
+		return nil
+	}
+	return filters
+}
+
+func mapWatchingSuggestions(items []inkbunny.UsernameID) []UsernameSuggestion {
+	suggestions := make([]UsernameSuggestion, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		username := strings.TrimSpace(item.Username)
+		if username == "" {
+			continue
+		}
+		key := normalizeUsername(username)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		suggestions = append(suggestions, UsernameSuggestion{
+			UserID:    strings.TrimSpace(item.UserID),
+			Value:     username,
+			Username:  username,
+			AvatarURL: defaultAvatarURL,
+		})
+	}
+	return suggestions
+}
+
+func (a *App) resolveArtistFilters(user *inkbunny.User, params SearchParams) ([]string, error) {
+	if params.UseWatchingArtists {
+		items, err := a.GetWatching()
+		if err != nil {
+			return nil, err
+		}
+		values := make([]string, 0, len(items))
+		for _, item := range items {
+			values = append(values, item.Username)
+		}
+		filters := normalizeArtistFilters(values)
+		if len(filters) == 0 {
+			return nil, errors.New("your watch list is empty")
+		}
+		return filters, nil
+	}
+	return normalizeArtistFilters(params.ArtistNames), nil
+}
+
 func (a *App) ensureCaches(user *inkbunny.User) {
 	a.cacheMu.Lock()
 	defer a.cacheMu.Unlock()
@@ -908,6 +1058,25 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 			})
 		})
 		a.avatarCache = &cache
+	}
+	if a.watchingCache == nil {
+		cache := flight.NewCache(func(key watchingCacheKey) ([]UsernameSuggestion, error) {
+			return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "watch list", func() ([]UsernameSuggestion, error) {
+				current, err := a.ensureSearchSession()
+				if err != nil {
+					return nil, err
+				}
+				if strings.EqualFold(current.Username, "guest") {
+					return nil, errors.New("sign in with a member account to use My watches")
+				}
+				items, err := current.GetWatching()
+				if err != nil {
+					return nil, err
+				}
+				return mapWatchingSuggestions(items), nil
+			})
+		})
+		a.watchingCache = &cache
 	}
 	if a.searchCache == nil {
 		cache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
@@ -1009,6 +1178,22 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			return defaultAvatarURL, nil
 		})
 	})
+	watchingCache := flight.NewCache(func(key watchingCacheKey) ([]UsernameSuggestion, error) {
+		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "watch list", func() ([]UsernameSuggestion, error) {
+			current, err := a.ensureSearchSession()
+			if err != nil {
+				return nil, err
+			}
+			if strings.EqualFold(current.Username, "guest") {
+				return nil, errors.New("sign in with a member account to use My watches")
+			}
+			items, err := current.GetWatching()
+			if err != nil {
+				return nil, err
+			}
+			return mapWatchingSuggestions(items), nil
+		})
+	})
 	searchCache := flight.NewCache(func(key searchCacheKey) (cachedSearchResult, error) {
 		return executeWithRateLimitRetry(a.ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
 			req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
@@ -1055,6 +1240,7 @@ func (a *App) resetCaches(user *inkbunny.User) {
 	a.keywordCache = &keywordCache
 	a.usernameCache = &usernameCache
 	a.avatarCache = &avatarCache
+	a.watchingCache = &watchingCache
 	a.searchCache = &searchCache
 	a.loadMoreCache = &loadMoreCache
 	a.detailsCache = &detailsCache

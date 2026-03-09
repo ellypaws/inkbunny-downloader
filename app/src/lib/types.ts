@@ -34,7 +34,8 @@ export type SearchParams = {
   searchInDescription: boolean
   searchInMD5: boolean
   unreadSubmissions: boolean
-  artistName: string
+  artistNames: string[]
+  useWatchingArtists: boolean
   favoritesBy: string
   poolId: number
   scraps: string

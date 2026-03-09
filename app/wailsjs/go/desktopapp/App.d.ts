@@ -28,6 +28,8 @@ export function GetUnreadSubmissionCount():Promise<number>;
 
 export function GetUsernameSuggestions(arg1:string):Promise<Array<desktopapp.UsernameSuggestion>>;
 
+export function GetWatching():Promise<Array<desktopapp.UsernameSuggestion>>;
+
 export function LoadMoreResults(arg1:string,arg2:number):Promise<desktopapp.SearchResponse>;
 
 export function Login(arg1:string,arg2:string):Promise<desktopapp.SessionInfo>;
