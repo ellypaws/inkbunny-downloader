@@ -288,32 +288,8 @@ function QueueRow(props: {
 
             <div className="flex shrink-0 items-center">
               <StatusBadge status={job.status} />
-              <div className="ml-0 flex max-w-0 items-center gap-2 overflow-hidden opacity-0 transition-[max-width,opacity,transform,margin] motion-safe:duration-300 motion-safe:ease-out motion-safe:translate-x-2 group-hover:ml-2 group-hover:max-w-48 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:ml-2 group-focus-within:max-w-48 group-focus-within:translate-x-0 group-focus-within:opacity-100">
-                {actionable ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => props.onCancelSubmission(job.submissionId)}
-                      className="theme-button-danger flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
-                      title={`Stop every file for submission ${job.submissionId}`}
-                    >
-                      <Square
-                        size={11}
-                        className="fill-current"
-                        strokeWidth={2.5}
-                      />
-                      Submission
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => props.onCancel(job.id)}
-                      className="theme-button-secondary flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
-                    >
-                      <X size={11} strokeWidth={2.5} />
-                      File
-                    </button>
-                  </>
-                ) : retryable ? (
+              {retryable ? (
+                <div className="ml-2 flex items-center">
                   <button
                     type="button"
                     onClick={() => props.onRetry(job.id)}
@@ -323,8 +299,36 @@ function QueueRow(props: {
                     <RefreshCw size={11} strokeWidth={2.4} />
                     Retry
                   </button>
-                ) : null}
-              </div>
+                </div>
+              ) : (
+                <div className="ml-0 flex max-w-0 items-center gap-2 overflow-hidden opacity-0 transition-[max-width,opacity,transform,margin] motion-safe:duration-300 motion-safe:ease-out motion-safe:translate-x-2 group-hover:ml-2 group-hover:max-w-48 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:ml-2 group-focus-within:max-w-48 group-focus-within:translate-x-0 group-focus-within:opacity-100">
+                  {actionable ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => props.onCancelSubmission(job.submissionId)}
+                        className="theme-button-danger flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
+                        title={`Stop every file for submission ${job.submissionId}`}
+                      >
+                        <Square
+                          size={11}
+                          className="fill-current"
+                          strokeWidth={2.5}
+                        />
+                        Submission
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => props.onCancel(job.id)}
+                        className="theme-button-secondary flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
+                      >
+                        <X size={11} strokeWidth={2.5} />
+                        File
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 

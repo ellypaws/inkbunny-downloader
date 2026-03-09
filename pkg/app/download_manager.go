@@ -362,10 +362,7 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 		return err
 	}
 
-	url := task.URL
-	if !task.IsPublic {
-		url += "?sid=" + task.SessionID
-	}
+	url := submissionPreviewURL(task.URL, task.SessionID)
 
 	const maxAttempts = 5
 	var lastErr error

@@ -382,11 +382,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                           : `Download ${item.title}`
                     }
                     disabled={downloaded}
-                    className={`group/download-action flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
+                    className={`${cancellable ? "group/download-action" : ""} flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
                       downloadSummary.state === "downloaded"
                         ? "translate-x-[3.25rem] bg-[#73D216]/85 text-white"
                         : retryable
-                          ? "bg-[#CC5E00] text-white hover:bg-[#A84600]"
+                          ? "bg-[#CC5E00] text-white hover:scale-105 hover:bg-[#A84600]"
                         : cancellable
                           ? "bg-[#2A7FA6] text-white hover:bg-[#CC5E00]"
                           : "bg-[#14112C]/72 text-white hover:scale-105"
@@ -1139,11 +1139,11 @@ function GridDownloadButton(props: {
             : `Download ${props.title}`
       }
       disabled={props.summary.state === "downloaded"}
-      className={`group/grid-download relative flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ${
+      className={`${props.cancellable ? "group/grid-download" : ""} relative flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ${
         props.summary.state === "downloaded"
           ? "translate-x-10 bg-[var(--theme-accent)] text-white"
           : props.retryable
-            ? "bg-[var(--theme-danger)] text-white hover:bg-[#A84600]"
+            ? "bg-[var(--theme-danger)] text-white hover:scale-105 hover:bg-[#A84600]"
           : props.cancellable
             ? "bg-[var(--theme-info)] text-white hover:bg-[var(--theme-danger)]"
             : "bg-[var(--theme-info)] text-white hover:scale-105"
