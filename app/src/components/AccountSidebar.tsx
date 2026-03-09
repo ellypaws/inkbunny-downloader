@@ -1,5 +1,6 @@
 import { Check, FolderOpen } from "lucide-react";
 
+import { DownloadPatternInput } from "./DownloadPatternInput";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import type { AppSettings, SearchParams, SessionInfo } from "../lib/types";
 
@@ -8,6 +9,7 @@ type AccountSidebarProps = {
   settings: AppSettings;
   searchParams: SearchParams;
   onPickDirectory: () => void;
+  onDownloadPatternCommit: (pattern: string) => void;
   onToggleSaveKeywords: (checked: boolean) => void;
   onLogout: () => void;
 };
@@ -85,6 +87,10 @@ export function AccountSidebar(props: AccountSidebarProps) {
               {props.settings.downloadDirectory ||
                 "No download folder selected yet."}
             </div>
+            <DownloadPatternInput
+              value={props.settings.downloadPattern}
+              onCommit={props.onDownloadPatternCommit}
+            />
             <label className="grid grid-cols-[1.1rem_minmax(0,1fr)] items-start gap-3 rounded-2xl border border-[#2D2D44]/10 bg-white/55 px-4 py-3 text-sm font-bold text-[#2D2D44] dark:border-white/10 dark:bg-[#1A1733]/60 dark:text-white">
               <input
                 type="checkbox"

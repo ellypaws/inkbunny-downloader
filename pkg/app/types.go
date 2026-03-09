@@ -20,6 +20,7 @@ type UsernameSuggestion struct {
 
 type AppSettings struct {
 	DownloadDirectory  string `json:"downloadDirectory"`
+	DownloadPattern    string `json:"downloadPattern"`
 	MaxActive          int    `json:"maxActive"`
 	DarkMode           bool   `json:"darkMode"`
 	MotionEnabled      bool   `json:"motionEnabled"`
@@ -98,6 +99,7 @@ type DownloadOptions struct {
 	SaveKeywords      bool   `json:"saveKeywords"`
 	MaxActive         int    `json:"maxActive"`
 	DownloadDirectory string `json:"downloadDirectory"`
+	DownloadPattern   string `json:"downloadPattern"`
 }
 
 type QueueSnapshot struct {

@@ -31,6 +31,7 @@ type downloadTask struct {
 	PreviewURL   string
 	SaveKeywords bool
 	DownloadRoot string
+	Destinations []string
 }
 
 type downloadJob struct {
@@ -395,22 +396,40 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 	}
 
 	task := job.task
-	folder := filepath.Join(task.DownloadRoot, task.Username)
-	filename := downloadFilePath(task.DownloadRoot, task.Username, task.FileName)
-	verified, err := verifyDownloadedFile(filename, task.FileMD5)
+	destinations := uniqueNonEmptyPaths(task.Destinations)
+	if len(destinations) == 0 {
+		destinations = uniqueNonEmptyPaths([]string{
+			filepath.Join(task.DownloadRoot, task.Username, filepath.Base(task.FileName)),
+		})
+	}
+	allMatch, size, source, err := downloadTargetsMatch(destinations, task.FileMD5)
 	if err != nil {
 		return err
 	}
-	if verified.Matches {
-		m.setProgress(jobID, verified.Size, verified.Size)
+	if allMatch {
+		m.setProgress(jobID, size, size)
 		return nil
 	}
-	if verified.Exists {
+
+	if source != "" {
+		if err := ensureDownloadTargetsFromSource(source, destinations, task.FileMD5); err != nil {
+			return err
+		}
+		if task.SaveKeywords && task.Keywords != "" {
+			return writeKeywordSidecars(destinations, task.Keywords)
+		}
+		return nil
+	}
+
+	filename := destinations[0]
+	if verified, err := verifyDownloadedFile(filename, task.FileMD5); err != nil {
+		return err
+	} else if verified.Exists && !verified.Matches {
 		if removeErr := os.Remove(filename); removeErr != nil && !os.IsNotExist(removeErr) {
 			return removeErr
 		}
 	}
-	if err := os.MkdirAll(folder, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
 		return err
 	}
 
@@ -423,11 +442,11 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 		m.setAttempt(jobID, attempt)
 		err := m.downloadAttempt(ctx, jobID, attempt, task, filename, url)
 		if err == nil {
+			if copyErr := ensureDownloadTargetsFromSource(filename, destinations, task.FileMD5); copyErr != nil {
+				return copyErr
+			}
 			if task.SaveKeywords && task.Keywords != "" {
-				sidecar := stringsTrimExt(filename) + ".txt"
-				if writeErr := os.WriteFile(sidecar, []byte(task.Keywords), 0o600); writeErr != nil {
-					return writeErr
-				}
+				return writeKeywordSidecars(destinations, task.Keywords)
 			}
 			return nil
 		}
@@ -663,14 +682,15 @@ func jobFileExists(job *downloadJob) bool {
 	if job == nil {
 		return false
 	}
-	result, err := verifyDownloadedFile(
-		downloadFilePath(job.task.DownloadRoot, job.task.Username, job.task.FileName),
-		job.task.FileMD5,
-	)
+	destinations := uniqueNonEmptyPaths(job.task.Destinations)
+	if len(destinations) == 0 {
+		destinations = []string{filepath.Join(job.task.DownloadRoot, job.task.Username, job.task.FileName)}
+	}
+	matches, _, _, err := downloadTargetsMatch(destinations, job.task.FileMD5)
 	if err != nil {
 		return false
 	}
-	return result.Matches
+	return matches
 }
 
 func max64(a, b int64) int64 {

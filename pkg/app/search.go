@@ -726,24 +726,25 @@ func (a *App) lookupDownloadedSubmissions(
 		return nil, err
 	}
 
+	downloadPattern := normalizeDownloadPattern(a.GetSession().Settings.DownloadPattern)
 	for _, submission := range details.Submissions {
-		downloaded[submission.SubmissionID.String()] = submissionFilesDownloaded(downloadRoot, submission)
+		downloaded[submission.SubmissionID.String()] = submissionFilesDownloaded(downloadRoot, downloadPattern, submission)
 	}
 
 	return downloaded, nil
 }
 
-func submissionFilesDownloaded(downloadRoot string, submission inkbunny.SubmissionDetails) bool {
+func submissionFilesDownloaded(downloadRoot, downloadPattern string, submission inkbunny.SubmissionDetails) bool {
 	if len(submission.Files) == 0 {
 		return false
 	}
 
 	for _, file := range submission.Files {
-		result, err := verifyDownloadedFile(
-			downloadFilePath(downloadRoot, submission.Username, file.FileName),
+		matches, _, _, err := downloadTargetsMatch(
+			resolveDownloadDestinations(downloadRoot, downloadPattern, submission, file),
 			file.FullFileMD5,
 		)
-		if err != nil || !result.Matches {
+		if err != nil || !matches {
 			return false
 		}
 	}
@@ -1254,6 +1255,7 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 				return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
 					SID:               key.SID,
 					SubmissionIDSlice: ids,
+					ShowPools:         inkbunny.Yes,
 				})
 			})
 		})
@@ -1363,6 +1365,7 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
 				SID:               key.SID,
 				SubmissionIDSlice: ids,
+				ShowPools:         inkbunny.Yes,
 			})
 		})
 	})

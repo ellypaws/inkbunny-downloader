@@ -1,5 +1,6 @@
 export type AppSettings = {
   downloadDirectory: string
+  downloadPattern: string
   maxActive: number
   darkMode: boolean
   motionEnabled: boolean
@@ -96,6 +97,7 @@ export type DownloadOptions = {
   saveKeywords: boolean
   maxActive: number
   downloadDirectory: string
+  downloadPattern: string
 }
 
 export type DownloadJobSnapshot = {

@@ -1,4 +1,5 @@
 import type { QueueSnapshot, SearchParams, SessionInfo } from './types'
+import { DEFAULT_DOWNLOAD_PATTERN } from './downloadPattern'
 
 export const DEFAULT_AVATAR_URL = 'https://inkbunny.net/images80/usericons/large/noicon.png'
 export const MIN_CONCURRENT_DOWNLOADS = 1
@@ -90,6 +91,7 @@ export const EMPTY_SESSION: SessionInfo = {
   ratingsMask: '',
   settings: {
     downloadDirectory: '',
+    downloadPattern: DEFAULT_DOWNLOAD_PATTERN,
     maxActive: 4,
     darkMode: false,
     motionEnabled: true,

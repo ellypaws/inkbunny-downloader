@@ -1487,6 +1487,7 @@ export default function App() {
           saveKeywords: tab.searchParams.saveKeywords,
           maxActive: settingsRef.current.maxActive,
           downloadDirectory: settingsRef.current.downloadDirectory,
+          downloadPattern: settingsRef.current.downloadPattern,
         },
       );
       setQueue(snapshot);
@@ -1858,6 +1859,9 @@ export default function App() {
                         saveKeywords: checked,
                       },
                     }));
+                  }}
+                  onDownloadPatternCommit={(downloadPattern) => {
+                    void persistSettings({ downloadPattern });
                   }}
                 />
               </div>

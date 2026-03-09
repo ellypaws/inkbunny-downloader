@@ -54,6 +54,7 @@ func (s *stateStore) Load() (storedState, error) {
 	if state.Settings.DownloadDirectory == "" {
 		state.Settings.DownloadDirectory = defaultDownloadDirectory()
 	}
+	state.Settings.DownloadPattern = normalizeDownloadPattern(state.Settings.DownloadPattern)
 	if state.Session.EffectiveTheme == "" {
 		state.Session.EffectiveTheme = ternary(state.Settings.DarkMode, "dark", "light")
 	}
@@ -81,6 +82,7 @@ func (s *stateStore) Save(state storedState) error {
 func defaultStoredState() storedState {
 	settings := AppSettings{
 		DownloadDirectory:  defaultDownloadDirectory(),
+		DownloadPattern:    defaultDownloadPattern,
 		MaxActive:          defaultMaxActive(),
 		DarkMode:           false,
 		MotionEnabled:      true,

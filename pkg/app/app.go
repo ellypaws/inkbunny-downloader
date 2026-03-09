@@ -233,6 +233,7 @@ func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 	if settings.DownloadDirectory != "" {
 		a.settings.DownloadDirectory = settings.DownloadDirectory
 	}
+	a.settings.DownloadPattern = normalizeDownloadPattern(settings.DownloadPattern)
 	if settings.MaxActive > 0 {
 		a.settings.MaxActive = normalizeMaxActive(settings.MaxActive)
 	}
@@ -266,6 +267,7 @@ func (a *App) PickDownloadDirectory() (string, error) {
 	}
 	_, updateErr := a.UpdateSettings(AppSettings{
 		DownloadDirectory:  selected,
+		DownloadPattern:    a.settings.DownloadPattern,
 		MaxActive:          a.settings.MaxActive,
 		DarkMode:           a.settings.DarkMode,
 		MotionEnabled:      a.settings.MotionEnabled,
@@ -390,6 +392,10 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 	if maxActive <= 0 {
 		maxActive = a.GetSession().Settings.MaxActive
 	}
+	downloadPattern := normalizeDownloadPattern(options.DownloadPattern)
+	if strings.TrimSpace(downloadPattern) == "" {
+		downloadPattern = a.GetSession().Settings.DownloadPattern
+	}
 	if err := os.MkdirAll(downloadRoot, 0o755); err != nil {
 		return QueueSnapshot{}, err
 	}
@@ -418,12 +424,14 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 				PreviewURL:   submissionResourceURL(file.FileURLPreview.String(), user.SID, submission.Public.Bool()),
 				SaveKeywords: saveKeywords,
 				DownloadRoot: downloadRoot,
+				Destinations: resolveDownloadDestinations(downloadRoot, downloadPattern, submission, file),
 			})
 		}
 	}
 
 	_, _ = a.UpdateSettings(AppSettings{
 		DownloadDirectory:  downloadRoot,
+		DownloadPattern:    downloadPattern,
 		MaxActive:          maxActive,
 		DarkMode:           a.settings.DarkMode,
 		MotionEnabled:      a.settings.MotionEnabled,

@@ -2,6 +2,7 @@ export namespace desktopapp {
 	
 	export class AppSettings {
 	    downloadDirectory: string;
+	    downloadPattern: string;
 	    maxActive: number;
 	    darkMode: boolean;
 	    motionEnabled: boolean;
@@ -16,6 +17,7 @@ export namespace desktopapp {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.downloadDirectory = source["downloadDirectory"];
+	        this.downloadPattern = source["downloadPattern"];
 	        this.maxActive = source["maxActive"];
 	        this.darkMode = source["darkMode"];
 	        this.motionEnabled = source["motionEnabled"];
@@ -70,6 +72,7 @@ export namespace desktopapp {
 	    saveKeywords: boolean;
 	    maxActive: number;
 	    downloadDirectory: string;
+	    downloadPattern: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DownloadOptions(source);
@@ -80,6 +83,7 @@ export namespace desktopapp {
 	        this.saveKeywords = source["saveKeywords"];
 	        this.maxActive = source["maxActive"];
 	        this.downloadDirectory = source["downloadDirectory"];
+	        this.downloadPattern = source["downloadPattern"];
 	    }
 	}
 	export class SelectedSubmission {
