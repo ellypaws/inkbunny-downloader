@@ -1114,6 +1114,10 @@ export default function App() {
       return;
     }
     setTabs((previous) => {
+      const nextDownloadedSubmissionIds = getDownloadedSubmissionIds(
+        previous,
+        completedQueueSubmissionIds,
+      );
       let changed = false;
       const nextTabs = previous.map((tab) => {
         let tabChanged = false;
@@ -1125,7 +1129,7 @@ export default function App() {
           return { ...result, downloaded: true };
         });
         const nextSelectedSubmissionIds = tab.selectedSubmissionIds.filter(
-          (submissionId) => !downloadedSubmissionIds.has(submissionId),
+          (submissionId) => !nextDownloadedSubmissionIds.has(submissionId),
         );
         if (nextSelectedSubmissionIds.length !== tab.selectedSubmissionIds.length) {
           tabChanged = true;
@@ -1142,7 +1146,7 @@ export default function App() {
       });
       return changed ? nextTabs : previous;
     });
-  }, [completedQueueSubmissionIds, downloadedSubmissionIds]);
+  }, [completedQueueSubmissionIds]);
 
   useEffect(() => {
     const requestId = ++keywordRequestRef.current;
