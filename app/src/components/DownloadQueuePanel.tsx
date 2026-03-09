@@ -63,6 +63,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const autoScrollIgnoreUntilRef = useRef(0);
   const [followActiveDownload, setFollowActiveDownload] = useState(false);
+  const [highlightedSubmissionId, setHighlightedSubmissionId] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<QueueFilterStatus[]>(
     [],
   );
@@ -81,6 +82,13 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
       selectedStatusSet.has(job.status as QueueFilterStatus),
     );
   }, [props.queue.jobs, selectedStatusSet, showAllJobs]);
+  const submissionJobCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const job of props.queue.jobs) {
+      counts.set(job.submissionId, (counts.get(job.submissionId) ?? 0) + 1);
+    }
+    return counts;
+  }, [props.queue.jobs]);
   const rowVirtualizer = useVirtualizer({
     count: visibleJobs.length,
     getScrollElement: () => parentRef.current,
@@ -97,6 +105,16 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
       setFollowActiveDownload(false);
     }
   }, [followActiveDownload, hasActiveDownload]);
+
+  useEffect(() => {
+    if (!highlightedSubmissionId) {
+      return;
+    }
+    if ((submissionJobCounts.get(highlightedSubmissionId) ?? 0) > 1) {
+      return;
+    }
+    setHighlightedSubmissionId("");
+  }, [highlightedSubmissionId, submissionJobCounts]);
 
   useEffect(() => {
     if (!followActiveDownload || firstActiveIndex < 0) {
@@ -340,6 +358,14 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                   >
                     <QueueRow
                       job={job}
+                      submissionJobCount={
+                        submissionJobCounts.get(job.submissionId) ?? 0
+                      }
+                      submissionHighlighted={
+                        highlightedSubmissionId !== "" &&
+                        highlightedSubmissionId === job.submissionId
+                      }
+                      onSubmissionHighlightChange={setHighlightedSubmissionId}
                       onCancel={props.onCancel}
                       onCancelSubmission={props.onCancelSubmission}
                       onRetry={props.onRetry}
@@ -357,6 +383,9 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
 
 function QueueRow(props: {
   job: QueueSnapshot["jobs"][number];
+  submissionJobCount: number;
+  submissionHighlighted: boolean;
+  onSubmissionHighlightChange: (submissionId: string) => void;
   onCancel: (jobId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
   onRetry: (jobId: string) => void;
@@ -364,6 +393,7 @@ function QueueRow(props: {
   const { job } = props;
   const actionable = job.status === "queued" || job.status === "active";
   const retryable = job.status === "failed";
+  const showSubmissionCancel = actionable && props.submissionJobCount > 1;
   const showAttemptChip =
     job.status === "queued" || (actionable && (job.attempt || 1) > 1);
   const submissionUrl = `https://inkbunny.net/s/${job.submissionId}`;
@@ -376,7 +406,11 @@ function QueueRow(props: {
   return (
     <div
       tabIndex={0}
-      className="theme-panel-strong group relative overflow-hidden rounded-[1.3rem] border px-3 py-2.5 shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 motion-safe:focus-within:-translate-y-0.5 hover:shadow-lg focus-within:shadow-lg"
+      className={`theme-panel-strong group relative overflow-hidden rounded-[1.3rem] border px-3 py-2.5 shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 motion-safe:focus-within:-translate-y-0.5 hover:shadow-lg focus-within:shadow-lg ${
+        props.submissionHighlighted
+          ? "border-[#CC5E00] ring-2 ring-[#CC5E00]/55"
+          : ""
+      }`}
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(114,159,207,0.12),transparent_35%,var(--theme-accent-soft))] opacity-0 transition-opacity motion-safe:duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
 
@@ -447,19 +481,31 @@ function QueueRow(props: {
                 <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
                   {actionable ? (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => props.onCancelSubmission(job.submissionId)}
-                        className="theme-button-danger flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
-                        title={`Stop every file for submission ${job.submissionId}`}
-                      >
-                        <Square
-                          size={11}
-                          className="fill-current"
-                          strokeWidth={2.5}
-                        />
-                        Submission
-                      </button>
+                      {showSubmissionCancel ? (
+                        <button
+                          type="button"
+                          onClick={() => props.onCancelSubmission(job.submissionId)}
+                          onMouseEnter={() =>
+                            props.onSubmissionHighlightChange(job.submissionId)
+                          }
+                          onMouseLeave={() =>
+                            props.onSubmissionHighlightChange("")
+                          }
+                          onFocus={() =>
+                            props.onSubmissionHighlightChange(job.submissionId)
+                          }
+                          onBlur={() => props.onSubmissionHighlightChange("")}
+                          className="theme-button-danger flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
+                          title={`Stop every file for submission ${job.submissionId}`}
+                        >
+                          <Square
+                            size={11}
+                            className="fill-current"
+                            strokeWidth={2.5}
+                          />
+                          Submission
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => props.onCancel(job.id)}
