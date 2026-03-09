@@ -109,6 +109,8 @@ export default function App() {
   const [watchingLoading, setWatchingLoading] = useState(false);
   const [queue, setQueue] = useState<QueueSnapshot>(EMPTY_QUEUE);
   const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] = useState<string[]>([]);
+  const [panelPreviewImages, setPanelPreviewImages] = useState<string[][]>([]);
+  const [recentDownloadedImages, setRecentDownloadedImages] = useState<string[][]>([]);
   const [queueMessage, setQueueMessage] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [apiCooldownUntil, setApiCooldownUntil] = useState(0);
@@ -235,6 +237,8 @@ export default function App() {
         ? false
         : !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
   const unreadModeActive = activeTab?.mode === "unread";
+  const folderPreviewImages =
+    panelPreviewImages.length > 0 ? panelPreviewImages : recentDownloadedImages;
   const newUnreadCount =
     trackedUnreadBaseline < 0 ? 0 : Math.max(unreadTotal - trackedUnreadBaseline, 0);
   const hasSelectableActiveResult = activeResults.some(
@@ -1147,6 +1151,20 @@ export default function App() {
       return changed ? nextTabs : previous;
     });
   }, [completedQueueSubmissionIds]);
+
+  useEffect(() => {
+    const completedPreviewImages = getRecentCompletedPreviewImages(queue, tabs);
+    if (completedPreviewImages.length === 0) {
+      return;
+    }
+    setRecentDownloadedImages((current) => {
+      const nextImages = dedupePreviewImageSets([
+        ...completedPreviewImages,
+        ...current,
+      ]).slice(0, 3);
+      return arePreviewImageSetsEqual(nextImages, current) ? current : nextImages;
+    });
+  }, [queue, tabs]);
 
   useEffect(() => {
     const requestId = ++keywordRequestRef.current;
@@ -2350,6 +2368,7 @@ export default function App() {
               downloadButtonMode={activeDownloadButtonMode}
               downloadButtonLabel={activeDownloadButtonLabel}
               downloadButtonDisabled={activeDownloadButtonDisabled}
+              onPanelPreviewImagesChange={setPanelPreviewImages}
               onSelectActive={(submissionId) => {
                 if (!activeTab) {
                   return;
@@ -2400,6 +2419,7 @@ export default function App() {
             canRetryAll={canRetryAllDownloads}
             allSelected={allResultsSelected}
             autoClearCompleted={settings.autoClearCompleted}
+            folderPreviewImages={folderPreviewImages}
             onOpenDownloadFolder={() => {
               backend.openDownloadDirectory().catch((error: unknown) => {
                 const message = getErrorMessage(error, "Could not open the download folder.");
@@ -2596,6 +2616,94 @@ function getDownloadedSubmissionIds(
     }
   }
   return downloaded;
+}
+
+function getRecentCompletedPreviewImages(
+  queue: QueueSnapshot,
+  tabs: SearchTabState[],
+) {
+  const previewBySubmission = buildSubmissionPreviewMap(tabs);
+  const sortedCompletedJobs = [...queue.jobs]
+    .filter((job) => job.status === "completed" && job.fileExists)
+    .sort((left, right) => compareIsoDates(right.updatedAt, left.updatedAt));
+
+  const previews: string[][] = [];
+  for (const job of sortedCompletedJobs) {
+    const previewSources = dedupePreviewSources([
+      ...(job.previewUrl ? [job.previewUrl] : []),
+      ...(previewBySubmission.get(job.submissionId) ?? []),
+    ]);
+    if (previewSources.length === 0) {
+      continue;
+    }
+    previews.push(previewSources);
+  }
+
+  return dedupePreviewImageSets(previews).slice(0, 3);
+}
+
+function buildSubmissionPreviewMap(tabs: SearchTabState[]) {
+  const previewBySubmission = new Map<string, string[]>();
+  for (const tab of tabs) {
+    for (const result of tab.results) {
+      if (previewBySubmission.has(result.submissionId)) {
+        continue;
+      }
+      const previewSources = getSubmissionPreviewSources(result);
+      if (previewSources.length === 0) {
+        continue;
+      }
+      previewBySubmission.set(result.submissionId, previewSources);
+    }
+  }
+  return previewBySubmission;
+}
+
+function getSubmissionPreviewSources(submission: SubmissionCard) {
+  return dedupePreviewSources([
+    submission.previewUrl ||
+      "",
+    submission.latestPreviewUrl || "",
+    submission.screenUrl || "",
+    submission.thumbnailUrl || "",
+    submission.latestThumbnailUrl || "",
+    submission.fullUrl || "",
+  ]);
+}
+
+function compareIsoDates(left: string, right: string) {
+  return Date.parse(left || "") - Date.parse(right || "");
+}
+
+function dedupePreviewSources(sources: string[]) {
+  return [...new Set(sources.filter(Boolean))];
+}
+
+function dedupePreviewImageSets(imageSets: string[][]) {
+  const seen = new Set<string>();
+  const unique: string[][] = [];
+
+  for (const imageSet of imageSets) {
+    const normalized = dedupePreviewSources(imageSet);
+    if (normalized.length === 0) {
+      continue;
+    }
+    const key = normalized.join("|");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(normalized);
+  }
+
+  return unique;
+}
+
+function arePreviewImageSetsEqual(left: string[][], right: string[][]) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => areStringArraysEqual(value, right[index] ?? []))
+  );
 }
 
 function writeBackendDebugEvent(event: BackendDebugEvent) {

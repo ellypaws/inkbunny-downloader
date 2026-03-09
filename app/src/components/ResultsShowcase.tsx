@@ -46,6 +46,7 @@ type ResultsShowcaseProps = {
   downloadButtonMode: "default" | "stop" | "searching" | "timer";
   downloadButtonLabel: string;
   downloadButtonDisabled: boolean;
+  onPanelPreviewImagesChange: (images: string[][]) => void;
   onSelectActive: (submissionId: string) => void;
   onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
@@ -103,6 +104,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const panelItems = useMemo(
     () => getPanelItems(props.results, panelStart),
     [props.results, panelStart],
+  );
+  const panelPreviewImages = useMemo(
+    () => selectPanelPreviewImages(panelItems),
+    [panelItems],
   );
   const downloadSummaries = useMemo(
     () =>
@@ -257,6 +262,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     resultColumnCount,
     resultRowVirtualizer,
   ]);
+
+  useEffect(() => {
+    props.onPanelPreviewImagesChange(panelPreviewImages);
+  }, [panelPreviewImages, props.onPanelPreviewImagesChange]);
 
   return (
     <section className="relative mt-4">
@@ -961,6 +970,26 @@ function getPanelItems(results: SubmissionCard[], startIndex: number) {
     Math.min(startIndex, results.length - PANEL_WINDOW_SIZE),
   );
   return results.slice(safeStart, safeStart + PANEL_WINDOW_SIZE);
+}
+
+function selectPanelPreviewImages(results: SubmissionCard[]) {
+  const previewImages = results
+    .map((result) => getPreviewSources(result, "full"))
+    .filter((value) => value.length > 0);
+
+  if (previewImages.length <= 3) {
+    return previewImages;
+  }
+
+  const shuffled = [...previewImages];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [
+      shuffled[swapIndex]!,
+      shuffled[index]!,
+    ];
+  }
+  return shuffled.slice(0, 3);
 }
 
 function getPanelWindowStart(resultCount: number, activeIndex: number) {
