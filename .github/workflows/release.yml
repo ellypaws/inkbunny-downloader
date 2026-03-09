@@ -169,6 +169,7 @@ jobs:
           wails build \
             -clean \
             -trimpath \
+              -devtools \
             -ldflags "-X github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo.Version=${release_version}" \
             -m \
             $nopackage_flag \
