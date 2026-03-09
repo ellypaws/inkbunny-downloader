@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  ArrowUpRight,
   Download,
   FileImage,
   FolderOpen,
@@ -43,7 +44,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const rowVirtualizer = useVirtualizer({
     count: props.queue.jobs.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 112,
+    estimateSize: () => 78,
     overscan: 8,
   });
 
@@ -61,7 +62,10 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           </h3>
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-black">
-          <StatChip tone="active" label={`${props.queue.activeCount} downloading`} />
+          <StatChip
+            tone="active"
+            label={`${props.queue.activeCount} downloading`}
+          />
           <StatChip tone="queued" label={`${props.queue.queuedCount} queued`} />
           <StatChip
             tone="completed"
@@ -135,23 +139,23 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           </div>
 
           <div className="theme-panel-strong min-w-[13rem] flex-1 rounded-2xl border px-4 pt-3 shadow-sm md:max-w-[17rem]">
-              <ElasticSlider
-                value={props.maxActive}
-                onChange={props.onMaxActiveChange}
-                startingValue={MIN_CONCURRENT_DOWNLOADS}
-                maxValue={MAX_CONCURRENT_DOWNLOADS}
-                isStepped
-                stepSize={1}
-                valueFormatter={(value) => `${Math.round(value)} at once`}
-                leftIcon={<span className="text-xs font-black">1</span>}
-                rightIcon={
-                  <span className="text-xs font-black">
-                    {MAX_CONCURRENT_DOWNLOADS}
-                  </span>
-                }
-                className="w-full"
-              />
-            </div>
+            <ElasticSlider
+              value={props.maxActive}
+              onChange={props.onMaxActiveChange}
+              startingValue={MIN_CONCURRENT_DOWNLOADS}
+              maxValue={MAX_CONCURRENT_DOWNLOADS}
+              isStepped
+              stepSize={1}
+              valueFormatter={(value) => `${Math.round(value)} at once`}
+              leftIcon={<span className="text-xs font-black">1</span>}
+              rightIcon={
+                <span className="text-xs font-black">
+                  {MAX_CONCURRENT_DOWNLOADS}
+                </span>
+              }
+              className="w-full"
+            />
+          </div>
         </div>
       </div>
 
@@ -184,6 +188,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                 return (
                   <div
                     key={job.id}
+                    data-index={virtualRow.index}
                     ref={rowVirtualizer.measureElement}
                     className="absolute left-0 top-0 w-full px-1 py-1"
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
@@ -211,6 +216,10 @@ function QueueRow(props: {
 }) {
   const { job } = props;
   const actionable = job.status === "queued" || job.status === "active";
+  const showAttemptChip =
+    job.status === "queued" || (actionable && (job.attempt || 1) > 1);
+  const submissionUrl = `https://inkbunny.net/s/${job.submissionId}`;
+  const submissionLabel = job.title || `Submission ${job.submissionId}`;
   const progress =
     job.status === "completed"
       ? 100
@@ -219,7 +228,7 @@ function QueueRow(props: {
   return (
     <div
       tabIndex={0}
-      className="theme-panel-strong group relative overflow-hidden rounded-[1.45rem] border px-3.5 py-3 shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 motion-safe:focus-within:-translate-y-0.5 hover:shadow-lg focus-within:shadow-lg"
+      className="theme-panel-strong group relative overflow-hidden rounded-[1.3rem] border px-3 py-2.5 shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 motion-safe:focus-within:-translate-y-0.5 hover:shadow-lg focus-within:shadow-lg"
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(114,159,207,0.12),transparent_35%,var(--theme-accent-soft))] opacity-0 transition-opacity motion-safe:duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
 
@@ -232,7 +241,7 @@ function QueueRow(props: {
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="theme-title truncate text-sm font-black md:text-[0.95rem]">
                   {job.fileName}
                 </div>
@@ -241,17 +250,40 @@ function QueueRow(props: {
                     On disk
                   </span>
                 ) : null}
+                {showAttemptChip ? (
+                  <span className="theme-panel-soft rounded-full border px-2 py-1 text-[10px] font-black text-[var(--theme-muted)]">
+                    Attempt {job.attempt || 1}
+                  </span>
+                ) : null}
+                <a
+                  href={submissionUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="theme-panel-soft theme-hover inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-black text-[var(--theme-info)] transition-colors hover:text-[var(--theme-info-strong)]"
+                  title={`Open submission ${job.submissionId}`}
+                >
+                  <ArrowUpRight size={11} strokeWidth={2.4} />
+                  <span className="truncate">{submissionLabel}</span>
+                </a>
               </div>
-              <div className="theme-subtle mt-1 flex items-center gap-2 text-[11px] font-semibold">
+              <div className="theme-subtle mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold">
                 <span className="truncate">@{job.username}</span>
                 <span className="h-1 w-1 rounded-full bg-current/60" />
+                <span>
+                  {formatBytes(job.bytesWritten)} / {formatBytes(job.totalBytes)}
+                </span>
+                <span className="h-1 w-1 rounded-full bg-current/60" />
                 <span>{progress}%</span>
+                <span className="h-1 w-1 rounded-full bg-current/60" />
+                <span className="truncate">
+                  {job.title || "Untitled submission"}
+                </span>
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center">
               <StatusBadge status={job.status} />
-              <div className="flex max-w-0 items-center gap-2 overflow-hidden opacity-0 transition-[max-width,opacity,transform] motion-safe:duration-300 motion-safe:ease-out motion-safe:translate-x-2 group-hover:max-w-48 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:max-w-48 group-focus-within:translate-x-0 group-focus-within:opacity-100">
+              <div className="ml-0 flex max-w-0 items-center gap-2 overflow-hidden opacity-0 transition-[max-width,opacity,transform,margin] motion-safe:duration-300 motion-safe:ease-out motion-safe:translate-x-2 group-hover:ml-2 group-hover:max-w-48 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:ml-2 group-focus-within:max-w-48 group-focus-within:translate-x-0 group-focus-within:opacity-100">
                 {actionable ? (
                   <>
                     <button
@@ -288,28 +320,11 @@ function QueueRow(props: {
             />
           </div>
 
-          <div className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity,margin] motion-safe:duration-300 motion-safe:ease-out group-hover:mt-3 group-hover:grid-rows-[1fr] group-hover:opacity-100 group-focus-within:mt-3 group-focus-within:grid-rows-[1fr] group-focus-within:opacity-100">
-            <div className="overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] font-bold">
-                <div className="theme-muted flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>
-                    {formatBytes(job.bytesWritten)} /{" "}
-                    {formatBytes(job.totalBytes)}
-                  </span>
-                  <span>Attempt {job.attempt || 1}</span>
-                  <span>ID {job.submissionId}</span>
-                </div>
-                <span className="theme-subtle">
-                  {job.title || "Untitled submission"}
-                </span>
-              </div>
-              {job.error ? (
-                <div className="mt-2 rounded-2xl bg-[var(--theme-danger-soft)] px-3 py-2 text-[11px] font-bold text-[var(--theme-danger)]">
-                  {job.error}
-                </div>
-              ) : null}
+          {job.error ? (
+            <div className="mt-2 rounded-2xl bg-[var(--theme-danger-soft)] px-3 py-2 text-[11px] font-bold text-[var(--theme-danger)]">
+              {job.error}
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -321,8 +336,8 @@ function QueueThumbnail(props: { src?: string; alt: string }) {
 
   if (!props.src || failed) {
     return (
-      <div className="theme-panel-soft theme-muted flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border text-[10px] font-black">
-        <FileImage size={16} />
+      <div className="theme-panel-soft theme-muted flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border text-[9px] font-black">
+        <FileImage size={14} />
         <span>Preview</span>
       </div>
     );
@@ -335,7 +350,7 @@ function QueueThumbnail(props: { src?: string; alt: string }) {
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className="h-14 w-14 shrink-0 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] object-cover"
+      className="h-12 w-12 shrink-0 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] object-cover"
     />
   );
 }
