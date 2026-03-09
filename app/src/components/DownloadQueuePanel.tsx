@@ -237,7 +237,7 @@ function QueueRow(props: {
                   {job.fileName}
                 </div>
                 {job.fileExists ? (
-                  <span className="rounded-full bg-[var(--theme-success-soft)] px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--theme-success)]">
+                  <span className="rounded-full bg-[var(--theme-success-soft)] px-2 py-1 text-[10px] font-black text-[var(--theme-success)]">
                     On disk
                   </span>
                 ) : null}
@@ -389,7 +389,7 @@ function StatChip(props: {
 function StatusBadge(props: { status: string }) {
   return (
     <span
-      className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] ${getStatusBadgeClass(
+      className={`rounded-full px-3 py-1.5 text-[11px] font-black ${getStatusBadgeClass(
         props.status,
       )}`}
     >
