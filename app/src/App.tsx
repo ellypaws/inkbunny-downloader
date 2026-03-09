@@ -65,6 +65,7 @@ type SearchTabState = {
   mode: SearchTabMode;
   searchParams: SearchParams;
   artistDraft: string;
+  artistAvatars: Record<string, string>;
   searchResponse: SearchResponse | null;
   results: SubmissionCard[];
   activeSubmissionId: string;
@@ -1575,6 +1576,7 @@ export default function App() {
               session={session}
               searchParams={activeSearchParams}
               artistDraft={activeArtistDraft}
+              artistAvatarUrls={activeTab?.artistAvatars ?? {}}
               mode={activeTab?.mode ?? "default"}
               keywordSuggestions={keywordSuggestions}
               artistSuggestions={artistSuggestions}
@@ -1612,6 +1614,12 @@ export default function App() {
                 if (!activeTab) {
                   return;
                 }
+                const artistName =
+                  typeof value === "string"
+                    ? value
+                    : value.username || value.value;
+                const avatarUrl =
+                  typeof value === "string" ? "" : value.avatarUrl || "";
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   artistDraft: "",
@@ -1619,10 +1627,16 @@ export default function App() {
                     ...currentTab.searchParams,
                     artistNames: appendArtistNames(
                       currentTab.searchParams.artistNames,
-                      value,
+                      artistName,
                     ),
                     useWatchingArtists: false,
                   },
+                  artistAvatars: avatarUrl
+                    ? {
+                        ...currentTab.artistAvatars,
+                        [normalizeArtistToken(artistName)]: avatarUrl,
+                      }
+                    : currentTab.artistAvatars,
                 }));
               }}
               onRemoveArtist={(value) => {
@@ -1638,6 +1652,11 @@ export default function App() {
                         normalizeArtistToken(artist) !== normalizeArtistToken(value),
                     ),
                   },
+                  artistAvatars: Object.fromEntries(
+                    Object.entries(currentTab.artistAvatars).filter(
+                      ([artist]) => artist !== normalizeArtistToken(value),
+                    ),
+                  ),
                 }));
               }}
               onToggleMyWatches={() => void handleToggleWatchingArtists()}
@@ -2061,6 +2080,7 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     mode: "default",
     searchParams: buildDefaultSearch(session, settings),
     artistDraft: "",
+    artistAvatars: {},
     searchResponse: null,
     results: [],
     activeSubmissionId: "",
@@ -2181,6 +2201,7 @@ function isSearchTabUntouched(
     tab.mode === "default" &&
     areSearchParamsEqual(tab.searchParams, buildDefaultSearch(session, settings)) &&
     tab.artistDraft === "" &&
+    Object.keys(tab.artistAvatars).length === 0 &&
     tab.searchResponse === null &&
     tab.results.length === 0 &&
     tab.activeSubmissionId === "" &&

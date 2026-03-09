@@ -5,7 +5,7 @@ import {
   Search as SearchIcon,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   DEFAULT_AVATAR_URL,
@@ -28,6 +28,7 @@ type SearchWorkspaceProps = {
   mode: "default" | "unread";
   keywordSuggestions: string[];
   artistDraft: string;
+  artistAvatarUrls: Record<string, string>;
   artistSuggestions: UsernameSuggestion[];
   favoriteSuggestions: UsernameSuggestion[];
   watchingCount: number;
@@ -38,7 +39,7 @@ type SearchWorkspaceProps = {
   error: string;
   onChange: (updater: (previous: SearchParams) => SearchParams) => void;
   onArtistDraftChange: (value: string) => void;
-  onAddArtist: (value: string) => void;
+  onAddArtist: (value: string | UsernameSuggestion) => void;
   onRemoveArtist: (value: string) => void;
   onToggleMyWatches: () => void;
   onSearch: () => void;
@@ -57,11 +58,27 @@ type ChoiceTone =
 
 export function SearchWorkspace(props: SearchWorkspaceProps) {
   const [focusedField, setFocusedField] = useState<SuggestionField>(null);
+  const [pinnedField, setPinnedField] = useState<SuggestionField>(null);
+  const [pinnedKeywordSuggestions, setPinnedKeywordSuggestions] = useState<
+    string[]
+  >([]);
+  const [pinnedArtistSuggestions, setPinnedArtistSuggestions] = useState<
+    UsernameSuggestion[]
+  >([]);
+  const [pinnedFavoriteSuggestions, setPinnedFavoriteSuggestions] = useState<
+    UsernameSuggestion[]
+  >([]);
   const canUseMyName =
     props.session.hasSession &&
     !props.session.isGuest &&
     props.session.username !== "";
   const anyTypeSelected = props.searchParams.submissionTypes.length === 0;
+
+  useEffect(() => {
+    if (focusedField === null) {
+      setPinnedField(null);
+    }
+  }, [focusedField]);
 
   const ratingRows = useMemo(
     () =>
@@ -71,6 +88,20 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
       })),
     [props.session.ratingsMask],
   );
+  const visibleKeywordSuggestions =
+    pinnedField === "query" ? pinnedKeywordSuggestions : props.keywordSuggestions;
+  const visibleArtistSuggestions =
+    pinnedField === "artistName"
+      ? pinnedArtistSuggestions
+      : props.artistSuggestions;
+  const visibleFavoriteSuggestions =
+    pinnedField === "favoritesBy"
+      ? pinnedFavoriteSuggestions
+      : props.favoriteSuggestions;
+
+  const clearPinnedField = (field: SuggestionField) => {
+    setPinnedField((current) => (current === field ? null : current));
+  };
 
   return (
     <section className="relative overflow-hidden rounded-toy-sm bg-transparent backdrop-blur-xl">
@@ -116,13 +147,18 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   <div className="relative min-w-0">
                     <input
                       value={props.searchParams.query}
-                      onFocus={() => setFocusedField("query")}
+                      onFocus={() => {
+                        setFocusedField("query");
+                        setPinnedField(null);
+                      }}
                       onBlur={() =>
                         window.setTimeout(
-                          () =>
+                          () => {
                             setFocusedField((current) =>
                               current === "query" ? null : current,
-                            ),
+                            );
+                            clearPinnedField("query");
+                          },
                           100,
                         )
                       }
@@ -144,19 +180,22 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     />
                     <KeywordSuggestionList
                       open={
-                        focusedField === "query" &&
-                        props.keywordSuggestions.length > 0
+                        (focusedField === "query" || pinnedField === "query") &&
+                        visibleKeywordSuggestions.length > 0
                       }
-                      suggestions={props.keywordSuggestions}
-                      onPick={(suggestion) =>
+                      suggestions={visibleKeywordSuggestions}
+                      onPick={(suggestion) => {
+                        setPinnedField("query");
+                        setPinnedKeywordSuggestions(visibleKeywordSuggestions);
                         props.onChange((previous) => ({
                           ...previous,
                           query: applyKeywordSuggestion(
                             previous.query,
                             suggestion,
                           ),
-                        }))
-                      }
+                        }));
+                      }}
+                      onMouseLeave={() => clearPinnedField("query")}
                     />
                   </div>
                   <button
@@ -267,23 +306,31 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   subtitle="Search only submissions by these users"
                   optionalText="optional"
                   artistNames={props.searchParams.artistNames}
+                  artistAvatarUrls={props.artistAvatarUrls}
                   useWatchingArtists={props.searchParams.useWatchingArtists}
                   watchingCount={props.watchingCount}
                   watchingLoading={props.watchingLoading}
                   draftValue={props.artistDraft}
                   suggestions={props.artistSuggestions}
+                  visibleSuggestions={visibleArtistSuggestions}
                   allowUseMyName={canUseMyName}
                   allowUseWatching={
                     props.session.hasSession && !props.session.isGuest
                   }
                   focused={focusedField === "artistName"}
-                  onFocus={() => setFocusedField("artistName")}
+                  pinned={pinnedField === "artistName"}
+                  onFocus={() => {
+                    setFocusedField("artistName");
+                    setPinnedField(null);
+                  }}
                   onBlur={() =>
                     window.setTimeout(
-                      () =>
+                      () => {
                         setFocusedField((current) =>
                           current === "artistName" ? null : current,
-                        ),
+                        );
+                        clearPinnedField("artistName");
+                      },
                       100,
                     )
                   }
@@ -291,8 +338,22 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   onAddArtist={props.onAddArtist}
                   onRemoveArtist={props.onRemoveArtist}
                   onToggleMyWatches={props.onToggleMyWatches}
+                  onPinSuggestions={() => {
+                    setPinnedField("artistName");
+                    setPinnedArtistSuggestions(visibleArtistSuggestions);
+                  }}
+                  onReleaseSuggestions={() =>
+                    clearPinnedField("artistName")
+                  }
                   inputTourAnchor="artist-name"
-                  onUseMyName={() => props.onAddArtist(props.session.username)}
+                  onUseMyName={() =>
+                    props.onAddArtist({
+                      userId: props.session.username,
+                      value: props.session.username,
+                      username: props.session.username,
+                      avatarUrl: props.session.avatarUrl,
+                    })
+                  }
                 />
                 <SuggestionFieldBlock
                   title="Search favorites by"
@@ -303,13 +364,19 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                   useMyNameLabel="Search my favorites only"
                   allowUseMyName={canUseMyName}
                   focused={focusedField === "favoritesBy"}
-                  onFocus={() => setFocusedField("favoritesBy")}
+                  pinned={pinnedField === "favoritesBy"}
+                  onFocus={() => {
+                    setFocusedField("favoritesBy");
+                    setPinnedField(null);
+                  }}
                   onBlur={() =>
                     window.setTimeout(
-                      () =>
+                      () => {
                         setFocusedField((current) =>
                           current === "favoritesBy" ? null : current,
-                        ),
+                        );
+                        clearPinnedField("favoritesBy");
+                      },
                       100,
                     )
                   }
@@ -318,6 +385,14 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       ...previous,
                       favoritesBy: value,
                     }))
+                  }
+                  visibleSuggestions={visibleFavoriteSuggestions}
+                  onPinSuggestions={() => {
+                    setPinnedField("favoritesBy");
+                    setPinnedFavoriteSuggestions(visibleFavoriteSuggestions);
+                  }}
+                  onReleaseSuggestions={() =>
+                    clearPinnedField("favoritesBy")
                   }
                   onUseMyName={() =>
                     props.onChange((previous) => ({
@@ -659,13 +734,17 @@ type SuggestionFieldBlockProps = {
   optionalText: string;
   value: string;
   suggestions: UsernameSuggestion[];
+  visibleSuggestions: UsernameSuggestion[];
   useMyNameLabel: string;
   allowUseMyName: boolean;
   inputTourAnchor?: string;
   focused: boolean;
+  pinned: boolean;
   onFocus: () => void;
   onBlur: () => void;
   onChange: (value: string) => void;
+  onPinSuggestions: () => void;
+  onReleaseSuggestions: () => void;
   onUseMyName: () => void;
 };
 
@@ -674,21 +753,26 @@ type ArtistSuggestionFieldBlockProps = {
   subtitle: string;
   optionalText: string;
   artistNames: string[];
+  artistAvatarUrls: Record<string, string>;
   useWatchingArtists: boolean;
   watchingCount: number;
   watchingLoading: boolean;
   draftValue: string;
   suggestions: UsernameSuggestion[];
+  visibleSuggestions: UsernameSuggestion[];
   allowUseMyName: boolean;
   allowUseWatching: boolean;
   inputTourAnchor?: string;
   focused: boolean;
+  pinned: boolean;
   onFocus: () => void;
   onBlur: () => void;
   onDraftChange: (value: string) => void;
-  onAddArtist: (value: string) => void;
+  onAddArtist: (value: string | UsernameSuggestion) => void;
   onRemoveArtist: (value: string) => void;
   onToggleMyWatches: () => void;
+  onPinSuggestions: () => void;
+  onReleaseSuggestions: () => void;
   onUseMyName: () => void;
 };
 
@@ -724,6 +808,17 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
                   key={artist}
                   className="group inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] px-3 py-1 text-sm font-semibold text-[var(--theme-title)]"
                 >
+                  <img
+                    src={
+                      props.artistAvatarUrls[artist.trim().toLowerCase()] ||
+                      DEFAULT_AVATAR_URL
+                    }
+                    alt={artist}
+                    onError={(event) => {
+                      event.currentTarget.src = DEFAULT_AVATAR_URL;
+                    }}
+                    className="h-5 w-5 shrink-0 rounded-full border border-white/70 bg-white object-cover"
+                  />
                   <span>{artist}</span>
                   <button
                     type="button"
@@ -779,13 +874,15 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
         <UsernameSuggestionList
           open={
             !props.useWatchingArtists &&
-            props.focused &&
-            props.suggestions.length > 0
+            (props.focused || props.pinned) &&
+            props.visibleSuggestions.length > 0
           }
-          suggestions={props.suggestions}
-          onPick={(suggestion) =>
-            props.onAddArtist(suggestion.username || suggestion.value)
-          }
+          suggestions={props.visibleSuggestions}
+          onPick={(suggestion) => {
+            props.onPinSuggestions();
+            props.onAddArtist(suggestion);
+          }}
+          onMouseLeave={props.onReleaseSuggestions}
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -871,11 +968,16 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
           data-tour-anchor={props.inputTourAnchor}
         />
         <UsernameSuggestionList
-          open={props.focused && props.suggestions.length > 0}
-          suggestions={props.suggestions}
-          onPick={(suggestion) =>
-            props.onChange(suggestion.username || suggestion.value)
+          open={
+            (props.focused || props.pinned) &&
+            props.visibleSuggestions.length > 0
           }
+          suggestions={props.visibleSuggestions}
+          onPick={(suggestion) => {
+            props.onPinSuggestions();
+            props.onChange(suggestion.username || suggestion.value);
+          }}
+          onMouseLeave={props.onReleaseSuggestions}
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -903,13 +1005,17 @@ function KeywordSuggestionList(props: {
   open: boolean;
   suggestions: string[];
   onPick: (suggestion: string) => void;
+  onMouseLeave?: () => void;
 }) {
   if (!props.open) {
     return null;
   }
 
   return (
-    <div className="theme-panel-strong absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+    <div
+      onMouseLeave={props.onMouseLeave}
+      className="theme-panel-strong absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl"
+    >
       <div className="grid gap-2 sm:grid-cols-2">
         {props.suggestions.slice(0, 8).map((suggestion) => (
           <button
@@ -933,13 +1039,17 @@ function UsernameSuggestionList(props: {
   open: boolean;
   suggestions: UsernameSuggestion[];
   onPick: (suggestion: UsernameSuggestion) => void;
+  onMouseLeave?: () => void;
 }) {
   if (!props.open) {
     return null;
   }
 
   return (
-    <div className="theme-panel-strong absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+    <div
+      onMouseLeave={props.onMouseLeave}
+      className="theme-panel-strong absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl"
+    >
       <div className="grid gap-2 sm:grid-cols-2">
         {props.suggestions.slice(0, 8).map((suggestion) => (
           <button
