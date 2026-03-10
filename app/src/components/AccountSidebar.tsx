@@ -18,6 +18,11 @@ type AccountSidebarProps = {
   remoteAccessInfo: RemoteAccessInfo | null;
   remoteAccessLoading: boolean;
   searchParams: SearchParams;
+  onNotify: (toast: {
+    level: "success" | "error";
+    message: string;
+    dedupeKey?: string;
+  }) => void;
   onEnableRemoteAccess: () => void;
   onDisableRemoteAccess: () => void;
   onSelectRemoteAccessHost: (host: string) => void;
@@ -39,6 +44,24 @@ export function AccountSidebar(props: AccountSidebarProps) {
       : "Signed in"
     : "No session yet";
 
+  async function handleCopyPairingLink() {
+    const pairingUrl = props.remoteAccessInfo?.pairingUrl || "";
+    const copied = await copyText(pairingUrl);
+    if (copied) {
+      props.onNotify({
+        level: "success",
+        message: "Remote access link copied.",
+        dedupeKey: "remote-link-copied",
+      });
+      return;
+    }
+    props.onNotify({
+      level: "error",
+      message: "Could not copy the remote access link.",
+      dedupeKey: "remote-link-copy-error",
+    });
+  }
+
   return (
     <aside className="xl:sticky xl:top-28">
       <div className="relative rounded-toy-lg bg-gradient-to-b from-[#FF34A5]/75 to-[#00A372]/75 p-1 shadow-pop">
@@ -50,7 +73,10 @@ export function AccountSidebar(props: AccountSidebarProps) {
               </div>
               <div className="flex items-center gap-2">
                 {props.capabilities.remoteAccessHost ? (
-                  <div className="relative">
+                  <div
+                    className="relative"
+                    onMouseLeave={() => setRemoteHostsOpen(false)}
+                  >
                     <button
                       type="button"
                       onClick={() => {
@@ -63,14 +89,14 @@ export function AccountSidebar(props: AccountSidebarProps) {
                         setRemoteOpen(true);
                         setRemoteHostsOpen((current) => !current);
                       }}
-                      className="rounded-full border border-[#2D2D44]/18 p-2 text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
+                      className="cursor-pointer rounded-full border border-[#2D2D44]/18 p-2 text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
                       aria-label="remote pairing"
                       title="remote pairing"
                     >
                       <Smartphone size={16} />
                     </button>
                     {remoteHostsOpen && (props.remoteAccessInfo?.availableHosts?.length ?? 0) > 0 ? (
-                      <div className="absolute right-0 top-full z-30 mt-2 min-w-[14rem] rounded-2xl border border-[#2D2D44]/10 bg-white/95 p-3 text-sm shadow-pop backdrop-blur-md dark:border-white/10 dark:bg-[#14112C]/95">
+                      <div className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-2.5rem))] rounded-2xl border border-[#2D2D44]/10 bg-white/95 p-3 text-sm shadow-pop backdrop-blur-md dark:border-white/10 dark:bg-[#14112C]/95">
                         <div className="mb-2 pl-2 text-xs font-semibold text-[#2D2D44]/55 dark:text-white/45">
                           Choose an address
                         </div>
@@ -82,11 +108,12 @@ export function AccountSidebar(props: AccountSidebarProps) {
                               onClick={(event) => {
                                 event.stopPropagation();
                                 props.onSelectRemoteAccessHost(host);
+                                setRemoteHostsOpen(false);
                               }}
-                              className={`rounded-xl px-3 py-2 text-left text-[13px] font-semibold transition-colors ${
+                              className={`cursor-pointer break-all rounded-xl px-3 py-2 text-left text-[13px] font-semibold leading-5 transition-colors ${
                                 props.remoteAccessInfo?.selectedHost === host
-                                  ? "bg-[#2A7FA6]/12 text-[#2A7FA6] dark:bg-[#89CFF0]/12 dark:text-[#89CFF0]"
-                                  : "text-[#2D2D44]/75 hover:bg-[#f3f7ff] dark:text-white/75 dark:hover:bg-[#1f252b]"
+                                  ? "bg-[#cfeeff] text-[#0f5d7a] dark:bg-[#0f4156] dark:text-[#d6f6ff]"
+                                  : "text-[#2D2D44]/80 hover:bg-[#d9edff] hover:text-[#0f5d7a] dark:text-white/75 dark:hover:bg-[#1a3950] dark:hover:text-[#d6f6ff]"
                               }`}
                             >
                               {host}
@@ -100,7 +127,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
                 {props.session.hasSession ? (
                   <button
                     onClick={props.onLogout}
-                    className="rounded-full border border-[#2D2D44]/18 px-2.5 py-1 text-[11px] font-semibold text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
+                    className="cursor-pointer rounded-full border border-[#2D2D44]/18 px-2.5 py-1 text-[11px] font-semibold text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
                   >
                     Logout
                   </button>
@@ -144,7 +171,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
             {props.capabilities.nativeDialogs ? (
               <button
                 onClick={props.onPickDirectory}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#3465A4] px-4 py-3.5 text-sm font-black text-white shadow-pop transition-all hover:bg-[#204A87]"
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#3465A4] px-4 py-3.5 text-sm font-black text-white shadow-pop transition-all hover:bg-[#204A87]"
               >
                 <FolderOpen size={18} />
                 Choose Download Folder
@@ -163,7 +190,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
               <div className="rounded-2xl border border-[#2D2D44]/10 bg-white/55 px-4 py-3 text-sm text-[#2D2D44] dark:border-white/10 dark:bg-[#1A1733]/60 dark:text-white">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold">
-                    {props.remoteAccessInfo?.enabled ? "scan to pair" : "starting remote access..."}
+                    {props.remoteAccessInfo?.enabled ? "Scan to Pair" : "Starting remote access..."}
                   </div>
                   <div className="flex items-center gap-2">
                     {props.remoteAccessInfo?.enabled ? (
@@ -173,7 +200,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
                           props.onDisableRemoteAccess();
                           setRemoteHostsOpen(false);
                         }}
-                        className="rounded-full border border-[#2D2D44]/18 px-2 py-1 text-[11px] font-semibold text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
+                        className="cursor-pointer rounded-full border border-[#2D2D44]/18 px-2 py-1 text-[11px] font-semibold text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
                       >
                         stop
                       </button>
@@ -184,7 +211,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
                         setRemoteOpen(false);
                         setRemoteHostsOpen(false);
                       }}
-                      className="rounded-full border border-[#2D2D44]/18 p-1.5 text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
+                      className="cursor-pointer rounded-full border border-[#2D2D44]/18 p-1.5 text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
                       aria-label="close remote pairing"
                     >
                       <X size={12} />
@@ -203,11 +230,11 @@ export function AccountSidebar(props: AccountSidebarProps) {
                     </div>
                     <button
                       type="button"
-                      onClick={() => void copyText(props.remoteAccessInfo?.pairingUrl || "")}
-                      className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#2D2D44]/18 px-3 py-1.5 text-[11px] font-black text-[#2D2D44]/75 transition-colors hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/70 dark:hover:bg-[#1f252b]"
+                      onClick={() => void handleCopyPairingLink()}
+                      className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#2A7FA6]/25 bg-[#f4fbff] px-3 py-1.5 text-[11px] font-black text-[#145676] transition-colors hover:border-[#2A7FA6]/45 hover:bg-[#d9edff] hover:text-[#0f5d7a] dark:border-[#89CFF0]/25 dark:bg-[#101f2a] dark:text-[#c7efff] dark:hover:bg-[#1a3950] dark:hover:text-[#e0f7ff]"
                     >
                       <Copy size={12} />
-                      copy link
+                      Copy Link
                     </button>
                   </>
                 ) : (
@@ -245,12 +272,13 @@ export function AccountSidebar(props: AccountSidebarProps) {
 
 async function copyText(value: string) {
   if (!value) {
-    return;
+    return false;
   }
   try {
     await navigator.clipboard.writeText(value);
+    return true;
   } catch {
-    // Ignore clipboard failures.
+    return false;
   }
 }
 

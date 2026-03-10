@@ -2657,7 +2657,7 @@ export default function App() {
               onToggleRating={(index) => void handleToggleRating(index)}
             />
             <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${activeSearchCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}>
-              <div className="overflow-hidden">
+              <div className={activeSearchCollapsed ? "overflow-hidden" : "overflow-visible"}>
                 <AccountSidebar
                   session={session}
                   settings={settings}
@@ -2665,6 +2665,7 @@ export default function App() {
                   remoteAccessInfo={remoteAccessInfo}
                   remoteAccessLoading={remoteAccessLoading}
                   searchParams={activeSearchParams}
+                  onNotify={pushToast}
                   onLogout={() => void handleLogout()}
                   onEnableRemoteAccess={() => void handleEnableRemoteAccess()}
                   onDisableRemoteAccess={() => void handleDisableRemoteAccess()}
