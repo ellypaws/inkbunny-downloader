@@ -212,6 +212,7 @@ func unwrapHTMLNode(node *html.Node) {
 	parent := node.Parent
 	for child := node.FirstChild; child != nil; {
 		next := child.NextSibling
+		node.RemoveChild(child)
 		parent.InsertBefore(child, node)
 		child = next
 	}

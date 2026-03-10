@@ -55,19 +55,13 @@ type BackendApi = {
   UpdateSettings(settings: AppSettings): Promise<AppSettings>
 }
 
+type WindowGoNamespace = {
+  App?: Partial<BackendApi>
+}
+
 declare global {
   interface Window {
-    go?: {
-      main?: {
-        App?: BackendApi
-      }
-      desktopapp?: {
-        App?: BackendApi
-      }
-      state?: {
-        App?: BackendApi
-      }
-    }
+    go?: Record<string, WindowGoNamespace | undefined>
     runtime?: {
       EventsOn?: (
         eventName: string,
@@ -78,15 +72,103 @@ declare global {
   }
 }
 
+const backendMethodNames = [
+  'GetSession',
+  'Login',
+  'EnsureGuestSession',
+  'Logout',
+  'UpdateRatings',
+  'OpenDownloadDirectory',
+  'OpenExternalURL',
+  'ProxyAvatarImageURL',
+  'Search',
+  'CancelSearchRequests',
+  'GetUnreadSubmissionCount',
+  'RefreshSearch',
+  'LoadMoreResults',
+  'GetKeywordSuggestions',
+  'GetUsernameSuggestions',
+  'GetWatching',
+  'GetReleaseStatus',
+  'GetBuildInfo',
+  'EnqueueDownloads',
+  'GetQueueSnapshot',
+  'GetWorkspaceState',
+  'SaveWorkspaceState',
+  'CancelDownload',
+  'CancelSubmission',
+  'RetryDownload',
+  'RetrySubmission',
+  'RetryAllDownloads',
+  'PauseAllDownloads',
+  'ResumeAllDownloads',
+  'StopAllDownloads',
+  'ClearQueue',
+  'ClearCompletedDownloads',
+  'ClearCompletedSubmissions',
+  'PickDownloadDirectory',
+  'SkipReleaseTag',
+  'UpdateSettings',
+] as const satisfies readonly (keyof BackendApi)[]
+
+let cachedBackend: BackendApi | null = null
+
 function getBackend(): BackendApi {
-  const backend =
-    window.go?.state?.App ??
-    window.go?.main?.App ??
-    window.go?.desktopapp?.App
-  if (!backend) {
-    throw new Error('Wails backend unavailable')
+  if (cachedBackend) {
+    return cachedBackend
   }
-  return backend
+
+  const namespaces = window.go
+  if (!namespaces || typeof namespaces !== 'object') {
+    throw new Error('Wails backend unavailable: window.go is missing')
+  }
+
+  const candidates = Object.entries(namespaces)
+    .map(([namespace, value]) => ({
+      namespace,
+      app: value?.App,
+    }))
+    .filter(
+      (
+        candidate,
+      ): candidate is {
+        namespace: string
+        app: Partial<BackendApi>
+      } => candidate.app !== undefined && candidate.app !== null,
+    )
+    .map((candidate) => {
+      const availableMethods = backendMethodNames.filter(
+        (methodName) => typeof candidate.app[methodName] === 'function',
+      )
+      return {
+        ...candidate,
+        availableMethods,
+        missingMethods: backendMethodNames.filter(
+          (methodName) => typeof candidate.app[methodName] !== 'function',
+        ),
+      }
+    })
+    .sort((left, right) => {
+      if (right.availableMethods.length !== left.availableMethods.length) {
+        return right.availableMethods.length - left.availableMethods.length
+      }
+      return left.namespace.localeCompare(right.namespace)
+    })
+
+  const bestCandidate = candidates[0]
+  if (!bestCandidate) {
+    throw new Error(
+      'Wails backend unavailable: no bound App namespace was found on window.go',
+    )
+  }
+  if (bestCandidate.missingMethods.length > 0) {
+    throw new Error(
+      `Wails backend binding "${bestCandidate.namespace}.App" is incomplete. Missing methods: ${bestCandidate.missingMethods.join(', ')}`,
+    )
+  }
+
+  cachedBackend = bestCandidate.app as BackendApi
+  return cachedBackend
 }
 
 export const backend = {

@@ -524,6 +524,7 @@ export namespace types {
 	    activeSubmissionId: string;
 	    selectedSubmissionIds: string[];
 	    searchCollapsed: boolean;
+	    showCustomThumbnails: boolean;
 	    autoQueueEnabled: boolean;
 	    trackedDownloadSubmissionIds: string[];
 	    autoQueueNextRunAt: number;
@@ -545,6 +546,7 @@ export namespace types {
 	        this.activeSubmissionId = source["activeSubmissionId"];
 	        this.selectedSubmissionIds = source["selectedSubmissionIds"];
 	        this.searchCollapsed = source["searchCollapsed"];
+	        this.showCustomThumbnails = source["showCustomThumbnails"];
 	        this.autoQueueEnabled = source["autoQueueEnabled"];
 	        this.trackedDownloadSubmissionIds = source["trackedDownloadSubmissionIds"];
 	        this.autoQueueNextRunAt = source["autoQueueNextRunAt"];

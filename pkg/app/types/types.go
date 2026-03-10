@@ -73,6 +73,7 @@ type SavedSearchTab struct {
 	ActiveSubmissionID           string            `json:"activeSubmissionId"`
 	SelectedSubmissionIDs        []string          `json:"selectedSubmissionIds"`
 	SearchCollapsed              bool              `json:"searchCollapsed"`
+	ShowCustomThumbnails         bool              `json:"showCustomThumbnails"`
 	AutoQueueEnabled             bool              `json:"autoQueueEnabled"`
 	TrackedDownloadSubmissionIDs []string          `json:"trackedDownloadSubmissionIds"`
 	AutoQueueNextRunAt           int64             `json:"autoQueueNextRunAt"`
