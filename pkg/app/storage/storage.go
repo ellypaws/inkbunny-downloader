@@ -3,10 +3,12 @@ package storage
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ellypaws/inkbunny"
 
@@ -49,27 +51,22 @@ func (s *StateStore) Load() (types.StoredState, error) {
 		return state, err
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
-		return state, err
+		defaultState := DefaultStoredState()
+		_ = s.backupInvalidStateFile()
+		_ = s.writeStateLocked(defaultState)
+		return defaultState, nil
 	}
-	state.Settings.MaxActive = apputils.NormalizeMaxActive(state.Settings.MaxActive)
-	if state.Settings.DownloadDirectory == "" {
-		state.Settings.DownloadDirectory = DefaultDownloadDirectory()
-	}
-	state.Settings.DownloadPattern = downloads.NormalizePattern(state.Settings.DownloadPattern)
-	if state.Session.EffectiveTheme == "" {
-		state.Session.EffectiveTheme = themeName(state.Settings.DarkMode)
-	}
-	if state.Session.AvatarURL == "" {
-		state.Session.AvatarURL = apputils.DefaultAvatarURL
-	}
-	state.Session.Settings = state.Settings
-	return state, nil
+	return normalizeStoredState(state), nil
 }
 
 func (s *StateStore) Save(state types.StoredState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	return s.writeStateLocked(state)
+}
+
+func (s *StateStore) writeStateLocked(state types.StoredState) error {
 	if err := os.MkdirAll(s.root, 0o755); err != nil {
 		return err
 	}
@@ -167,4 +164,43 @@ func themeName(darkMode bool) string {
 		return "dark"
 	}
 	return "light"
+}
+
+func normalizeStoredState(state types.StoredState) types.StoredState {
+	defaultState := DefaultStoredState()
+
+	state.Settings.MaxActive = apputils.NormalizeMaxActive(state.Settings.MaxActive)
+	if strings.TrimSpace(state.Settings.DownloadDirectory) == "" {
+		state.Settings.DownloadDirectory = DefaultDownloadDirectory()
+	}
+	state.Settings.DownloadPattern = downloads.NormalizePattern(state.Settings.DownloadPattern)
+	if state.Settings.DownloadPattern == "" {
+		state.Settings.DownloadPattern = defaultState.Settings.DownloadPattern
+	}
+	state.Workspace.ActiveTabID = strings.TrimSpace(state.Workspace.ActiveTabID)
+	if state.Workspace.Tabs == nil {
+		state.Workspace.Tabs = []types.SavedSearchTab{}
+	}
+	if state.Session.EffectiveTheme == "" {
+		state.Session.EffectiveTheme = themeName(state.Settings.DarkMode)
+	}
+	if state.Session.AvatarURL == "" {
+		state.Session.AvatarURL = apputils.DefaultAvatarURL
+	}
+	state.Session.Settings = state.Settings
+	return state
+}
+
+func (s *StateStore) backupInvalidStateFile() error {
+	if strings.TrimSpace(s.path) == "" {
+		return nil
+	}
+	backupPath := fmt.Sprintf("%s.invalid-%s", s.path, time.Now().UTC().Format("20060102T150405"))
+	if err := os.Rename(s.path, backupPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

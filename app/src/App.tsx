@@ -615,6 +615,10 @@ export default function App() {
     );
   }
 
+  function applyQueueSnapshot(snapshot: QueueSnapshot | null | undefined) {
+    setQueue(normalizeQueueSnapshot(snapshot));
+  }
+
   function applyWorkspaceSnapshot(
     workspace: WorkspaceState,
     nextSession = sessionRef.current,
@@ -727,6 +731,7 @@ export default function App() {
     }
 
     const result = await backend.debugResetState(scope);
+    result.queue = normalizeQueueSnapshot(result.queue);
     applySession(result.session, result.settings);
 
     if (scope === "state" || scope === "workspace" || scope === "all") {
@@ -734,7 +739,7 @@ export default function App() {
     }
 
     if (scope === "queue" || scope === "all") {
-      setQueue(result.queue);
+      applyQueueSnapshot(result.queue);
     }
 
     if (scope === "login" || scope === "state" || scope === "all") {
@@ -769,7 +774,7 @@ export default function App() {
       buildInfo: nextBuildInfo,
       session: nextSession,
       workspace,
-      queue: snapshot,
+      queue: normalizeQueueSnapshot(snapshot),
     };
   }
 
@@ -777,7 +782,7 @@ export default function App() {
     setBuildInfo(snapshot.buildInfo);
     applySession(snapshot.session);
     applyWorkspaceSnapshot(snapshot.workspace, snapshot.session, snapshot.session.settings);
-    setQueue(snapshot.queue);
+    applyQueueSnapshot(snapshot.queue);
     setLoginOpen(!snapshot.session.hasSession);
     setAuthError("");
     workspaceLoadedRef.current = true;
@@ -1157,7 +1162,7 @@ export default function App() {
   useEffect(() => {
     const unsubscribeProgress = onRuntimeEvent<DownloadProgressEvent>("download-progress", (event) => {
       if (event.queue) {
-        setQueue(event.queue);
+        applyQueueSnapshot(event.queue);
       }
     });
     const unsubscribeDebugLogs = onRuntimeEvent<BackendDebugEvent>("app-debug-log", (event) => {
@@ -1572,7 +1577,7 @@ export default function App() {
 
     try {
       const snapshot = await backend.clearCompletedSubmissions(submissionIds);
-      setQueue(snapshot);
+      applyQueueSnapshot(snapshot);
       cleared = true;
       updateQueueMessage(
         `${formatCountLabel(submissionIds.length, "submission")} cleared automatically.`,
@@ -1601,7 +1606,7 @@ export default function App() {
   async function handleClearCompleted(auto = false) {
     try {
       const snapshot = await backend.clearCompletedDownloads();
-      setQueue(snapshot);
+      applyQueueSnapshot(snapshot);
       if (auto) {
         updateQueueMessage("Completed downloads cleared automatically.", "success", "queue-auto-clear-completed");
         return;
@@ -2049,7 +2054,7 @@ export default function App() {
           downloadPattern: settingsRef.current.downloadPattern,
         },
       );
-      setQueue(snapshot);
+      applyQueueSnapshot(snapshot);
       updateQueueMessage(
         `Queued ${eligibleSubmissionIds.length} submission${eligibleSubmissionIds.length === 1 ? "" : "s"}.`,
         "success",
@@ -2092,7 +2097,7 @@ export default function App() {
       );
       const latestSnapshot = snapshots[snapshots.length - 1];
       if (latestSnapshot) {
-        setQueue(latestSnapshot);
+        applyQueueSnapshot(latestSnapshot);
       }
       updateQueueMessage(
         `Stopping ${formatCountLabel(trackedSubmissionIds.length, "submission")} for this tab.`,
@@ -2156,7 +2161,7 @@ export default function App() {
       previous.filter((value) => value !== submissionId),
     );
     try {
-      setQueue(await backend.cancelSubmission(submissionId));
+      applyQueueSnapshot(await backend.cancelSubmission(submissionId));
     } catch (error) {
       const message = getErrorMessage(error, "Failed to cancel download.");
       updateQueueMessage(message);
@@ -2169,7 +2174,7 @@ export default function App() {
       return;
     }
     try {
-      setQueue(await backend.retryDownload(jobId));
+      applyQueueSnapshot(await backend.retryDownload(jobId));
       updateQueueMessage(
         "Retrying failed download.",
         "success",
@@ -2187,7 +2192,7 @@ export default function App() {
       return;
     }
     try {
-      setQueue(await backend.retrySubmission(submissionId));
+      applyQueueSnapshot(await backend.retrySubmission(submissionId));
       updateQueueMessage(
         "Retrying failed submission.",
         "success",
@@ -2205,7 +2210,7 @@ export default function App() {
       return;
     }
     try {
-      setQueue(await backend.retryAllDownloads());
+      applyQueueSnapshot(await backend.retryAllDownloads());
       updateQueueMessage(
         "Retrying all failed downloads.",
         "success",
@@ -2223,7 +2228,7 @@ export default function App() {
       return;
     }
     try {
-      setQueue(await backend.pauseAllDownloads());
+      applyQueueSnapshot(await backend.pauseAllDownloads());
       updateQueueMessage(
         "Pausing queued and active downloads.",
         "success",
@@ -2241,7 +2246,7 @@ export default function App() {
       return;
     }
     try {
-      setQueue(await backend.resumeAllDownloads());
+      applyQueueSnapshot(await backend.resumeAllDownloads());
       updateQueueMessage(
         "Resuming queued downloads.",
         "success",
@@ -2260,7 +2265,7 @@ export default function App() {
     }
     setPendingDownloadSubmissionIds([]);
     try {
-      setQueue(await backend.stopAllDownloads());
+      applyQueueSnapshot(await backend.stopAllDownloads());
       updateQueueMessage(
         "Stopping all active and queued downloads.",
         "success",
@@ -2660,7 +2665,7 @@ export default function App() {
               backend
                 .clearQueue()
                 .then((snapshot) => {
-                  setQueue(snapshot);
+                  applyQueueSnapshot(snapshot);
                   setPendingDownloadSubmissionIds([]);
                   updateQueueMessage("Queue cleared.", "success", "queue-cleared");
                 })
@@ -2682,7 +2687,7 @@ export default function App() {
             }
             onMaxActiveChange={handleMaxActiveChange}
             onCancel={(jobId) => {
-              backend.cancelDownload(jobId).then(setQueue).catch(() => undefined);
+              backend.cancelDownload(jobId).then(applyQueueSnapshot).catch(() => undefined);
             }}
             onCancelSubmission={(submissionId) => void handleCancelSubmission(submissionId)}
             onRetry={(jobId) => void handleRetryDownload(jobId)}
@@ -3245,6 +3250,94 @@ function createIdleLoadMoreState(): SearchTabLoadMoreState {
   };
 }
 
+function normalizeQueueSnapshot(snapshot: QueueSnapshot | null | undefined): QueueSnapshot {
+  const input: Record<string, unknown> = isRecord(snapshot) ? snapshot : {};
+  const jobs = Array.isArray(input.jobs) ? input.jobs : EMPTY_QUEUE.jobs;
+
+  return {
+    jobs,
+    paused: Boolean(input.paused),
+    queuedCount: normalizeQueueCount(input.queuedCount, jobs, "queued"),
+    activeCount: normalizeQueueCount(input.activeCount, jobs, "active"),
+    completedCount: normalizeQueueCount(input.completedCount, jobs, "completed"),
+    failedCount: normalizeQueueCount(input.failedCount, jobs, "failed"),
+    cancelledCount: normalizeQueueCount(input.cancelledCount, jobs, "cancelled"),
+  };
+}
+
+function normalizeQueueCount(
+  value: unknown,
+  jobs: QueueSnapshot["jobs"],
+  status: string,
+) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : jobs.filter((job) => job?.status === status).length;
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null;
+}
+
+function getStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function getStringRecord(value: unknown) {
+  if (!isRecord(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => typeof item === "string"),
+  );
+}
+
+function getBoolean(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function getNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeSavedSearchParams(
+  input: unknown,
+  mode: SearchTabMode,
+  session: SessionInfo,
+  settings: AppSettings,
+) {
+  const value = isRecord(input) ? input : {};
+  const base = {
+    ...buildDefaultSearch(session, settings),
+    ...value,
+    artistNames: getStringArray(value.artistNames),
+    submissionTypes: Array.isArray(value.submissionTypes)
+      ? value.submissionTypes.filter(
+          (item): item is number => typeof item === "number" && Number.isFinite(item),
+        )
+      : [],
+  };
+  return syncSearchParamsWithSession(base, session, settings, mode);
+}
+
+function normalizeSavedSearchResponse(input: unknown, session: SessionInfo) {
+  if (!isRecord(input) || typeof input.searchId !== "string" || !input.searchId.trim()) {
+    return null;
+  }
+  const results = Array.isArray(input.results) ? [...input.results] : [];
+  return {
+    searchId: input.searchId,
+    page: getNumber(input.page, 1),
+    pagesCount: Math.max(getNumber(input.pagesCount, 1), 1),
+    resultsCount: Math.max(getNumber(input.resultsCount, results.length), results.length),
+    results,
+    session,
+  };
+}
+
 function delay(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms);
@@ -3385,20 +3478,17 @@ function restoreSavedSearchTab(
   session: SessionInfo,
   settings: AppSettings,
 ): SearchTabState | null {
-  const id = savedTab.id.trim();
+  const source: Record<string, unknown> = isRecord(savedTab) ? savedTab : {};
+  const id = typeof source.id === "string" ? source.id.trim() : "";
   if (!id) {
     return null;
   }
-  const mode: SearchTabMode = savedTab.mode === "unread" ? "unread" : "default";
-  const searchParams = syncSearchParamsWithSession(
-    savedTab.searchParams ?? buildDefaultSearch(session, settings),
-    session,
-    settings,
-    mode,
-  );
-  const results = Array.isArray(savedTab.results) ? [...savedTab.results] : [];
+  const mode: SearchTabMode = source.mode === "unread" ? "unread" : "default";
+  const searchParams = normalizeSavedSearchParams(source.searchParams, mode, session, settings);
+  const results = Array.isArray(source.results) ? [...source.results] : [];
+  const searchResponse = normalizeSavedSearchResponse(source.searchResponse, session);
   const activeSubmissionId =
-    savedTab.activeSubmissionId ||
+    (typeof source.activeSubmissionId === "string" ? source.activeSubmissionId : "") ||
     results[0]?.submissionId ||
     "";
 
@@ -3406,29 +3496,24 @@ function restoreSavedSearchTab(
     id,
     mode,
     searchParams,
-    artistDraft: savedTab.artistDraft ?? "",
-    artistAvatars: { ...(savedTab.artistAvatars ?? {}) },
-    artistValidation: { ...(savedTab.artistValidation ?? {}) },
-    searchResponse: savedTab.searchResponse
-      ? {
-          ...savedTab.searchResponse,
-          results: [...savedTab.searchResponse.results],
-        }
-      : null,
+    artistDraft: typeof source.artistDraft === "string" ? source.artistDraft : "",
+    artistAvatars: getStringRecord(source.artistAvatars),
+    artistValidation: getStringRecord(source.artistValidation) as Record<string, ArtistValidationState>,
+    searchResponse,
     results,
     activeSubmissionId,
-    selectedSubmissionIds: [...(savedTab.selectedSubmissionIds ?? [])],
+    selectedSubmissionIds: getStringArray(source.selectedSubmissionIds),
     searchLoading: false,
-    searchCollapsed: Boolean(savedTab.searchCollapsed),
-    showCustomThumbnails: savedTab.showCustomThumbnails !== false,
+    searchCollapsed: getBoolean(source.searchCollapsed, false),
+    showCustomThumbnails: getBoolean(source.showCustomThumbnails, true),
     searchError: "",
     resultsRefreshToken: 0,
     loadMoreState: createIdleLoadMoreState(),
-    autoQueueEnabled: Boolean(savedTab.autoQueueEnabled),
-    trackedDownloadSubmissionIds: [...(savedTab.trackedDownloadSubmissionIds ?? [])],
+    autoQueueEnabled: getBoolean(source.autoQueueEnabled, false),
+    trackedDownloadSubmissionIds: getStringArray(source.trackedDownloadSubmissionIds),
     autoQueueNextRunAt:
-      savedTab.autoQueueEnabled && savedTab.autoQueueNextRunAt > 0
-        ? savedTab.autoQueueNextRunAt
+      getBoolean(source.autoQueueEnabled, false) && getNumber(source.autoQueueNextRunAt, 0) > 0
+        ? getNumber(source.autoQueueNextRunAt, 0)
         : 0,
     autoQueuePhase: "idle",
   };

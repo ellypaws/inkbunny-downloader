@@ -181,6 +181,12 @@ type QueueSnapshot struct {
 	CancelledCount int                   `json:"cancelledCount"`
 }
 
+func EmptyQueueSnapshot() QueueSnapshot {
+	return QueueSnapshot{
+		Jobs: []DownloadJobSnapshot{},
+	}
+}
+
 type DownloadJobSnapshot struct {
 	ID           string  `json:"id"`
 	SubmissionID string  `json:"submissionId"`

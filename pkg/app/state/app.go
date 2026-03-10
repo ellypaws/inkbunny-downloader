@@ -301,84 +301,84 @@ func (a *App) PickDownloadDirectory() (string, error) {
 
 func (a *App) GetQueueSnapshot() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.Snapshot()
 }
 
 func (a *App) CancelDownload(jobID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.Cancel(jobID)
 }
 
 func (a *App) CancelSubmission(submissionID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.CancelSubmission(submissionID)
 }
 
 func (a *App) RetryDownload(jobID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.Retry(jobID)
 }
 
 func (a *App) RetrySubmission(submissionID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.RetrySubmission(submissionID)
 }
 
 func (a *App) RetryAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.RetryAll()
 }
 
 func (a *App) PauseAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.PauseAll()
 }
 
 func (a *App) ResumeAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.ResumeAll()
 }
 
 func (a *App) StopAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.CancelAll()
 }
 
 func (a *App) ClearQueue() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.Clear()
 }
 
 func (a *App) ClearCompletedDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.ClearCompleted()
 }
 
 func (a *App) ClearCompletedSubmissions(submissionIDs []string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return types.QueueSnapshot{}
+		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.ClearCompletedSubmissions(submissionIDs)
 }
