@@ -906,34 +906,119 @@ export default function App() {
   }
 
   function applyPendingHydratedResults(searchId: string, results: SubmissionCard[]) {
+    const merged = mergePendingHydratedResults(searchId, results);
+    if (merged.matchedSubmissionIds.length === 0) {
+      return results;
+    }
+    clearPendingHydratedResults(searchId, merged.matchedSubmissionIds);
+    return merged.results;
+  }
+
+  function mergePendingHydratedResults(searchId: string, results: SubmissionCard[]) {
     const pending = pendingHydratedResultsRef.current.get(searchId);
     if (!pending || pending.size === 0 || results.length === 0) {
-      return results;
+      return {
+        results,
+        matchedSubmissionIds: [] as string[],
+      };
     }
 
     let changed = false;
-    const appliedSubmissionIds: string[] = [];
+    const matchedSubmissionIds: string[] = [];
     const nextResults = results.map((result) => {
       const hydrated = pending.get(result.submissionId);
-      if (!hydrated || areSubmissionCardsEqual(result, hydrated)) {
+      if (!hydrated) {
+        return result;
+      }
+      matchedSubmissionIds.push(result.submissionId);
+      if (areSubmissionCardsEqual(result, hydrated)) {
         return result;
       }
       changed = true;
-      appliedSubmissionIds.push(result.submissionId);
       return hydrated;
     });
 
-    if (!changed) {
-      return results;
-    }
+    return {
+      results: changed ? nextResults : results,
+      matchedSubmissionIds,
+    };
+  }
 
-    for (const submissionId of appliedSubmissionIds) {
+  function clearPendingHydratedResults(searchId: string, submissionIds: string[]) {
+    if (!searchId || submissionIds.length === 0) {
+      return;
+    }
+    const pending = pendingHydratedResultsRef.current.get(searchId);
+    if (!pending || pending.size === 0) {
+      return;
+    }
+    for (const submissionId of submissionIds) {
       pending.delete(submissionId);
     }
     if (pending.size === 0) {
       pendingHydratedResultsRef.current.delete(searchId);
     }
-    return nextResults;
+  }
+
+  function flushPendingHydratedResultsIntoTabs(tabs: SearchTabState[]) {
+    if (pendingHydratedResultsRef.current.size === 0) {
+      return tabs;
+    }
+
+    let changed = false;
+    const matchedBySearchId = new Map<string, Set<string>>();
+    const nextTabs = tabs.map((tab) => {
+      const searchId = tab.searchResponse?.searchId ?? "";
+      if (!searchId) {
+        return tab;
+      }
+
+      const mergedTabResults = mergePendingHydratedResults(searchId, tab.results);
+      const mergedSearchResponseResults = mergePendingHydratedResults(
+        searchId,
+        tab.searchResponse?.results ?? [],
+      );
+
+      if (mergedTabResults.matchedSubmissionIds.length > 0) {
+        const matched = matchedBySearchId.get(searchId) ?? new Set<string>();
+        for (const submissionId of mergedTabResults.matchedSubmissionIds) {
+          matched.add(submissionId);
+        }
+        matchedBySearchId.set(searchId, matched);
+      }
+      if (mergedSearchResponseResults.matchedSubmissionIds.length > 0) {
+        const matched = matchedBySearchId.get(searchId) ?? new Set<string>();
+        for (const submissionId of mergedSearchResponseResults.matchedSubmissionIds) {
+          matched.add(submissionId);
+        }
+        matchedBySearchId.set(searchId, matched);
+      }
+
+      if (
+        mergedTabResults.results === tab.results &&
+        mergedSearchResponseResults.results === tab.searchResponse?.results
+      ) {
+        return tab;
+      }
+
+      changed = true;
+      return {
+        ...tab,
+        results: mergedTabResults.results,
+        searchResponse: tab.searchResponse
+          ? {
+              ...tab.searchResponse,
+              results: mergedSearchResponseResults.results,
+            }
+          : tab.searchResponse,
+      };
+    });
+
+    for (const [searchId, submissionIds] of matchedBySearchId.entries()) {
+      clearPendingHydratedResults(searchId, [...submissionIds]);
+    }
+
+    return changed ? nextTabs : tabs;
   }
 
   function areHydratedResultsMounted(update: SearchResultsHydratedUpdate) {
@@ -1179,6 +1264,12 @@ export default function App() {
   }
 
   useEffect(() => void (tabsRef.current = tabs), [tabs]);
+  useEffect(() => {
+    if (pendingHydratedResultsRef.current.size === 0) {
+      return;
+    }
+    setTabs((previous) => flushPendingHydratedResultsIntoTabs(previous));
+  }, [tabs]);
   useEffect(() => void (activeTabIdRef.current = activeTabId), [activeTabId]);
   useEffect(() => void (queueRef.current = queue), [queue]);
   useEffect(
