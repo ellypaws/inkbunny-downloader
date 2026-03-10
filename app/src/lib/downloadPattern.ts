@@ -106,6 +106,19 @@ export const DOWNLOAD_PATTERN_TOKENS: DownloadPatternToken[] = [
     example: "27491",
   },
   {
+    name: "submission_name",
+    label: "Submission name",
+    description: "Submission title.",
+    example: "Star Patrol",
+  },
+  {
+    name: "submission_name_auto_omit",
+    label: "Submission name auto omit",
+    description:
+      "Submission title, but omitted automatically when the submission only has one file.",
+    example: "Star Patrol",
+  },
+  {
     name: "number",
     label: "File number",
     description: "1-based file order inside the submission.",
@@ -127,6 +140,13 @@ export const DOWNLOAD_PATTERN_TOKENS: DownloadPatternToken[] = [
     name: "submission_id",
     label: "Submission ID",
     description: "Numeric submission ID.",
+    example: "908172",
+  },
+  {
+    name: "submission_id_auto_omit",
+    label: "Submission ID auto omit",
+    description:
+      "Submission ID, but omitted automatically when the submission only has one file.",
     example: "908172",
   },
   {
@@ -171,10 +191,13 @@ const PREVIEW_VALUES: Record<string, string> = {
   file_name: "27491_elly_star-patrol",
   file_name_ext: "27491_elly_star-patrol",
   file_id: "27491",
+  submission_name: "Star Patrol",
+  submission_name_auto_omit: "Star Patrol",
   number: "3",
   ext: "png",
   extension: "png",
   submission_id: "908172",
+  submission_id_auto_omit: "908172",
 }
 
 export function tokenizeDownloadPattern(value: string): DownloadPatternSegment[] {

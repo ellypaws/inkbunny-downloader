@@ -212,6 +212,13 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 		return fileStem, true
 	case "file_id":
 		return ctx.File.FileID.String(), true
+	case "submission_name":
+		return ctx.Submission.Title, true
+	case "submission_name_auto_omit":
+		if submissionHasMultipleFiles(ctx.Submission) {
+			return ctx.Submission.Title, true
+		}
+		return "", true
 	case "number":
 		return fmt.Sprintf("%d", ctx.Number), true
 	case "ext":
@@ -220,6 +227,11 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 		return ext, true
 	case "submission_id":
 		return ctx.Submission.SubmissionID.String(), true
+	case "submission_id_auto_omit":
+		if submissionHasMultipleFiles(ctx.Submission) {
+			return ctx.Submission.SubmissionID.String(), true
+		}
+		return "", true
 	case "pool_id":
 		if ctx.Pool == nil {
 			return "", true
@@ -426,6 +438,16 @@ func resolveFileNumber(file inkbunny.File) int {
 		return 1
 	}
 	return number
+}
+
+func submissionHasMultipleFiles(submission inkbunny.SubmissionDetails) bool {
+	if len(submission.Files) > 1 {
+		return true
+	}
+	if submission.PageCount.Int() > 1 {
+		return true
+	}
+	return false
 }
 
 func coarseSubmissionRating(submission inkbunny.SubmissionDetails) string {
