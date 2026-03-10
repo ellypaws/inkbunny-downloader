@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   collectUnknownDownloadTokens,
@@ -37,8 +37,24 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
   }));
   const [tokensExpanded, setTokensExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const draft =
-    draftState.syncedValue === externalValue ? draftState.value : externalValue;
+  const draft = draftState.value;
+
+  useEffect(() => {
+    setDraftState((current) => {
+      const isDirty = current.value !== current.syncedValue;
+      const nextValue = isDirty ? current.value : externalValue;
+      if (
+        current.value === nextValue &&
+        current.syncedValue === externalValue
+      ) {
+        return current;
+      }
+      return {
+        value: nextValue,
+        syncedValue: externalValue,
+      };
+    });
+  }, [externalValue]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -87,17 +103,17 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
   );
 
   function handleChange(value: string) {
-    setDraftState({
+    setDraftState((current) => ({
       value: normalizeEditorText(value),
-      syncedValue: externalValue,
-    });
+      syncedValue: current.syncedValue,
+    }));
   }
 
   function handleSave() {
     const nextValue = normalizePatternDraft(draft);
     setDraftState({
       value: nextValue,
-      syncedValue: externalValue,
+      syncedValue: nextValue,
     });
     if (nextValue !== normalizePatternDraft(props.value)) {
       props.onCommit(nextValue);
@@ -118,11 +134,9 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     const tokenText = `{${tokenName}}`;
     if (!textarea) {
       setDraftState((current) => {
-        const currentDraft =
-          current.syncedValue === externalValue ? current.value : externalValue;
         return {
-          value: `${currentDraft}${tokenText}`,
-          syncedValue: externalValue,
+          value: `${current.value}${tokenText}`,
+          syncedValue: current.syncedValue,
         };
       });
       return;
@@ -132,10 +146,10 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     const end = textarea.selectionEnd ?? draft.length;
     const nextValue = `${draft.slice(0, start)}${tokenText}${draft.slice(end)}`;
     nextSelectionRef.current = start + tokenText.length;
-    setDraftState({
+    setDraftState((current) => ({
       value: nextValue,
-      syncedValue: externalValue,
-    });
+      syncedValue: current.syncedValue,
+    }));
   }
 
   return (

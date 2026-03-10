@@ -60,6 +60,7 @@ const UNREAD_POLL_INTERVAL_MS = 60_000;
 const LOAD_ALL_DELAY_MS = 500;
 const AUTO_QUEUE_INTERVAL_MS = 60_000;
 const AUTO_QUEUE_TICK_MS = 1_000;
+const LOCAL_WORKSPACE_INPUT_PROTECTION_MS = 2_500;
 
 type SearchTabLoadMoreMode = "idle" | "more" | "all";
 type AutoQueuePhase = "idle" | "searching" | "queueing";
@@ -165,6 +166,7 @@ export default function App() {
   const pendingHydratedResultsRef = useRef(
     new Map<string, Map<string, SubmissionCard>>(),
   );
+  const recentWorkspaceInputEditsRef = useRef<Map<string, number>>(new Map());
   const sessionRevisionRef = useRef(0);
   const settingsRevisionRef = useRef(0);
   const workspaceRevisionRef = useRef(0);
@@ -375,6 +377,38 @@ export default function App() {
 
   function updateTab(tabId: string, updater: (tab: SearchTabState) => SearchTabState) {
     setTabs((previous) => previous.map((tab) => (tab.id === tabId ? updater(tab) : tab)));
+  }
+
+  function markWorkspaceInputEdit(tabId: string) {
+    if (!tabId) {
+      return;
+    }
+    recentWorkspaceInputEditsRef.current.set(tabId, Date.now());
+  }
+
+  function getProtectedWorkspaceInputTabIds(now = Date.now()) {
+    const protectedTabIds = new Set<string>();
+    const staleTabIds: string[] = [];
+    for (const [tabId, editedAt] of recentWorkspaceInputEditsRef.current.entries()) {
+      if (now - editedAt <= LOCAL_WORKSPACE_INPUT_PROTECTION_MS) {
+        protectedTabIds.add(tabId);
+        continue;
+      }
+      staleTabIds.push(tabId);
+    }
+    for (const tabId of staleTabIds) {
+      recentWorkspaceInputEditsRef.current.delete(tabId);
+    }
+    if (
+      activeTabIdRef.current &&
+      (
+        workspacePersistTimeoutRef.current !== null ||
+        pendingWorkspaceEchoesRef.current.length > 0
+      )
+    ) {
+      protectedTabIds.add(activeTabIdRef.current);
+    }
+    return protectedTabIds;
   }
 
   function applyArtistResolution(
@@ -674,13 +708,20 @@ export default function App() {
     nextSession = sessionRef.current,
     nextSettings = settingsRef.current,
   ) {
-    pendingWorkspaceEchoesRef.current = [];
     const restoredTabs = restoreWorkspaceTabs(workspace, nextSession, nextSettings);
+    const protectedTabIds = getProtectedWorkspaceInputTabIds();
     const mergedTabs = mergeWorkspaceTabsWithTransientState(
       restoredTabs,
       tabsRef.current,
+      protectedTabIds,
     );
-    const nextActiveTabId = resolveActiveWorkspaceTabId(workspace, mergedTabs);
+    const nextActiveTabId = resolveActiveWorkspaceTabId(
+      workspace,
+      mergedTabs,
+      activeTabIdRef.current,
+      protectedTabIds,
+    );
+    pendingWorkspaceEchoesRef.current = [];
     tabsRef.current = mergedTabs;
     activeTabIdRef.current = nextActiveTabId;
     setTabs(mergedTabs);
@@ -2877,6 +2918,7 @@ export default function App() {
                 if (!activeTab) {
                   return;
                 }
+                markWorkspaceInputEdit(activeTab.id);
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   searchParams: normalizeSearchParamsForMode(
@@ -2891,6 +2933,7 @@ export default function App() {
                 if (!activeTab) {
                   return;
                 }
+                markWorkspaceInputEdit(activeTab.id);
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   artistDraft: value,
@@ -2911,6 +2954,7 @@ export default function App() {
                 if (!normalizeArtistToken(artistName)) {
                   return;
                 }
+                markWorkspaceInputEdit(activeTab.id);
                 updateTab(activeTab.id, (currentTab) =>
                   commitArtistSelection(currentTab, artistName, {
                     avatarUrl: matchedSuggestion?.avatarUrl || "",
@@ -2925,6 +2969,7 @@ export default function App() {
                 if (!activeTab) {
                   return;
                 }
+                markWorkspaceInputEdit(activeTab.id);
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   searchParams: {
@@ -3010,6 +3055,7 @@ export default function App() {
                     if (!activeTab) {
                       return;
                     }
+                    markWorkspaceInputEdit(activeTab.id);
                     updateTab(activeTab.id, (currentTab) => ({
                       ...currentTab,
                       searchParams: {
@@ -4061,14 +4107,19 @@ function restoreWorkspaceTabs(
 function mergeWorkspaceTabsWithTransientState(
   restoredTabs: SearchTabState[],
   currentTabs: SearchTabState[],
+  protectedTabIds: Set<string> = new Set(),
 ) {
   const currentTabsById = new Map(currentTabs.map((tab) => [tab.id, tab]));
-  return restoredTabs.map((restoredTab) => {
+  const restoredTabIds = new Set(restoredTabs.map((tab) => tab.id));
+  const mergedTabs = restoredTabs.map((restoredTab) => {
     const currentTab = currentTabsById.get(restoredTab.id);
     if (!currentTab) {
       return restoredTab;
     }
 
+    const preserveLocalInputDraft =
+      protectedTabIds.has(restoredTab.id) &&
+      currentTab.mode === restoredTab.mode;
     const preserveCurrentSearchState =
       currentTab.searchLoading ||
       currentTab.loadMoreState.mode !== "idle" ||
@@ -4079,6 +4130,12 @@ function mergeWorkspaceTabsWithTransientState(
 
     return {
       ...restoredTab,
+      ...(preserveLocalInputDraft
+        ? {
+            searchParams: cloneSearchParams(currentTab.searchParams),
+            artistDraft: currentTab.artistDraft,
+          }
+        : {}),
       searchLoading: currentTab.searchLoading,
       searchError: currentTab.searchError,
       resultsRefreshToken: currentTab.resultsRefreshToken,
@@ -4099,15 +4156,28 @@ function mergeWorkspaceTabsWithTransientState(
         : {}),
     };
   });
+
+  for (const currentTab of currentTabs) {
+    if (protectedTabIds.has(currentTab.id) && !restoredTabIds.has(currentTab.id)) {
+      mergedTabs.push(currentTab);
+    }
+  }
+
+  return mergedTabs;
 }
 
 function resolveActiveWorkspaceTabId(
   workspace: WorkspaceState | null | undefined,
   restoredTabs: SearchTabState[],
+  currentActiveTabId = "",
+  protectedTabIds: Set<string> = new Set(),
 ) {
   const requestedId = workspace?.activeTabId ?? "";
   return restoredTabs.some((tab) => tab.id === requestedId)
     ? requestedId
+    : protectedTabIds.has(currentActiveTabId) &&
+        restoredTabs.some((tab) => tab.id === currentActiveTabId)
+      ? currentActiveTabId
     : restoredTabs[0]?.id ?? "";
 }
 
