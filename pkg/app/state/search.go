@@ -96,15 +96,23 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 	if err != nil {
 		return types.SearchResponse{}, err
 	}
+	a.emitDebugLog("debug", "search.run", "search request built", map[string]any{
+		"artistFilters": artistFilters,
+		"request":       debugSearchRequestFields(req),
+	})
 	ratingsMask := userRatingsMask(user)
 	key, normalizedReq, err := makeSearchCacheKey(user, ratingsMask, req)
 	if err != nil {
 		return types.SearchResponse{}, err
 	}
+	a.emitDebugLog("debug", "search.run", "search cache key prepared", map[string]any{
+		"cache": debugSearchCacheKeyFields(key),
+	})
 	entry, err := a.cachedSearchResponse(ctx, user, key)
 	if err != nil {
 		a.emitDebugLog("warn", "search.run", "cached search fetch failed, checking session state", map[string]any{
 			"query": params.Query,
+			"cache": debugSearchCacheKeyFields(key),
 			"error": err.Error(),
 		})
 		if a.handleSessionError(err) {
@@ -129,10 +137,10 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 		perPage = defaultSearchPerPage
 	}
 	a.emitDebugLog("debug", "search.run", "search response cached", map[string]any{
-		"rawResultsCount":  int(response.ResultsCountAll),
-		"serverPagesCount": int(response.PagesCount),
-		"perPage":          perPage,
-		"query":            params.Query,
+		"query":    params.Query,
+		"cache":    debugSearchCacheKeyFields(key),
+		"response": debugSearchResponseFields(response),
+		"perPage":  perPage,
 	})
 
 	searchID := a.newSearchID()
@@ -151,6 +159,7 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 		Request:         normalizedReq,
 		CacheKey:        key,
 	}
+	a.emitDebugLog("debug", "search.run", "search state initialized", debugSearchStateFields(state))
 	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, &response)
 	if err != nil {
 		return types.SearchResponse{}, err
@@ -301,6 +310,7 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 	if state == nil {
 		return types.SearchResponse{}, fmt.Errorf("unknown search ID: %s", searchID)
 	}
+	a.emitDebugLog("debug", "search.refresh", "refresh state snapshot", debugSearchStateFields(state))
 
 	user, err := a.ensureSearchSession()
 	if err != nil {
@@ -344,6 +354,9 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 
 	a.ensureCaches(user)
 	a.searchCache.Delete(key)
+	a.emitDebugLog("debug", "search.refresh", "search cache invalidated before refresh", map[string]any{
+		"cache": debugSearchCacheKeyFields(key),
+	})
 
 	entry, err := a.cachedSearchResponse(ctx, user, key)
 	if err != nil {
@@ -439,6 +452,12 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 	if state == nil {
 		return types.SearchResponse{}, fmt.Errorf("unknown search ID: %s", searchID)
 	}
+	a.emitDebugLog("debug", "search.loadMore", "load more state snapshot", mergeDebugFields(
+		map[string]any{
+			"requestedPage": requestedPage,
+		},
+		debugSearchStateFields(state),
+	))
 	if page <= 0 {
 		page = state.ClientPage + 1
 	}
@@ -448,6 +467,12 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 	}
 	if len(state.ArtistSearches) > 0 {
 		if multiArtistSearchExpired(state) {
+			a.emitDebugLog("info", "search.loadMore", "artist search RID expired before load more, refreshing search state", mergeDebugFields(
+				map[string]any{
+					"requestedPage": page,
+				},
+				debugSearchStateFields(state),
+			))
 			if err := a.refreshSearchState(ctx, user, state); err != nil {
 				return types.SearchResponse{}, err
 			}
@@ -456,6 +481,12 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 		visible, _, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, nil)
 		if err != nil {
 			if a.handleSessionError(err) {
+				a.emitDebugLog("warn", "search.loadMore", "artist load more hit session error, refreshing search state", withDebugError(mergeDebugFields(
+					map[string]any{
+						"requestedPage": page,
+					},
+					debugSearchStateFields(state),
+				), err))
 				user, err = a.ensureSearchSession()
 				if err != nil {
 					return types.SearchResponse{}, err
@@ -465,6 +496,12 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 				}
 				visible, _, hasMore, err = a.collectVisibleSearchPage(ctx, user, state, nil)
 			} else if a.handleRIDExpiredError(err) {
+				a.emitDebugLog("warn", "search.loadMore", "artist load more hit RID error, forcing refresh", withDebugError(mergeDebugFields(
+					map[string]any{
+						"requestedPage": page,
+					},
+					debugSearchStateFields(state),
+				), err))
 				if err := a.refreshSearchStateForced(ctx, user, state); err != nil {
 					return types.SearchResponse{}, err
 				}
@@ -496,6 +533,12 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 		return resp, nil
 	}
 	if !state.ExpiresAt.IsZero() && time.Now().After(state.ExpiresAt) {
+		a.emitDebugLog("info", "search.loadMore", "stored RID expired before load more, refreshing search state", mergeDebugFields(
+			map[string]any{
+				"requestedPage": page,
+			},
+			debugSearchStateFields(state),
+		))
 		if err := a.refreshSearchState(ctx, user, state); err != nil {
 			return types.SearchResponse{}, err
 		}
@@ -504,6 +547,12 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 	visible, nextServerPage, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, nil)
 	if err != nil {
 		if a.handleSessionError(err) {
+			a.emitDebugLog("warn", "search.loadMore", "load more hit session error, refreshing search state", withDebugError(mergeDebugFields(
+				map[string]any{
+					"requestedPage": page,
+				},
+				debugSearchStateFields(state),
+			), err))
 			user, err = a.ensureSearchSession()
 			if err != nil {
 				return types.SearchResponse{}, err
@@ -513,6 +562,12 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 			}
 			visible, nextServerPage, hasMore, err = a.collectVisibleSearchPage(ctx, user, state, nil)
 		} else if a.handleRIDExpiredError(err) {
+			a.emitDebugLog("warn", "search.loadMore", "load more hit RID error, forcing refresh", withDebugError(mergeDebugFields(
+				map[string]any{
+					"requestedPage": page,
+				},
+				debugSearchStateFields(state),
+			), err))
 			if err := a.refreshSearchStateForced(ctx, user, state); err != nil {
 				return types.SearchResponse{}, err
 			}
@@ -801,13 +856,24 @@ func (a *App) loadArtistSearchEntry(
 	if err != nil {
 		return searchCacheKey{}, inkbunny.SubmissionSearchRequest{}, cachedSearchResult{}, err
 	}
+	a.emitDebugLog("debug", "search.artist", "artist search cache key prepared", map[string]any{
+		"force":   force,
+		"cache":   debugSearchCacheKeyFields(key),
+		"request": debugSearchRequestFields(req),
+	})
 	if force {
 		a.ensureCaches(user)
 		a.searchCache.Delete(key)
+		a.emitDebugLog("debug", "search.artist", "artist search cache invalidated", map[string]any{
+			"cache": debugSearchCacheKeyFields(key),
+		})
 	}
 	entry, err := a.cachedSearchResponse(ctx, user, key)
 	if err != nil {
 		if a.handleSessionError(err) {
+			a.emitDebugLog("warn", "search.artist", "artist search hit session error, rebuilding cache key", withDebugError(map[string]any{
+				"cache": debugSearchCacheKeyFields(key),
+			}, err))
 			user, err = a.ensureSearchSession()
 			if err != nil {
 				return searchCacheKey{}, inkbunny.SubmissionSearchRequest{}, cachedSearchResult{}, err
@@ -860,6 +926,84 @@ func unmarshalSearchRequest(data []byte) (inkbunny.SubmissionSearchRequest, erro
 	}
 
 	return req, nil
+}
+
+func (a *App) fetchSearchCacheEntry(
+	ctx context.Context,
+	key searchCacheKey,
+) (cachedSearchResult, error) {
+	return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
+		req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
+		if err != nil {
+			a.emitDebugLog("error", "search.cache", "failed to unmarshal cached search request", withDebugError(map[string]any{
+				"cache": debugSearchCacheKeyFields(key),
+			}, err))
+			return cachedSearchResult{}, err
+		}
+		current, err := a.ensureSearchSession()
+		if err != nil {
+			return cachedSearchResult{}, err
+		}
+		req.SID = current.SID
+		fields := map[string]any{
+			"cache":   debugSearchCacheKeyFields(key),
+			"request": debugSearchRequestFields(req),
+		}
+		a.emitDebugLog("debug", "search.cache", "cache miss executing search", fields)
+		response, err := current.SearchSubmissions(req)
+		if err != nil {
+			a.emitDebugLog("warn", "search.cache", "search fetch failed", withDebugError(fields, err))
+			return cachedSearchResult{}, err
+		}
+		a.emitDebugLog("debug", "search.cache", "search fetch completed", map[string]any{
+			"cache":    debugSearchCacheKeyFields(key),
+			"response": debugSearchResponseFields(response),
+		})
+		return cachedSearchResult{
+			Request:  req,
+			Response: response,
+		}, nil
+	})
+}
+
+func (a *App) newSearchCache() flight.Cache[searchCacheKey, cachedSearchResult] {
+	return flight.NewCache(func(ctx context.Context, key searchCacheKey) (cachedSearchResult, error) {
+		return a.fetchSearchCacheEntry(ctx, key)
+	})
+}
+
+func (a *App) fetchLoadMoreCacheEntry(
+	ctx context.Context,
+	key loadMoreCacheKey,
+) (inkbunny.SubmissionSearchResponse, error) {
+	return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
+		req := inkbunny.SubmissionSearchRequest{
+			SID:  key.SID,
+			RID:  key.RID,
+			Page: inkbunny.IntString(key.Page),
+		}
+		fields := map[string]any{
+			"cache":   debugLoadMoreCacheKeyFields(key),
+			"request": debugSearchRequestFields(req),
+		}
+		a.emitDebugLog("debug", "search.loadMore.cache", "cache miss executing load more", fields)
+		response, err := inkbunny.SearchSubmissions(req)
+		if err != nil {
+			a.emitDebugLog("warn", "search.loadMore.cache", "load more fetch failed", withDebugError(fields, err))
+			return inkbunny.SubmissionSearchResponse{}, err
+		}
+		a.emitDebugLog("debug", "search.loadMore.cache", "load more fetch completed", map[string]any{
+			"cache":    debugLoadMoreCacheKeyFields(key),
+			"response": debugSearchResponseFields(response),
+		})
+		return response, nil
+	})
+}
+
+func (a *App) newLoadMoreCache() flight.Cache[loadMoreCacheKey, inkbunny.SubmissionSearchResponse] {
+	return flight.NewCache(func(ctx context.Context, key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
+		return a.fetchLoadMoreCacheEntry(ctx, key)
+	})
 }
 
 func normalizeScrapsMode(value string) inkbunny.Scraps {
@@ -1594,39 +1738,11 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.watchingCache = &cache
 	}
 	if a.searchCache == nil {
-		cache := flight.NewCache(func(ctx context.Context, key searchCacheKey) (cachedSearchResult, error) {
-			return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
-				req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
-				if err != nil {
-					return cachedSearchResult{}, err
-				}
-				current, err := a.ensureSearchSession()
-				if err != nil {
-					return cachedSearchResult{}, err
-				}
-				req.SID = current.SID
-				response, err := current.SearchSubmissions(req)
-				if err != nil {
-					return cachedSearchResult{}, err
-				}
-				return cachedSearchResult{
-					Request:  req,
-					Response: response,
-				}, nil
-			})
-		})
+		cache := a.newSearchCache()
 		a.searchCache = &cache
 	}
 	if a.loadMoreCache == nil {
-		cache := flight.NewCache(func(ctx context.Context, key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
-			return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
-				return inkbunny.SearchSubmissions(inkbunny.SubmissionSearchRequest{
-					SID:  key.SID,
-					RID:  key.RID,
-					Page: inkbunny.IntString(key.Page),
-				})
-			})
-		})
+		cache := a.newLoadMoreCache()
 		a.loadMoreCache = &cache
 	}
 	if a.detailsCache == nil {
@@ -1708,36 +1824,8 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			return mapWatchingSuggestions(items), nil
 		})
 	})
-	searchCache := flight.NewCache(func(ctx context.Context, key searchCacheKey) (cachedSearchResult, error) {
-		return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "search", func() (cachedSearchResult, error) {
-			req, err := unmarshalSearchRequest([]byte(key.RequestJSON))
-			if err != nil {
-				return cachedSearchResult{}, err
-			}
-			current, err := a.ensureSearchSession()
-			if err != nil {
-				return cachedSearchResult{}, err
-			}
-			req.SID = current.SID
-			response, err := current.SearchSubmissions(req)
-			if err != nil {
-				return cachedSearchResult{}, err
-			}
-			return cachedSearchResult{
-				Request:  req,
-				Response: response,
-			}, nil
-		})
-	})
-	loadMoreCache := flight.NewCache(func(ctx context.Context, key loadMoreCacheKey) (inkbunny.SubmissionSearchResponse, error) {
-		return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "search results", func() (inkbunny.SubmissionSearchResponse, error) {
-			return inkbunny.SearchSubmissions(inkbunny.SubmissionSearchRequest{
-				SID:  key.SID,
-				RID:  key.RID,
-				Page: inkbunny.IntString(key.Page),
-			})
-		})
-	})
+	searchCache := a.newSearchCache()
+	loadMoreCache := a.newLoadMoreCache()
 	detailsCache := flight.NewCache(func(ctx context.Context, key submissionDetailsCacheKey) (inkbunny.SubmissionDetails, error) {
 		response, err := a.fetchSubmissionDetailsBatch(ctx, user, []string{key.SubmissionID})
 		if err != nil {
@@ -1841,13 +1929,41 @@ func (a *App) cachedSearchResponse(
 	key searchCacheKey,
 ) (cachedSearchResult, error) {
 	a.ensureCaches(user)
+	hit := false
+	if _, ok := a.searchCache.Peek(key); ok {
+		hit = true
+	}
+	a.emitDebugLog("debug", "search.cache", "search cache lookup", map[string]any{
+		"hit":   hit,
+		"cache": debugSearchCacheKeyFields(key),
+	})
 	entry, err := a.searchCache.GetWithContext(ctx, key)
 	if err != nil {
+		a.emitDebugLog("warn", "search.cache", "search cache lookup failed", withDebugError(map[string]any{
+			"hit":   hit,
+			"cache": debugSearchCacheKeyFields(key),
+		}, err))
 		return cachedSearchResult{}, err
 	}
 	if !entry.Response.RIDExpiry.IsZero() && time.Now().After(entry.Response.RIDExpiry) {
+		a.emitDebugLog("info", "search.cache", "search cache entry expired by RID expiry, refetching", map[string]any{
+			"cache":          debugSearchCacheKeyFields(key),
+			"cachedResponse": debugSearchResponseFields(entry.Response),
+		})
 		a.searchCache.Delete(key)
-		return a.searchCache.GetWithContext(ctx, key)
+		entry, err = a.searchCache.GetWithContext(ctx, key)
+		if err != nil {
+			a.emitDebugLog("warn", "search.cache", "search cache refetch failed", withDebugError(map[string]any{
+				"cache": debugSearchCacheKeyFields(key),
+			}, err))
+			return cachedSearchResult{}, err
+		}
+	}
+	if hit {
+		a.emitDebugLog("debug", "search.cache", "search cache hit served", map[string]any{
+			"cache":    debugSearchCacheKeyFields(key),
+			"response": debugSearchResponseFields(entry.Response),
+		})
 	}
 	return entry, nil
 }
@@ -1972,11 +2088,37 @@ func (a *App) cachedLoadMore(
 		return inkbunny.SubmissionSearchResponse{}, errors.New("search state is missing")
 	}
 	a.ensureCaches(a.user)
-	return a.loadMoreCache.GetWithContext(ctx, loadMoreCacheKey{
+	key := loadMoreCacheKey{
 		SID:  state.SID,
 		RID:  state.RID,
 		Page: page,
+	}
+	hit := false
+	if _, ok := a.loadMoreCache.Peek(key); ok {
+		hit = true
+	}
+	a.emitDebugLog("debug", "search.loadMore.cache", "load more cache lookup", map[string]any{
+		"hit":      hit,
+		"cache":    debugLoadMoreCacheKeyFields(key),
+		"searchId": state.ID,
 	})
+	response, err := a.loadMoreCache.GetWithContext(ctx, key)
+	if err != nil {
+		a.emitDebugLog("warn", "search.loadMore.cache", "load more cache lookup failed", withDebugError(map[string]any{
+			"hit":      hit,
+			"cache":    debugLoadMoreCacheKeyFields(key),
+			"searchId": state.ID,
+		}, err))
+		return inkbunny.SubmissionSearchResponse{}, err
+	}
+	if hit {
+		a.emitDebugLog("debug", "search.loadMore.cache", "load more cache hit served", map[string]any{
+			"cache":    debugLoadMoreCacheKeyFields(key),
+			"searchId": state.ID,
+			"response": debugSearchResponseFields(response),
+		})
+	}
+	return response, nil
 }
 
 func (a *App) cachedLoadMoreArtist(
@@ -1988,11 +2130,37 @@ func (a *App) cachedLoadMoreArtist(
 		return inkbunny.SubmissionSearchResponse{}, errors.New("artist search stream is missing")
 	}
 	a.ensureCaches(a.user)
-	return a.loadMoreCache.GetWithContext(ctx, loadMoreCacheKey{
+	key := loadMoreCacheKey{
 		SID:  stream.SID,
 		RID:  stream.RID,
 		Page: page,
+	}
+	hit := false
+	if _, ok := a.loadMoreCache.Peek(key); ok {
+		hit = true
+	}
+	a.emitDebugLog("debug", "search.loadMore.cache", "artist load more cache lookup", map[string]any{
+		"hit":      hit,
+		"cache":    debugLoadMoreCacheKeyFields(key),
+		"username": stream.Username,
 	})
+	response, err := a.loadMoreCache.GetWithContext(ctx, key)
+	if err != nil {
+		a.emitDebugLog("warn", "search.loadMore.cache", "artist load more cache lookup failed", withDebugError(map[string]any{
+			"hit":      hit,
+			"cache":    debugLoadMoreCacheKeyFields(key),
+			"username": stream.Username,
+		}, err))
+		return inkbunny.SubmissionSearchResponse{}, err
+	}
+	if hit {
+		a.emitDebugLog("debug", "search.loadMore.cache", "artist load more cache hit served", map[string]any{
+			"cache":    debugLoadMoreCacheKeyFields(key),
+			"username": stream.Username,
+			"response": debugSearchResponseFields(response),
+		})
+	}
+	return response, nil
 }
 
 func (a *App) ensureMultiArtistResults(

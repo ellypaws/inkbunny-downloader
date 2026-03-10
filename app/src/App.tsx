@@ -202,7 +202,9 @@ export default function App() {
   const activeResultsRefreshToken = activeTab?.resultsRefreshToken ?? 0;
   const activeLoadMoreState = activeTab?.loadMoreState ?? createIdleLoadMoreState();
   const activeSearchBusy =
-    activeSearchLoading || activeLoadMoreState.mode !== "idle";
+    activeSearchLoading ||
+    activeLoadMoreState.mode !== "idle" ||
+    activeTab?.autoQueuePhase === "searching";
   const activeTabQueueing = activeTab?.autoQueuePhase === "queueing";
   const activeTabDownloading = activeTab
     ? hasTrackedQueueActivity(
@@ -340,6 +342,16 @@ export default function App() {
         ),
       })),
     );
+  }
+
+  function applySessionWithoutTabSync(
+    nextSession: SessionInfo,
+    nextSettings = nextSession.settings,
+  ) {
+    sessionRef.current = nextSession;
+    settingsRef.current = nextSettings;
+    setSession(nextSession);
+    setSettings(nextSettings);
   }
 
   function updateTab(tabId: string, updater: (tab: SearchTabState) => SearchTabState) {
@@ -634,6 +646,10 @@ export default function App() {
     setQueue(normalizeQueueSnapshot(snapshot));
   }
 
+  function writeFrontendSearchLog(message: string, fields?: Record<string, unknown>) {
+    console.info(`[frontend][search] ${message}`, fields ?? "");
+  }
+
   function applyWorkspaceSnapshot(
     workspace: WorkspaceState,
     nextSession = sessionRef.current,
@@ -641,10 +657,14 @@ export default function App() {
   ) {
     pendingWorkspaceEchoesRef.current = [];
     const restoredTabs = restoreWorkspaceTabs(workspace, nextSession, nextSettings);
-    const nextActiveTabId = resolveActiveWorkspaceTabId(workspace, restoredTabs);
-    tabsRef.current = restoredTabs;
+    const mergedTabs = mergeWorkspaceTabsWithTransientState(
+      restoredTabs,
+      tabsRef.current,
+    );
+    const nextActiveTabId = resolveActiveWorkspaceTabId(workspace, mergedTabs);
+    tabsRef.current = mergedTabs;
     activeTabIdRef.current = nextActiveTabId;
-    setTabs(restoredTabs);
+    setTabs(mergedTabs);
     setActiveTabId(nextActiveTabId);
   }
 
@@ -863,17 +883,36 @@ export default function App() {
 
   function handleWorkspaceStateUpdate(update: WorkspaceStateUpdate) {
     if (update.revision <= workspaceRevisionRef.current) {
+      writeFrontendSearchLog("ignored workspace update", {
+        reason: "stale-revision",
+        revision: update.revision,
+        currentRevision: workspaceRevisionRef.current,
+      });
       return;
     }
     workspaceRevisionRef.current = update.revision;
     const currentWorkspace = buildWorkspaceState(tabsRef.current, activeTabIdRef.current);
     if (areWorkspaceStatesEqual(currentWorkspace, update.workspace)) {
       acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, update.workspace);
+      writeFrontendSearchLog("ignored workspace update", {
+        reason: "matches-current",
+        revision: update.revision,
+      });
       return;
     }
     if (acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, update.workspace)) {
+      writeFrontendSearchLog("ignored workspace update", {
+        reason: "matched-pending-echo",
+        revision: update.revision,
+      });
       return;
     }
+    writeFrontendSearchLog("applying workspace update", {
+      revision: update.revision,
+      activeTabId: activeTabIdRef.current,
+      currentTabCount: tabsRef.current.length,
+      nextTabCount: update.workspace.tabs.length,
+    });
     suppressNextWorkspacePersistRef.current = true;
     applyWorkspaceSnapshot(update.workspace);
   }
@@ -1078,6 +1117,27 @@ export default function App() {
   useEffect(() => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds), [downloadedSubmissionIds]);
   useEffect(() => void (unavailableSubmissionIdsRef.current = unavailableSubmissionIds), [unavailableSubmissionIds]);
   useEffect(() => void (toastsRef.current = toasts), [toasts]);
+  useEffect(() => {
+    writeFrontendSearchLog("active tab state", {
+      tabId: activeTab?.id ?? "",
+      mode: activeTab?.mode ?? "",
+      searchLoading: activeSearchLoading,
+      loadMoreMode: activeLoadMoreState.mode,
+      autoQueuePhase: activeTab?.autoQueuePhase ?? "idle",
+      searchId: activeSearchResponse?.searchId ?? "",
+      resultsCount: activeSearchResponse?.resultsCount ?? 0,
+      visibleResults: activeResults.length,
+    });
+  }, [
+    activeLoadMoreState.mode,
+    activeResults.length,
+    activeSearchLoading,
+    activeSearchResponse?.resultsCount,
+    activeSearchResponse?.searchId,
+    activeTab?.autoQueuePhase,
+    activeTab?.id,
+    activeTab?.mode,
+  ]);
   useEffect(() => {
     const intervalId = window.setInterval(
       () => setAutoQueueClock(Date.now()),
@@ -1336,6 +1396,13 @@ export default function App() {
     }
     if (suppressNextWorkspacePersistRef.current) {
       suppressNextWorkspacePersistRef.current = false;
+      return;
+    }
+    if (hasTransientWorkspaceState(tabsRef.current)) {
+      writeFrontendSearchLog("skipping workspace persist", {
+        reason: "transient-search-state",
+        tabCount: tabsRef.current.length,
+      });
       return;
     }
     if (workspacePersistTimeoutRef.current !== null) {
@@ -1885,6 +1952,16 @@ export default function App() {
         sessionRef.current,
         settingsRef.current,
       );
+      writeFrontendSearchLog("search request started", {
+        tabId: targetTabId,
+        runId,
+        page,
+        mode: tab.mode,
+        unreadSubmissions: normalizedParams.unreadSubmissions,
+        query: normalizedParams.query,
+        artistCount: normalizedParams.artistNames.length,
+        previousSearchId: tab.searchResponse?.searchId ?? "",
+      });
       const response =
         page === 1
           ? await backend.search({
@@ -1894,12 +1971,30 @@ export default function App() {
             })
           : await backend.loadMoreResults(tab.searchResponse!.searchId, page);
       if (isSearchRequestStopRequested(targetTabId, runId)) {
+        writeFrontendSearchLog("search response ignored", {
+          tabId: targetTabId,
+          runId,
+          page,
+          reason: "stop-requested",
+          searchId: response.searchId,
+        });
         return undefined;
       }
+      writeFrontendSearchLog("search response received", {
+        tabId: targetTabId,
+        runId,
+        page,
+        mode: tab.mode,
+        searchId: response.searchId,
+        resultsCount: response.resultsCount,
+        returnedResults: response.results.length,
+        pagesCount: response.pagesCount,
+        firstSubmissionId: response.results[0]?.submissionId ?? "",
+      });
       if (tourOpen && tourStepId === "run-search" && page === 1) {
         setTourSearchAttempted(true);
       }
-      applySession(response.session);
+      applySessionWithoutTabSync(response.session);
       if (page === 1 && activeTabIdRef.current === targetTabId) {
         shouldScrollToResultsRef.current = true;
       }
@@ -1947,6 +2042,13 @@ export default function App() {
           }),
         );
       });
+      writeFrontendSearchLog("search response scheduled for tab apply", {
+        tabId: targetTabId,
+        runId,
+        page,
+        searchId: response.searchId,
+        returnedResults: response.results.length,
+      });
       return response;
     } catch (error) {
       if (
@@ -1959,11 +2061,22 @@ export default function App() {
         return handleSearch(1, targetTabId);
       }
       const message = getErrorMessage(error, "Search failed.");
+      writeFrontendSearchLog("search request failed", {
+        tabId: targetTabId,
+        runId,
+        page,
+        error: message,
+      });
       updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
       pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
       return undefined;
     } finally {
       if (clearSearchLoadingInFinally && isSearchRequestRunActive(targetTabId, runId)) {
+        writeFrontendSearchLog("search loading cleared in finally", {
+          tabId: targetTabId,
+          runId,
+          page,
+        });
         updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
       }
     }
@@ -1989,7 +2102,7 @@ export default function App() {
       if (isSearchRequestStopRequested(resolvedTabId, runId)) {
         return;
       }
-      applySession(response.session);
+      applySessionWithoutTabSync(response.session);
       clearSearchLoadingInFinally = false;
       startTransition(() => {
         setTabs((previous) =>
@@ -3591,6 +3704,28 @@ function serializeWorkspaceState(workspace: WorkspaceState | null | undefined) {
   return JSON.stringify(workspace ?? null);
 }
 
+function hasTransientWorkspaceState(tabs: SearchTabState[]) {
+  return tabs.some(
+    (tab) =>
+      tab.searchLoading ||
+      tab.loadMoreState.mode !== "idle" ||
+      tab.autoQueuePhase === "searching",
+  );
+}
+
+function parseSearchSequence(searchId: string | null | undefined) {
+  const trimmed = typeof searchId === "string" ? searchId.trim() : "";
+  if (!trimmed) {
+    return 0;
+  }
+  const match = /^search-(\d+)$/.exec(trimmed);
+  if (!match) {
+    return 0;
+  }
+  const value = Number.parseInt(match[1] ?? "", 10);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function rememberPendingWorkspaceEcho(
   pendingRef: { current: string[] },
   workspace: WorkspaceState,
@@ -3652,6 +3787,49 @@ function restoreWorkspaceTabs(
   return restoredTabs.length > 0
     ? restoredTabs
     : [createSearchTab(session, settings)];
+}
+
+function mergeWorkspaceTabsWithTransientState(
+  restoredTabs: SearchTabState[],
+  currentTabs: SearchTabState[],
+) {
+  const currentTabsById = new Map(currentTabs.map((tab) => [tab.id, tab]));
+  return restoredTabs.map((restoredTab) => {
+    const currentTab = currentTabsById.get(restoredTab.id);
+    if (!currentTab) {
+      return restoredTab;
+    }
+
+    const preserveCurrentSearchState =
+      currentTab.searchLoading ||
+      currentTab.loadMoreState.mode !== "idle" ||
+      parseSearchSequence(currentTab.searchResponse?.searchId) >
+        parseSearchSequence(restoredTab.searchResponse?.searchId) ||
+      (currentTab.searchResponse !== null && restoredTab.searchResponse === null) ||
+      (currentTab.results.length > 0 && restoredTab.results.length === 0);
+
+    return {
+      ...restoredTab,
+      searchLoading: currentTab.searchLoading,
+      searchError: currentTab.searchError,
+      resultsRefreshToken: currentTab.resultsRefreshToken,
+      loadMoreState: currentTab.loadMoreState,
+      autoQueuePhase: currentTab.autoQueuePhase,
+      trackedDownloadSubmissionIds: currentTab.trackedDownloadSubmissionIds,
+      autoQueueNextRunAt:
+        currentTab.autoQueuePhase !== "idle"
+          ? currentTab.autoQueueNextRunAt
+          : restoredTab.autoQueueNextRunAt,
+      ...(preserveCurrentSearchState
+        ? {
+            searchResponse: currentTab.searchResponse,
+            results: currentTab.results,
+            activeSubmissionId: currentTab.activeSubmissionId,
+            selectedSubmissionIds: currentTab.selectedSubmissionIds,
+          }
+        : {}),
+    };
+  });
 }
 
 function resolveActiveWorkspaceTabId(
