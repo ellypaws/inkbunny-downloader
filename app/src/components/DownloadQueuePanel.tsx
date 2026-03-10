@@ -30,6 +30,7 @@ import {
   MIN_CONCURRENT_DOWNLOADS,
 } from "../lib/constants";
 import { formatBytes } from "../lib/format";
+import { resolveExternalLinkURL, resolveMediaURL } from "../lib/wails";
 import type { QueueSnapshot } from "../lib/types";
 
 const FILTERABLE_QUEUE_STATUSES = [
@@ -213,14 +214,14 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
 
   return (
     <section
-      className="theme-panel relative overflow-visible rounded-toy-sm border p-5 shadow-pop backdrop-blur-2xl md:min-h-[95vh] md:p-6"
+      className="theme-panel relative overflow-visible rounded-toy-sm border p-3.5 shadow-pop backdrop-blur-2xl sm:p-5 md:min-h-[95vh] md:p-6"
       data-tour-anchor="queue-panel"
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,var(--theme-accent-soft),transparent_28%),radial-gradient(circle_at_bottom_left,var(--theme-surface-soft),transparent_24%)] opacity-80" />
 
       <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h3 className="font-display text-3xl font-black text-[var(--theme-accent-strong)] md:text-[2.55rem]">
+          <h3 className="font-display text-2xl font-black text-[var(--theme-accent-strong)] sm:text-[2.2rem] md:text-[2.55rem]">
             Download Queue
           </h3>
         </div>
@@ -252,7 +253,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
         </div>
       </div>
 
-      <div className="theme-panel-soft relative z-20 mt-4 overflow-visible flex flex-col gap-3 rounded-2xl border px-4 py-3 backdrop-blur-xl">
+      <div className="theme-panel-soft relative z-20 mt-3 overflow-visible flex flex-col gap-3 rounded-2xl border px-3 py-3 backdrop-blur-xl sm:mt-4 sm:px-4">
         <div className="flex flex-wrap items-start justify-between gap-3 overflow-visible">
           <div className="flex flex-wrap gap-2.5 overflow-visible">
             <button
@@ -387,7 +388,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
       </div>
 
       {props.message ? (
-        <div className="theme-panel-soft relative z-10 mt-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-sm motion-safe:animate-[fade-in_220ms_ease-out]">
+        <div className="theme-panel-soft relative z-10 mt-3 rounded-2xl border px-3 py-3 text-sm font-bold shadow-sm motion-safe:animate-[fade-in_220ms_ease-out] sm:px-4">
           {props.message}
         </div>
       ) : null}
@@ -413,7 +414,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             }
             onPointerDownCapture={handleQueuePointerDown}
             onKeyDownCapture={handleQueueKeyDown}
-            className="theme-panel-muted h-[75vh] min-h-[26rem] overflow-y-auto rounded-toy-sm border p-2 backdrop-blur-md"
+            className="theme-panel-muted h-[68vh] min-h-[22rem] overflow-y-auto rounded-toy-sm border p-1.5 backdrop-blur-md sm:h-[75vh] sm:min-h-[26rem] sm:p-2"
           >
             <div
               className="relative w-full"
@@ -483,7 +484,7 @@ function QueueRow(props: {
   return (
     <div
       tabIndex={0}
-      className={`theme-panel-strong group relative overflow-hidden rounded-[1.3rem] border px-3 py-2.5 shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 motion-safe:focus-within:-translate-y-0.5 hover:shadow-lg focus-within:shadow-lg ${
+      className={`theme-panel-strong group relative overflow-hidden rounded-[1.15rem] border px-2.5 py-2 shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 motion-safe:focus-within:-translate-y-0.5 hover:shadow-lg focus-within:shadow-lg sm:rounded-[1.3rem] sm:px-3 sm:py-2.5 ${
         props.submissionHighlighted
           ? "border-[#CC5E00] ring-2 ring-[#CC5E00]/55"
           : ""
@@ -491,7 +492,7 @@ function QueueRow(props: {
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(114,159,207,0.12),transparent_35%,var(--theme-accent-soft))] opacity-0 transition-opacity motion-safe:duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
 
-      <div className="relative flex items-start gap-3">
+      <div className="relative flex items-start gap-2.5 sm:gap-3">
         <QueueThumbnail
           src={job.previewUrl}
           alt={job.fileName || job.title || job.submissionId}
@@ -501,7 +502,7 @@ function QueueRow(props: {
           <div className="flex flex-wrap items-start gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="theme-title truncate text-sm font-black md:text-[0.95rem]">
+                <div className="theme-title truncate text-[13px] font-black md:text-[0.95rem]">
                   {job.fileName}
                 </div>
                 {job.fileExists ? (
@@ -515,10 +516,10 @@ function QueueRow(props: {
                   </span>
                 ) : null}
                 <a
-                  href={submissionUrl}
+                  href={resolveExternalLinkURL(submissionUrl) ?? submissionUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="theme-panel-soft theme-hover inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-black text-[var(--theme-info)] transition-colors hover:text-[var(--theme-info-strong)]"
+                  className="theme-panel-soft theme-hover inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black text-[var(--theme-info)] transition-colors hover:text-[var(--theme-info-strong)] sm:text-[10px]"
                   title={`Open submission ${job.submissionId}`}
                 >
                   <ArrowUpRight size={11} strokeWidth={2.4} />
@@ -598,7 +599,7 @@ function QueueRow(props: {
             </div>
           </div>
 
-          <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-[var(--theme-surface-soft)]">
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--theme-surface-soft)] sm:mt-2.5 sm:h-2">
             <div
               className={`h-full rounded-full transition-[width,background-color] motion-safe:duration-500 motion-safe:ease-out ${getProgressBarClass(job.status)}`}
               style={{ width: `${progress}%` }}
@@ -621,7 +622,7 @@ function QueueThumbnail(props: { src?: string; alt: string }) {
 
   if (!props.src || failed) {
     return (
-      <div className="theme-panel-soft theme-muted flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border text-[9px] font-black">
+      <div className="theme-panel-soft theme-muted flex h-10 w-10 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border text-[8px] font-black sm:h-12 sm:w-12 sm:gap-1 sm:text-[9px]">
         <FileImage size={14} />
         <span>Preview</span>
       </div>
@@ -630,12 +631,14 @@ function QueueThumbnail(props: { src?: string; alt: string }) {
 
   return (
     <img
-      src={props.src}
+      src={resolveMediaURL(props.src) ?? props.src}
       alt={props.alt}
       loading="lazy"
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="h-12 w-12 shrink-0 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] object-cover"
+      onError={() => {
+        setFailed(true);
+      }}
+      className="h-10 w-10 shrink-0 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] object-cover sm:h-12 sm:w-12"
     />
   );
 }
@@ -645,7 +648,7 @@ function AutoClearToggle(props: {
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="theme-panel-strong flex items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-black shadow-sm">
+    <label className="theme-panel-strong flex items-center gap-2.5 rounded-2xl border px-3 py-2 text-xs font-black shadow-sm sm:gap-3 sm:text-sm">
       <span className="theme-title">Auto-clear</span>
       <button
         type="button"

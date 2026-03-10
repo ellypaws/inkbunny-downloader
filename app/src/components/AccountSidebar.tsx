@@ -102,7 +102,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
                     onClick={props.onLogout}
                     className="rounded-full border border-[#2D2D44]/18 px-2.5 py-1 text-[11px] font-semibold text-[#555753] transition-colors hover:border-[#2D2D44]/28 hover:bg-[#f7f8f2]/92 dark:border-white/12 dark:text-white/65 dark:hover:bg-[#1f252b]"
                   >
-                    logout
+                    Logout
                   </button>
                 ) : null}
               </div>
@@ -147,7 +147,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#3465A4] px-4 py-3.5 text-sm font-black text-white shadow-pop transition-all hover:bg-[#204A87]"
               >
                 <FolderOpen size={18} />
-                choose download folder
+                Choose Download Folder
               </button>
             ) : (
               <div className="rounded-2xl border border-[#2D2D44]/10 bg-white/55 px-4 py-3 text-sm font-bold text-[#2D2D44]/70 dark:border-white/10 dark:bg-[#1A1733]/60 dark:text-white/70">

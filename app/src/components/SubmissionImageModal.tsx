@@ -28,7 +28,11 @@ import {
 
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import type { SubmissionCard } from "../lib/types";
-import { backend } from "../lib/wails";
+import {
+  backend,
+  resolveMediaSrcSet,
+  resolveMediaURL,
+} from "../lib/wails";
 
 export type SubmissionModalPreviewSource = {
   src: string;
@@ -511,14 +515,14 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
             onClick={(event) => {
               event.stopPropagation();
             }}
-            className="theme-panel-strong relative z-10 flex h-full flex-col px-5 py-6 shadow-[0_18px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl md:px-6 md:py-7"
+            className="theme-panel-strong relative z-10 flex h-full flex-col px-4 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl md:px-6 md:py-7"
           >
             <div className="sim-panel-item flex items-start gap-3">
               <img
-                src={resolvedAvatarSrc}
+                src={resolveMediaURL(resolvedAvatarSrc) ?? resolvedAvatarSrc}
                 srcSet={
                   avatarIndex === 0 && !isUserIconURL(avatarSrc)
-                    ? avatarSrcSet || undefined
+                    ? resolveMediaSrcSet(avatarSrcSet || undefined)
                     : undefined
                 }
                 sizes="48px"
@@ -577,12 +581,12 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               </div>
             </div>
 
-            <h2 className="sim-panel-item theme-title mt-6 font-display text-3xl font-black leading-tight md:text-[2.7rem]">
+            <h2 className="sim-panel-item theme-title mt-5 font-display text-2xl font-black leading-tight sm:mt-6 sm:text-3xl md:text-[2.7rem]">
               {props.submission.title}
             </h2>
 
             <SubmissionDescription
-              className="sim-panel-item theme-muted mt-5 max-h-[30vh] overflow-y-auto pr-1 text-[15px] leading-7 md:max-h-[calc(100vh-12rem)] [&_a]:text-[var(--theme-info-strong)] [&_a]:underline-offset-4 [&_a]:transition-colors [&_a:hover]:text-[var(--theme-title)] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--theme-border-soft)] [&_blockquote]:pl-4 [&_em]:italic [&_img]:h-auto [&_img]:max-w-full [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-3 [&_strong]:font-bold [&_ul]:my-3"
+              className="sim-panel-item theme-muted mt-4 max-h-[26vh] overflow-y-auto pr-1 text-[13px] leading-6 sm:mt-5 sm:max-h-[30vh] sm:text-[15px] sm:leading-7 md:max-h-[calc(100vh-12rem)] [&_a]:text-[var(--theme-info-strong)] [&_a]:underline-offset-4 [&_a]:transition-colors [&_a:hover]:text-[var(--theme-title)] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--theme-border-soft)] [&_blockquote]:pl-4 [&_em]:italic [&_img]:h-auto [&_img]:max-w-full [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-3 [&_strong]:font-bold [&_ul]:my-3"
               descriptionHtml={props.submission.descriptionHtml}
               description={props.submission.description}
             />
@@ -785,52 +789,54 @@ function SubmissionModalImage(props: {
     return (
       <ModalPreviewFallback
         submission={props.submission}
-        className="h-[min(86vh,72rem)] w-full max-w-full"
+        className="max-h-[min(86vh,72rem)] w-[min(92vw,72rem)] max-w-full"
       />
     );
   }
 
   return (
-    <div
-      className="relative flex h-[min(90vh,80rem)] w-full max-w-full items-center justify-center"
-      onClick={(event) => event.stopPropagation()}
-    >
-      {props.thumbnail?.src ? (
+    <div className="relative flex max-h-[min(90vh,80rem)] max-w-full items-center justify-center">
+      <div
+        className="relative inline-flex max-h-[min(90vh,80rem)] max-w-full min-w-0 items-center justify-center"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {props.thumbnail?.src ? (
+          <img
+            src={resolveMediaURL(props.thumbnail.src) ?? props.thumbnail.src}
+            srcSet={resolveMediaSrcSet(props.thumbnail.srcSet)}
+            alt={props.alt}
+            aria-hidden={loaded}
+            referrerPolicy="no-referrer"
+            className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
+              loaded ? "opacity-0" : "opacity-100"
+            }`}
+          />
+        ) : null}
+        {!loaded ? (
+          <div className="theme-panel-strong absolute z-10 flex items-center gap-3 rounded-full border px-4 py-2 text-sm font-semibold text-[var(--theme-title)] shadow-sm">
+            <LoaderCircle size={18} className="animate-spin" />
+            <span>Loading full image</span>
+          </div>
+        ) : null}
         <img
-          src={props.thumbnail.src}
-          srcSet={props.thumbnail.srcSet}
+          ref={imageRef}
+          key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
+          src={resolveMediaURL(source.src) ?? source.src}
+          srcSet={resolveMediaSrcSet(source.srcSet)}
           alt={props.alt}
-          aria-hidden={loaded}
           referrerPolicy="no-referrer"
-          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
-            loaded ? "opacity-0" : "opacity-100"
+          onLoad={() => {
+            setLoaded(true);
+          }}
+          onError={() => {
+            setLoaded(false);
+            setSourceIndex((current) => current + 1);
+          }}
+          className={`relative z-[1] max-h-[min(90vh,80rem)] max-w-full min-w-0 object-contain transition-opacity duration-[250ms] ${
+            loaded ? "opacity-100" : "opacity-0"
           }`}
         />
-      ) : null}
-      {!loaded ? (
-        <div className="theme-panel-strong absolute z-10 flex items-center gap-3 rounded-full border px-4 py-2 text-sm font-semibold text-[var(--theme-title)] shadow-sm">
-          <LoaderCircle size={18} className="animate-spin" />
-          <span>Loading full image</span>
-        </div>
-      ) : null}
-      <img
-        ref={imageRef}
-        key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
-        src={source.src}
-        srcSet={source.srcSet}
-        alt={props.alt}
-        referrerPolicy="no-referrer"
-        onLoad={() => {
-          setLoaded(true);
-        }}
-        onError={() => {
-          setLoaded(false);
-          setSourceIndex((current) => current + 1);
-        }}
-        className={`relative z-[1] max-h-[min(90vh,80rem)] max-w-full min-w-0 object-contain transition-opacity duration-[250ms] ${
-          loaded ? "opacity-100" : "opacity-0"
-        }`}
-      />
+      </div>
     </div>
   );
 }
@@ -860,6 +866,19 @@ const SubmissionDescription = memo(function SubmissionDescription(props: {
       props.descriptionHtml,
       "text/html",
     );
+    const mediaNodes = Array.from(
+      documentFragment.querySelectorAll("img, source"),
+    );
+    for (const node of mediaNodes) {
+      const src = node.getAttribute("src");
+      const srcSet = node.getAttribute("srcset");
+      if (src) {
+        node.setAttribute("src", resolveMediaURL(src) ?? src);
+      }
+      if (srcSet) {
+        node.setAttribute("srcset", resolveMediaSrcSet(srcSet) ?? srcSet);
+      }
+    }
     const userIconImages = Array.from(documentFragment.querySelectorAll("img"))
       .map((image) => ({
         image,

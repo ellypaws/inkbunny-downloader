@@ -419,6 +419,15 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"value": value})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/resource":
+		s.proxyRemoteResource(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/open":
+		target := s.app.ResolveRemoteURL(r.URL.Query().Get("url"))
+		if target == "" {
+			writeJSONError(w, http.StatusBadRequest, "resource url is required")
+			return
+		}
+		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/search":
 		var params types.SearchParams
 		if !decodeJSON(w, r, &params) {
@@ -643,4 +652,61 @@ func hostWithoutPort(value string) string {
 		return host
 	}
 	return value
+}
+
+func (s *Server) proxyRemoteResource(w http.ResponseWriter, r *http.Request) {
+	target := s.app.ResolveRemoteURL(r.URL.Query().Get("url"))
+	if target == "" {
+		writeJSONError(w, http.StatusBadRequest, "resource url is required")
+		return
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid resource url")
+		return
+	}
+	copyRequestHeaderIfPresent(req.Header, r.Header, "Accept")
+	copyRequestHeaderIfPresent(req.Header, r.Header, "If-Modified-Since")
+	copyRequestHeaderIfPresent(req.Header, r.Header, "If-None-Match")
+	copyRequestHeaderIfPresent(req.Header, r.Header, "Range")
+	copyRequestHeaderIfPresent(req.Header, r.Header, "Cache-Control")
+	req.Header.Set("Origin", "https://inkbunny.net")
+	req.Header.Set("Referer", "https://inkbunny.net/")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
+
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, "resource fetch failed")
+		return
+	}
+	defer response.Body.Close()
+
+	copyHeaderIfPresent(w.Header(), response.Header, "Content-Type")
+	copyHeaderIfPresent(w.Header(), response.Header, "Content-Length")
+	copyHeaderIfPresent(w.Header(), response.Header, "Content-Disposition")
+	copyHeaderIfPresent(w.Header(), response.Header, "Cache-Control")
+	copyHeaderIfPresent(w.Header(), response.Header, "ETag")
+	copyHeaderIfPresent(w.Header(), response.Header, "Last-Modified")
+	copyHeaderIfPresent(w.Header(), response.Header, "Accept-Ranges")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(response.StatusCode)
+	_, _ = io.Copy(w, response.Body)
+}
+
+func copyHeaderIfPresent(target http.Header, source http.Header, name string) {
+	value := strings.TrimSpace(source.Get(name))
+	if value == "" {
+		return
+	}
+	target.Set(name, value)
+}
+
+func copyRequestHeaderIfPresent(target http.Header, source http.Header, name string) {
+	for _, value := range source.Values(name) {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		target.Add(name, value)
+	}
 }

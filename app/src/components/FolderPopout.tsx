@@ -4,6 +4,8 @@ import { Brush, Image, Video } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 
+import { resolveMediaURL } from "../lib/wails";
+
 type FolderPopoutProps = {
   images: string[][];
   className?: string;
@@ -164,12 +166,14 @@ function FolderCardFace(props: { card: FolderCard }) {
     if (source) {
       return (
         <img
-          src={source}
+          src={resolveMediaURL(source) ?? source}
           alt=""
           aria-hidden="true"
           draggable={false}
           referrerPolicy="no-referrer"
-          onError={() => setSourceIndex((current) => current + 1)}
+          onError={() => {
+            setSourceIndex((current) => current + 1);
+          }}
           className="h-full w-full object-cover"
         />
       );

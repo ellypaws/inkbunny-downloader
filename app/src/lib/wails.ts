@@ -157,7 +157,6 @@ const browserCapabilities: BackendCapabilities = {
 }
 
 let cachedDesktopBackend: BackendApi | null = null
-
 function isDesktopRuntimeAvailable(): boolean {
   return Boolean(window.go && typeof window.go === 'object')
 }
@@ -243,6 +242,7 @@ async function requestJSON<T>(
 ): Promise<T> {
   const response = await fetch(url, {
     method,
+    credentials: 'same-origin',
     headers:
       body === undefined
         ? undefined
@@ -346,6 +346,14 @@ class BrowserEventBus {
 
 const browserEvents = new BrowserEventBus()
 
+function buildRemoteResourceURL(url: string): string {
+  return `/api/resource?url=${encodeURIComponent(url)}`
+}
+
+function buildRemoteOpenURL(url: string): string {
+  return `/api/open?url=${encodeURIComponent(url)}`
+}
+
 const browserBackend: BackendApi = {
   async GetSession() {
     return requestJSON<SessionInfo>('GET', '/api/session')
@@ -369,7 +377,7 @@ const browserBackend: BackendApi = {
     throw new Error('Opening the local download folder is only available on desktop.')
   },
   async OpenExternalURL(url: string) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    window.open(buildRemoteOpenURL(url), '_blank', 'noopener,noreferrer')
   },
   async ProxyAvatarImageURL(url: string) {
     const response = await requestJSON<{ value: string }>(
@@ -679,4 +687,35 @@ export function subscribeBackendEvent<E extends BackendEventName>(
     return subscribeDesktopEvent(eventName, callback)
   }
   return browserEvents.subscribe(eventName, callback)
+}
+
+export function resolveMediaURL(url?: string): string | undefined {
+  if (!url) {
+    return url
+  }
+  return isDesktopRuntimeAvailable() ? url : buildRemoteResourceURL(url)
+}
+
+export function resolveMediaSrcSet(srcSet?: string): string | undefined {
+  if (!srcSet || isDesktopRuntimeAvailable()) {
+    return srcSet
+  }
+
+  return srcSet
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [url, ...descriptor] = entry.split(/\s+/)
+      const resolved = resolveMediaURL(url)
+      return [resolved, ...descriptor].filter(Boolean).join(' ')
+    })
+    .join(', ')
+}
+
+export function resolveExternalLinkURL(url?: string): string | undefined {
+  if (!url) {
+    return url
+  }
+  return isDesktopRuntimeAvailable() ? url : buildRemoteOpenURL(url)
 }

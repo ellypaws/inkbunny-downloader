@@ -138,11 +138,11 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
         <button
           type="button"
           onClick={props.onToggleCollapse}
-          className="theme-divider theme-hover group flex w-full items-center justify-between border-b px-5 py-4 text-left transition-colors sm:px-6"
+          className="theme-divider theme-hover group flex w-full items-center justify-between border-b px-4 py-3.5 text-left transition-colors sm:px-6 sm:py-4"
           aria-expanded={!props.collapsed}
         >
           <div className="flex items-center gap-3">
-            <h2 className="font-display text-3xl font-black text-[var(--theme-accent-strong)] sm:text-[2.1rem]">
+            <h2 className="font-display text-2xl font-black text-[var(--theme-accent-strong)] sm:text-[2.1rem]">
               Search
             </h2>
             {props.mode === "unread" ? (
@@ -168,7 +168,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
           }`}
         >
           <div className="overflow-hidden">
-            <div className="space-y-6 px-5 py-5 sm:px-6 sm:py-6">
+            <div className="space-y-5 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6">
               <div className="grid gap-4 lg:grid-cols-[132px_minmax(0,1fr)] lg:items-start">
                 <FieldLabel title="Search words" subtitle="optional" />
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">

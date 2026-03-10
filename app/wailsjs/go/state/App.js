@@ -130,6 +130,10 @@ export function RefreshSearch(arg1) {
   return window['go']['state']['App']['RefreshSearch'](arg1);
 }
 
+export function ResolveRemoteURL(arg1) {
+  return window['go']['state']['App']['ResolveRemoteURL'](arg1);
+}
+
 export function ResumeAllDownloads() {
   return window['go']['state']['App']['ResumeAllDownloads']();
 }

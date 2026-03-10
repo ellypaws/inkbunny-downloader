@@ -67,6 +67,8 @@ export function ProxyAvatarImageURL(arg1:string):Promise<string>;
 
 export function RefreshSearch(arg1:string):Promise<types.SearchResponse>;
 
+export function ResolveRemoteURL(arg1:string):Promise<string>;
+
 export function ResumeAllDownloads():Promise<types.QueueSnapshot>;
 
 export function RetryAllDownloads():Promise<types.QueueSnapshot>;

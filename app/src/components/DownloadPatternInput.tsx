@@ -139,9 +139,9 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
   }
 
   return (
-    <div className="space-y-2.5 rounded-[0.75rem] border border-[#2D2D44]/10 bg-white/58 p-3 dark:border-white/10 dark:bg-[#1A1733]/60">
+    <div className="space-y-2 rounded-[0.75rem] border border-[#2D2D44]/10 bg-white/58 p-2.5 dark:border-white/10 dark:bg-[#1A1733]/60 sm:space-y-2.5 sm:p-3">
       <div className="flex items-start justify-between gap-4">
-        <div className="text-sm font-black text-[#2D2D44] dark:text-white">
+        <div className="text-[13px] font-black text-[#2D2D44] dark:text-white sm:text-sm">
           Download pattern
         </div>
         <div className="rounded-full bg-[#2A7FA6]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#2A7FA6] dark:bg-[#89CFF0]/12 dark:text-[#89CFF0]">
@@ -219,8 +219,8 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
         </div>
       ) : null}
 
-      <div className="space-y-2">
-        <div className="text-[11px] font-semibold text-[#2D2D44]/55 dark:text-white/45">
+      <div className="space-y-1.5 sm:space-y-2">
+        <div className="text-[10px] font-semibold text-[#2D2D44]/55 dark:text-white/45 sm:text-[11px]">
           Download folder
         </div>
         <div className="break-all rounded-[0.4rem] bg-white/60 px-3 py-2.5 font-mono text-xs font-semibold text-[#2D2D44]/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:bg-[#120F28]/88 dark:text-white/72">
@@ -228,11 +228,11 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="text-[11px] font-semibold text-[#2D2D44]/55 dark:text-white/45">
+      <div className="space-y-1.5 sm:space-y-2">
+        <div className="text-[10px] font-semibold text-[#2D2D44]/55 dark:text-white/45 sm:text-[11px]">
           Preview
         </div>
-        <div className="space-y-1.5 rounded-[0.2rem] bg-[#0F172A] px-3 py-2.5 font-mono text-xs text-[#D8F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="space-y-1 rounded-[0.2rem] bg-[#0F172A] px-2.5 py-2 font-mono text-[11px] text-[#D8F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:space-y-1.5 sm:px-3 sm:py-2.5 sm:text-xs">
           {combinedPreviewPaths.map((previewPath: string) => (
             <div key={previewPath} className="break-all">
               {previewPath}

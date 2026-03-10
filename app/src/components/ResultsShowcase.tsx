@@ -26,7 +26,11 @@ import { LoadMoreControl, type LoadMoreControlState } from "./LoadMoreControl";
 import { SubmissionImageModal } from "./SubmissionImageModal";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import { accentClass } from "../lib/format";
-import { backend } from "../lib/wails";
+import {
+  backend,
+  resolveMediaSrcSet,
+  resolveMediaURL,
+} from "../lib/wails";
 import type {
   DownloadJobSnapshot,
   QueueSnapshot,
@@ -450,20 +454,20 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   return (
     <section className="relative mt-4">
-      <h1 className="text-white font-teko text-[144px] font-bold tracking-[-0.02em] leading-[118.8px] -mb-[130px] drop-shadow-sm pointer-events-none text-left antialiased block w-full max-w-[945px] break-words relative z-20 -rotate-2 origin-left">
+      <h1 className="pointer-events-none relative z-20 -mb-12 block w-full max-w-[945px] break-words text-left font-teko text-[68px] leading-[0.82] font-bold text-white drop-shadow-sm antialiased sm:-mb-16 sm:text-[92px] lg:-mb-[130px] lg:text-[144px] lg:leading-[118.8px] lg:-rotate-2 lg:tracking-[-0.02em] lg:origin-left">
         Preview
       </h1>
 
-      <div className="relative z-10 mb-5 flex flex-wrap items-center justify-end gap-4 px-2">
-        <div className="flex items-center gap-3">
-          <div className="theme-panel-soft rounded-full border px-4 py-2 text-sm font-bold backdrop-blur-md">
+      <div className="relative z-10 mb-3 flex flex-wrap items-center justify-end gap-2 px-0 sm:mb-5 sm:gap-4 sm:px-2">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="theme-panel-soft rounded-full border px-3 py-1.5 text-xs font-bold backdrop-blur-md sm:px-4 sm:py-2 sm:text-sm">
             {selectedCount} selected
           </div>
           <button
             type="button"
             onClick={props.onToggleSelectAll}
             disabled={selectAllDisabled}
-            className="theme-button-secondary rounded-2xl border px-5 py-3 text-sm font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50"
+            className="theme-button-secondary rounded-2xl border px-3.5 py-2 text-xs font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50 sm:px-5 sm:py-3 sm:text-sm"
           >
             {selectAllLabel}
           </button>
@@ -471,7 +475,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             type="button"
             onClick={props.onRefresh}
             disabled={!props.searchResponse || props.loading}
-            className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50"
+            className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50 sm:px-5 sm:py-3 sm:text-sm"
           >
             {props.loading ? (
               <LoaderCircle className="animate-spin" size={16} />
@@ -484,7 +488,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             type="button"
             onClick={props.onStopAll}
             disabled={!props.canStopAll}
-            className="theme-button-danger flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50"
+            className="theme-button-danger flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50 sm:px-5 sm:py-3 sm:text-sm"
             title="Stop every queued or active download"
           >
             <Square size={15} className="fill-current" strokeWidth={2.5} />
@@ -496,7 +500,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             disabled={props.downloadButtonDisabled}
             className={getDownloadActionButtonClass(
               props.downloadButtonMode,
-              "rounded-2xl border-b-8 px-6 py-3 font-black shadow-xl",
+              "rounded-2xl border-b-8 px-4 py-2.5 text-xs font-black shadow-xl sm:px-6 sm:py-3 sm:text-sm",
             )}
           >
             {renderDownloadActionButtonContent(
@@ -508,7 +512,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       </div>
 
-      <div className="theme-panel flex h-[1020px] w-full flex-col overflow-hidden rounded-toy-sm border-2 shadow-pop md:h-[600px] md:flex-row">
+      <div className="theme-panel flex h-[44rem] w-full flex-col overflow-hidden rounded-toy-sm border-2 shadow-pop sm:h-[52rem] md:h-[600px] md:flex-row">
         {props.results.length === 0 ? (
           <div className="theme-panel-soft flex h-full w-full flex-col items-center justify-center px-6 text-center">
             <SearchIcon className="text-[var(--theme-info)]" size={42} />
@@ -578,7 +582,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 />
                 <div className="absolute inset-0 bg-gradient-to-br from-[#14112C]/10 via-transparent to-[#14112C]/60" />
 
-                <div className="absolute right-5 top-5 z-20 flex items-center gap-2">
+                <div className="absolute right-3 top-3 z-20 flex items-center gap-2 sm:right-5 sm:top-5">
                   <button
                     type="button"
                     onClick={(event) => {
@@ -601,7 +605,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                           : `Download ${item.title}`
                     }
                     disabled={downloaded}
-                    className={`${cancellable ? "group/download-action" : ""} flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
+                    className={`${cancellable ? "group/download-action" : ""} flex h-9 w-9 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 sm:h-11 sm:w-11 ${
                       downloadSummary.state === "downloaded"
                         ? "translate-x-[3.25rem] bg-[#73D216]/85 text-white"
                         : retryable
@@ -642,7 +646,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                         ? `Remove ${item.title} from selection`
                         : `Select ${item.title}`
                     }
-                    className={`flex h-11 w-11 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 ${
+                    className={`flex h-9 w-9 items-center justify-center rounded-full shadow-pop backdrop-blur-md transition-all duration-300 sm:h-11 sm:w-11 ${
                       downloaded
                         ? "pointer-events-none w-0 scale-75 opacity-0"
                         : selected
@@ -660,10 +664,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   </button>
                 </div>
 
-                <div className="absolute bottom-8 left-8 z-10 max-w-[72%]">
+                <div className="absolute bottom-5 left-5 z-10 max-w-[78%] sm:bottom-8 sm:left-8 sm:max-w-[72%]">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span
-                      className={`inline-block rounded-full bg-white px-4 py-1 text-sm font-black shadow-sm transform ${
+                      className={`inline-block rounded-full bg-white px-3 py-1 text-xs font-black shadow-sm transform sm:px-4 sm:text-sm ${
                         index % 2 === 0
                           ? "-rotate-3 text-[#3465A4]"
                           : "rotate-2 text-[#CC5E00]"
@@ -671,14 +675,14 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     >
                       {item.badgeText || item.typeName || "Submission"}
                     </span>
-                    <span className="rounded-full border border-white/55 bg-[#14112C]/35 px-3 py-1 text-xs font-bold text-white/92 backdrop-blur-sm">
+                    <span className="rounded-full border border-white/55 bg-[#14112C]/35 px-2.5 py-1 text-[11px] font-bold text-white/92 backdrop-blur-sm sm:px-3 sm:text-xs">
                       {formatFileCount(item.pageCount)}
                     </span>
                   </div>
-                  <h4 className="text-3xl font-display font-black text-white drop-shadow-md">
+                  <h4 className="text-xl font-display font-black text-white drop-shadow-md sm:text-3xl">
                     {item.title}
                   </h4>
-                  <p className="text-xl font-bold text-white opacity-95">
+                  <p className="text-sm font-bold text-white opacity-95 sm:text-xl">
                     @{item.username}
                   </p>
                 </div>
@@ -792,9 +796,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           </div>
           <div
             ref={resultsScrollRef}
-            className="h-[75vh] overflow-x-hidden overflow-y-auto"
+            className="h-[68vh] overflow-x-hidden overflow-y-auto sm:h-[75vh]"
           >
-            <div ref={resultsGridMeasureRef} className="p-4">
+            <div ref={resultsGridMeasureRef} className="p-2 sm:p-4">
               <div
                 className="relative w-full"
                 style={{
@@ -813,7 +817,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                       key={virtualRow.key}
                       data-index={virtualRow.index}
                       ref={resultRowVirtualizer.measureElement}
-                      className="absolute left-0 top-0 w-full pb-3"
+                      className="absolute left-0 top-0 w-full pb-2 sm:pb-3"
                       style={{
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
@@ -1272,9 +1276,12 @@ function getThumbnailPreviewSource(
     0,
   );
   const srcSet = [
-    ...srcSetVariants.map((variant) => `${variant.src} ${variant.width}w`),
+    ...srcSetVariants.map(
+      (variant) =>
+        `${resolveMediaURL(variant.src) ?? variant.src} ${variant.width}w`,
+    ),
     includeFullFileURL && item.fullUrl
-      ? `${item.fullUrl} ${Math.max(fullWidth + 1, 4096)}w`
+      ? `${resolveMediaURL(item.fullUrl) ?? item.fullUrl} ${Math.max(fullWidth + 1, 4096)}w`
       : null,
   ]
     .filter((value): value is string => Boolean(value))
@@ -1356,7 +1363,7 @@ function toPreviewSource(src?: string): PreviewSource | null {
   if (!src) {
     return null;
   }
-  return { src };
+  return { src: resolveMediaURL(src) ?? src };
 }
 
 function dedupePreviewSources(
@@ -1392,7 +1399,7 @@ function buildAvatarSrcSet(submission: SubmissionCard) {
       seen.add(src);
       return true;
     })
-    .map(([src, descriptor]) => `${src} ${descriptor}`)
+    .map(([src, descriptor]) => `${resolveMediaURL(src) ?? src} ${descriptor}`)
     .join(", ");
 }
 
@@ -1416,6 +1423,7 @@ function ExternalActionButton(props: {
         openExternal(props.url);
       }}
       className={props.className}
+      title={props.url}
     >
       {props.children}
     </button>
@@ -1446,8 +1454,8 @@ function SubmissionAuthorButton(props: {
       } ${props.className ?? ""}`}
     >
       <img
-        src={avatarSrc}
-        srcSet={avatarSrcSet || undefined}
+        src={resolveMediaURL(avatarSrc) ?? avatarSrc}
+        srcSet={resolveMediaSrcSet(avatarSrcSet || undefined)}
         sizes={props.compact ? "24px" : "32px"}
         alt={props.submission.username}
         loading="lazy"
