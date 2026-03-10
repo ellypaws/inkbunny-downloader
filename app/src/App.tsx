@@ -1866,6 +1866,7 @@ export default function App() {
       searchError: "",
     }));
     const runId = startSearchRequestRun(targetTabId);
+    let clearSearchLoadingInFinally = true;
     try {
       const committedArtistName = getCommittedArtistDraftName(
         tab.searchParams,
@@ -1902,6 +1903,7 @@ export default function App() {
       if (page === 1 && activeTabIdRef.current === targetTabId) {
         shouldScrollToResultsRef.current = true;
       }
+      clearSearchLoadingInFinally = false;
       startTransition(() => {
         setTabs((previous) =>
           previous.map((currentTab) => {
@@ -1919,6 +1921,7 @@ export default function App() {
                 ...nextTab,
                 searchParams: normalizedParams,
                 artistDraft: "",
+                searchLoading: false,
                 searchResponse: response,
                 results: response.results,
                 selectedSubmissionIds: getAutoSelectedSubmissionIds(
@@ -1934,6 +1937,7 @@ export default function App() {
             }
             return {
               ...currentTab,
+              searchLoading: false,
               searchResponse: response,
               results: [...currentTab.results, ...response.results],
               activeSubmissionId:
@@ -1959,7 +1963,7 @@ export default function App() {
       pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
       return undefined;
     } finally {
-      if (isSearchRequestRunActive(targetTabId, runId)) {
+      if (clearSearchLoadingInFinally && isSearchRequestRunActive(targetTabId, runId)) {
         updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
       }
     }
@@ -1979,18 +1983,21 @@ export default function App() {
       searchError: "",
     }));
     const runId = startSearchRequestRun(resolvedTabId);
+    let clearSearchLoadingInFinally = true;
     try {
       const response = await backend.refreshSearch(tab.searchResponse.searchId);
       if (isSearchRequestStopRequested(resolvedTabId, runId)) {
         return;
       }
       applySession(response.session);
+      clearSearchLoadingInFinally = false;
       startTransition(() => {
         setTabs((previous) =>
             previous.map((currentTab) =>
               currentTab.id === resolvedTabId
                 ? {
                   ...currentTab,
+                  searchLoading: false,
                   searchResponse: response,
                   results: response.results,
                   selectedSubmissionIds: getAutoSelectedSubmissionIds(
@@ -2022,7 +2029,7 @@ export default function App() {
       updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchError: message }));
       pushErrorToast(message, "refresh-search-error");
     } finally {
-      if (isSearchRequestRunActive(resolvedTabId, runId)) {
+      if (clearSearchLoadingInFinally && isSearchRequestRunActive(resolvedTabId, runId)) {
         updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
       }
     }
