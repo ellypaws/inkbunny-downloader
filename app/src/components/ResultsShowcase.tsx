@@ -331,8 +331,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     );
   }, [
     activeIndex,
-    props.results.length,
     resultColumnCount,
+    props.resultsRefreshToken,
     resultRowVirtualizer,
   ]);
 
