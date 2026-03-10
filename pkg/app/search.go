@@ -711,8 +711,16 @@ func mapSubmissionCards(
 				strings.TrimSpace(detail.SalesDescription),
 			),
 			DescriptionHTML: firstNonEmpty(
-				strings.TrimSpace(detail.DescriptionBBCodeParsed),
-				strings.TrimSpace(detail.WritingBBCodeParsed),
+				normalizeSubmissionDescriptionHTML(
+					strings.TrimSpace(detail.DescriptionBBCodeParsed),
+					sid,
+					submission.Public.Bool(),
+				),
+				normalizeSubmissionDescriptionHTML(
+					strings.TrimSpace(detail.WritingBBCodeParsed),
+					sid,
+					submission.Public.Bool(),
+				),
 			),
 			Username:         submission.Username,
 			UserURL:          userPageURL(submission.Username),

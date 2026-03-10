@@ -19,6 +19,7 @@ type BackendApi = {
   UpdateRatings(mask: string): Promise<SessionInfo>
   OpenDownloadDirectory(): Promise<void>
   OpenExternalURL(url: string): Promise<void>
+  ProxyAvatarImageURL(url: string): Promise<string>
   Search(params: SearchParams): Promise<SearchResponse>
   CancelSearchRequests(): Promise<void>
   GetUnreadSubmissionCount(): Promise<number>
@@ -101,6 +102,9 @@ export const backend = {
   },
   async openExternalURL(url: string): Promise<void> {
     return getBackend().OpenExternalURL(url)
+  },
+  async proxyAvatarImageURL(url: string): Promise<string> {
+    return getBackend().ProxyAvatarImageURL(url)
   },
   async search(params: SearchParams): Promise<SearchResponse> {
     return getBackend().Search(params)

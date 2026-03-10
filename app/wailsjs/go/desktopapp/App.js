@@ -98,6 +98,10 @@ export function PickDownloadDirectory() {
   return window['go']['desktopapp']['App']['PickDownloadDirectory']();
 }
 
+export function ProxyAvatarImageURL(arg1) {
+  return window['go']['desktopapp']['App']['ProxyAvatarImageURL'](arg1);
+}
+
 export function RefreshSearch(arg1) {
   return window['go']['desktopapp']['App']['RefreshSearch'](arg1);
 }
