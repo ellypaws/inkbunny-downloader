@@ -811,9 +811,9 @@ function SubmissionModalImage(props: {
           />
         ) : null}
         {!loaded ? (
-          <div className="theme-panel-strong absolute z-10 flex items-center gap-3 rounded-full border px-4 py-2 text-sm font-semibold text-[var(--theme-title)] shadow-sm">
-            <LoaderCircle size={18} className="animate-spin" />
-            <span>Loading full image</span>
+          <div className="theme-panel-strong absolute z-10 inline-flex flex-nowrap items-center gap-3 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold text-[var(--theme-title)] shadow-sm">
+            <LoaderCircle size={18} className="shrink-0 animate-spin" />
+            <span className="whitespace-nowrap">Loading full image</span>
           </div>
         ) : null}
         <img

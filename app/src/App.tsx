@@ -152,6 +152,7 @@ export default function App() {
   const workspaceLoadedRef = useRef(false);
   const workspacePersistTimeoutRef = useRef<number | null>(null);
   const suppressNextWorkspacePersistRef = useRef(false);
+  const pendingWorkspaceEchoesRef = useRef<string[]>([]);
   const autoQueueRunningRef = useRef(false);
   const tourAdvanceTimeoutRef = useRef<number | null>(null);
   const scheduledTourAdvanceRef = useRef("");
@@ -638,6 +639,7 @@ export default function App() {
     nextSession = sessionRef.current,
     nextSettings = settingsRef.current,
   ) {
+    pendingWorkspaceEchoesRef.current = [];
     const restoredTabs = restoreWorkspaceTabs(workspace, nextSession, nextSettings);
     const nextActiveTabId = resolveActiveWorkspaceTabId(workspace, restoredTabs);
     tabsRef.current = restoredTabs;
@@ -676,6 +678,7 @@ export default function App() {
     favoritesRequestRef.current += 1;
     loadMoreControllersRef.current = new Map();
     searchRequestControllersRef.current = new Map();
+    pendingWorkspaceEchoesRef.current = [];
 
     setAuthLoading(false);
     setAuthError("");
@@ -865,6 +868,10 @@ export default function App() {
     workspaceRevisionRef.current = update.revision;
     const currentWorkspace = buildWorkspaceState(tabsRef.current, activeTabIdRef.current);
     if (areWorkspaceStatesEqual(currentWorkspace, update.workspace)) {
+      acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, update.workspace);
+      return;
+    }
+    if (acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, update.workspace)) {
       return;
     }
     suppressNextWorkspacePersistRef.current = true;
@@ -1336,9 +1343,12 @@ export default function App() {
     }
     workspacePersistTimeoutRef.current = window.setTimeout(() => {
       workspacePersistTimeoutRef.current = null;
+      const workspaceState = buildWorkspaceState(tabsRef.current, activeTabIdRef.current);
+      rememberPendingWorkspaceEcho(pendingWorkspaceEchoesRef, workspaceState);
       void backend
-        .saveWorkspaceState(buildWorkspaceState(tabsRef.current, activeTabIdRef.current))
+        .saveWorkspaceState(workspaceState)
         .catch((error: unknown) => {
+          acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, workspaceState);
           pushErrorToast(
             getErrorMessage(error, "Unable to save tab workspace."),
             "save-workspace-error",
@@ -3567,7 +3577,36 @@ function areWorkspaceStatesEqual(
   left: WorkspaceState | null | undefined,
   right: WorkspaceState | null | undefined,
 ) {
-  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+  return serializeWorkspaceState(left) === serializeWorkspaceState(right);
+}
+
+function serializeWorkspaceState(workspace: WorkspaceState | null | undefined) {
+  return JSON.stringify(workspace ?? null);
+}
+
+function rememberPendingWorkspaceEcho(
+  pendingRef: { current: string[] },
+  workspace: WorkspaceState,
+) {
+  const serialized = serializeWorkspaceState(workspace);
+  const nextPending = [...pendingRef.current, serialized];
+  pendingRef.current =
+    nextPending.length > 12 ? nextPending.slice(nextPending.length - 12) : nextPending;
+}
+
+function acknowledgePendingWorkspaceEcho(
+  pendingRef: { current: string[] },
+  workspace: WorkspaceState,
+) {
+  const serialized = serializeWorkspaceState(workspace);
+  const index = pendingRef.current.indexOf(serialized);
+  if (index < 0) {
+    return false;
+  }
+  pendingRef.current = pendingRef.current.filter(
+    (_, currentIndex) => currentIndex !== index,
+  );
+  return true;
 }
 
 function toSavedSearchTab(tab: SearchTabState): SavedSearchTab {

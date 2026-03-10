@@ -35,8 +35,22 @@ type searchState struct {
 	RawResultsCount int
 	ArtistFilters   []string
 	ArtistFilterSet map[string]struct{}
+	ArtistSearches  []artistSearchState
 	Request         inkbunny.SubmissionSearchRequest
 	CacheKey        searchCacheKey
+}
+
+type artistSearchState struct {
+	Username           string
+	RID                string
+	SID                string
+	ExpiresAt          time.Time
+	PagesCount         int
+	NextServerPage     int
+	RawResultsCount    int
+	FetchedResultCount int
+	Request            inkbunny.SubmissionSearchRequest
+	CacheKey           searchCacheKey
 }
 
 const defaultSearchPerPage = 30
@@ -75,6 +89,9 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 		"useWatchingArtists":  params.UseWatchingArtists,
 		"requestedArtistList": params.ArtistNames,
 	})
+	if len(artistFilters) > 1 {
+		return a.searchMultipleArtists(ctx, user, params, artistFilters)
+	}
 	req, err := a.buildSearchRequest(ctx, user, params, artistFilters)
 	if err != nil {
 		return types.SearchResponse{}, err
@@ -164,6 +181,97 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 	return resp, nil
 }
 
+func (a *App) searchMultipleArtists(
+	ctx context.Context,
+	user *inkbunny.User,
+	params types.SearchParams,
+	artistFilters []string,
+) (types.SearchResponse, error) {
+	requests, err := a.buildArtistSearchRequests(ctx, user, params, artistFilters)
+	if err != nil {
+		return types.SearchResponse{}, err
+	}
+
+	perPage := params.PerPage
+	if perPage <= 0 || perPage > 100 {
+		perPage = defaultSearchPerPage
+	}
+	ratingsMask := userRatingsMask(user)
+	streams := make([]artistSearchState, 0, len(requests))
+	pending := make([]inkbunny.SubmissionSearch, 0, perPage*len(requests))
+	totalRaw := 0
+
+	for index, req := range requests {
+		key, normalizedReq, entry, fetchErr := a.loadArtistSearchEntry(ctx, user, req, false)
+		if fetchErr != nil {
+			return types.SearchResponse{}, fetchErr
+		}
+		filtered := filterSearchSubmissions(
+			entry.Response.Submissions,
+			ratingsMask,
+			nil,
+			normalizedReq.UnreadSubmissions == inkbunny.Yes,
+		)
+		pageNumber := int(entry.Response.Page)
+		if pageNumber <= 0 {
+			pageNumber = 1
+		}
+		streams = append(streams, artistSearchState{
+			Username:           artistFilters[index],
+			RID:                entry.Response.RID,
+			SID:                entry.Response.SID,
+			ExpiresAt:          entry.Response.RIDExpiry,
+			PagesCount:         int(entry.Response.PagesCount),
+			NextServerPage:     pageNumber + 1,
+			RawResultsCount:    int(entry.Response.ResultsCountAll),
+			FetchedResultCount: len(filtered),
+			Request:            normalizedReq,
+			CacheKey:           key,
+		})
+		totalRaw += int(entry.Response.ResultsCountAll)
+		pending = append(pending, filtered...)
+	}
+
+	searchID := a.newSearchID()
+	state := &searchState{
+		ID:              searchID,
+		ClientPage:      1,
+		MaxDownloads:    max(params.MaxDownloads, 0),
+		PerPage:         perPage,
+		PendingResults:  pending,
+		RawResultsCount: totalRaw,
+		ArtistFilters:   artistFilters,
+		ArtistFilterSet: buildArtistFilterSet(artistFilters),
+		ArtistSearches:  streams,
+		Request:         streams[0].Request,
+	}
+
+	visible, _, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, nil)
+	if err != nil {
+		return types.SearchResponse{}, err
+	}
+	state.DeliveredCount = len(visible)
+
+	cards, err := a.buildSubmissionCards(ctx, user, visible)
+	if err != nil {
+		return types.SearchResponse{}, err
+	}
+
+	a.mu.Lock()
+	a.searches[searchID] = state
+	a.lastSearchID = searchID
+	a.mu.Unlock()
+
+	return types.SearchResponse{
+		SearchID:     searchID,
+		Page:         1,
+		PagesCount:   searchPageCount(1, hasMore),
+		ResultsCount: searchResultsCount(state, hasMore),
+		Results:      cards,
+		Session:      a.GetSession(),
+	}, nil
+}
+
 func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err error) {
 	startedAt := time.Now()
 	a.emitDebugLog("debug", "search.refresh", "refresh requested", map[string]any{
@@ -197,6 +305,36 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 	user, err := a.ensureSearchSession()
 	if err != nil {
 		return types.SearchResponse{}, err
+	}
+	if len(state.ArtistSearches) > 0 {
+		if err := a.resetMultiArtistSearchState(ctx, user, state, true); err != nil {
+			return types.SearchResponse{}, err
+		}
+
+		visible, _, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, nil)
+		if err != nil {
+			return types.SearchResponse{}, err
+		}
+
+		a.mu.Lock()
+		state.ClientPage = 1
+		state.DeliveredCount = len(visible)
+		a.mu.Unlock()
+
+		cards, err := a.buildSubmissionCards(ctx, user, visible)
+		if err != nil {
+			return types.SearchResponse{}, err
+		}
+
+		resp = types.SearchResponse{
+			SearchID:     searchID,
+			Page:         1,
+			PagesCount:   searchPageCount(1, hasMore),
+			ResultsCount: searchResultsCount(state, hasMore),
+			Results:      cards,
+			Session:      a.GetSession(),
+		}
+		return resp, nil
 	}
 
 	key, normalizedReq, err := makeSearchCacheKey(user, userRatingsMask(user), state.Request)
@@ -307,6 +445,55 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 	user, err := a.ensureSearchSession()
 	if err != nil {
 		return types.SearchResponse{}, err
+	}
+	if len(state.ArtistSearches) > 0 {
+		if multiArtistSearchExpired(state) {
+			if err := a.refreshSearchState(ctx, user, state); err != nil {
+				return types.SearchResponse{}, err
+			}
+		}
+
+		visible, _, hasMore, err := a.collectVisibleSearchPage(ctx, user, state, nil)
+		if err != nil {
+			if a.handleSessionError(err) {
+				user, err = a.ensureSearchSession()
+				if err != nil {
+					return types.SearchResponse{}, err
+				}
+				if err := a.refreshSearchState(ctx, user, state); err != nil {
+					return types.SearchResponse{}, err
+				}
+				visible, _, hasMore, err = a.collectVisibleSearchPage(ctx, user, state, nil)
+			} else if a.handleRIDExpiredError(err) {
+				if err := a.refreshSearchStateForced(ctx, user, state); err != nil {
+					return types.SearchResponse{}, err
+				}
+				visible, _, hasMore, err = a.collectVisibleSearchPage(ctx, user, state, nil)
+			}
+		}
+		if err != nil {
+			return types.SearchResponse{}, err
+		}
+
+		a.mu.Lock()
+		state.ClientPage = page
+		state.DeliveredCount += len(visible)
+		a.mu.Unlock()
+
+		cards, err := a.buildSubmissionCards(ctx, user, visible)
+		if err != nil {
+			return types.SearchResponse{}, err
+		}
+
+		resp = types.SearchResponse{
+			SearchID:     searchID,
+			Page:         page,
+			PagesCount:   searchPageCount(page, hasMore),
+			ResultsCount: searchResultsCount(state, hasMore),
+			Results:      cards,
+			Session:      a.GetSession(),
+		}
+		return resp, nil
 	}
 	if !state.ExpiresAt.IsZero() && time.Now().After(state.ExpiresAt) {
 		if err := a.refreshSearchState(ctx, user, state); err != nil {
@@ -576,6 +763,70 @@ func (a *App) buildSearchRequest(
 	}
 
 	return req, nil
+}
+
+func (a *App) buildArtistSearchRequests(
+	ctx context.Context,
+	user *inkbunny.User,
+	params types.SearchParams,
+	artistFilters []string,
+) ([]inkbunny.SubmissionSearchRequest, error) {
+	if len(artistFilters) == 0 {
+		req, err := a.buildSearchRequest(ctx, user, params, nil)
+		if err != nil {
+			return nil, err
+		}
+		return []inkbunny.SubmissionSearchRequest{req}, nil
+	}
+
+	requests := make([]inkbunny.SubmissionSearchRequest, 0, len(artistFilters))
+	for _, artist := range artistFilters {
+		req, err := a.buildSearchRequest(ctx, user, params, []string{artist})
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, req)
+	}
+	return requests, nil
+}
+
+func (a *App) loadArtistSearchEntry(
+	ctx context.Context,
+	user *inkbunny.User,
+	req inkbunny.SubmissionSearchRequest,
+	force bool,
+) (searchCacheKey, inkbunny.SubmissionSearchRequest, cachedSearchResult, error) {
+	ratingsMask := userRatingsMask(user)
+	key, normalizedReq, err := makeSearchCacheKey(user, ratingsMask, req)
+	if err != nil {
+		return searchCacheKey{}, inkbunny.SubmissionSearchRequest{}, cachedSearchResult{}, err
+	}
+	if force {
+		a.ensureCaches(user)
+		a.searchCache.Delete(key)
+	}
+	entry, err := a.cachedSearchResponse(ctx, user, key)
+	if err != nil {
+		if a.handleSessionError(err) {
+			user, err = a.ensureSearchSession()
+			if err != nil {
+				return searchCacheKey{}, inkbunny.SubmissionSearchRequest{}, cachedSearchResult{}, err
+			}
+			key, normalizedReq, err = makeSearchCacheKey(user, userRatingsMask(user), req)
+			if err != nil {
+				return searchCacheKey{}, inkbunny.SubmissionSearchRequest{}, cachedSearchResult{}, err
+			}
+			if force {
+				a.ensureCaches(user)
+				a.searchCache.Delete(key)
+			}
+			entry, err = a.cachedSearchResponse(ctx, user, key)
+		}
+		if err != nil {
+			return searchCacheKey{}, inkbunny.SubmissionSearchRequest{}, cachedSearchResult{}, err
+		}
+	}
+	return key, normalizedReq, entry, nil
 }
 
 func unmarshalSearchRequest(data []byte) (inkbunny.SubmissionSearchRequest, error) {
@@ -858,6 +1109,9 @@ func (a *App) collectVisibleSearchPage(
 	if state == nil {
 		return nil, 0, false, errors.New("search state is missing")
 	}
+	if len(state.ArtistSearches) > 0 {
+		return a.collectVisibleMultiArtistPage(ctx, user, state)
+	}
 
 	remainingLimit := remainingVisibleLimit(state)
 	if remainingLimit == 0 {
@@ -940,6 +1194,46 @@ func (a *App) collectVisibleSearchPage(
 	return visible, nextServerPage, hasMore, nil
 }
 
+func (a *App) collectVisibleMultiArtistPage(
+	ctx context.Context,
+	user *inkbunny.User,
+	state *searchState,
+) ([]inkbunny.SubmissionSearch, int, bool, error) {
+	remainingLimit := remainingVisibleLimit(state)
+	if remainingLimit == 0 {
+		return nil, 0, false, nil
+	}
+
+	target := state.PerPage
+	if remainingLimit > 0 && remainingLimit < target {
+		target = remainingLimit
+	}
+	if target <= 0 {
+		target = state.PerPage
+	}
+
+	requiredCount := state.DeliveredCount + target
+	if err := a.ensureMultiArtistResults(ctx, user, state, requiredCount); err != nil {
+		return nil, 0, false, err
+	}
+	if err := a.sortPendingSearchResults(ctx, user, state); err != nil {
+		return nil, 0, false, err
+	}
+
+	visible := make([]inkbunny.SubmissionSearch, 0, target)
+	if len(state.PendingResults) > 0 {
+		remaining := minInt(target, len(state.PendingResults))
+		visible = append(visible, state.PendingResults[:remaining]...)
+		state.PendingResults = state.PendingResults[remaining:]
+	}
+
+	hasMore := len(state.PendingResults) > 0 || multiArtistSearchHasMore(state)
+	if remainingLimit > 0 && len(visible) >= remainingLimit {
+		hasMore = false
+	}
+	return visible, 0, hasMore, nil
+}
+
 func (a *App) GetUnreadSubmissionCount() (int, error) {
 	user, err := a.ensureSearchSession()
 	if err != nil {
@@ -1005,6 +1299,9 @@ func limitedResultsCount(raw, limit int) int {
 func searchResultsCount(state *searchState, hasMore bool) int {
 	if state == nil {
 		return 0
+	}
+	if len(state.ArtistSearches) > 0 {
+		return limitedResultsCount(state.RawResultsCount, state.MaxDownloads)
 	}
 	if len(state.ArtistFilterSet) == 0 || strings.TrimSpace(state.Request.Username) != "" {
 		return limitedResultsCount(state.RawResultsCount, state.MaxDownloads)
@@ -1572,6 +1869,26 @@ func (a *App) refreshSearchStateWithOptions(
 	if state == nil {
 		return errors.New("search state is missing")
 	}
+	if len(state.ArtistSearches) > 0 {
+		totalRaw := 0
+		for index := range state.ArtistSearches {
+			stream := &state.ArtistSearches[index]
+			key, normalizedReq, entry, err := a.loadArtistSearchEntry(ctx, user, stream.Request, force)
+			if err != nil {
+				return err
+			}
+			stream.RID = entry.Response.RID
+			stream.SID = entry.Response.SID
+			stream.ExpiresAt = entry.Response.RIDExpiry
+			stream.PagesCount = int(entry.Response.PagesCount)
+			stream.RawResultsCount = int(entry.Response.ResultsCountAll)
+			stream.Request = normalizedReq
+			stream.CacheKey = key
+			totalRaw += stream.RawResultsCount
+		}
+		state.RawResultsCount = totalRaw
+		return nil
+	}
 	key, normalizedReq, err := makeSearchCacheKey(user, userRatingsMask(user), state.Request)
 	if err != nil {
 		return err
@@ -1594,6 +1911,58 @@ func (a *App) refreshSearchStateWithOptions(
 	return nil
 }
 
+func (a *App) resetMultiArtistSearchState(
+	ctx context.Context,
+	user *inkbunny.User,
+	state *searchState,
+	force bool,
+) error {
+	if state == nil {
+		return errors.New("search state is missing")
+	}
+	ratingsMask := userRatingsMask(user)
+	pending := make([]inkbunny.SubmissionSearch, 0, state.PerPage*max(len(state.ArtistSearches), 1))
+	totalRaw := 0
+
+	for index := range state.ArtistSearches {
+		stream := &state.ArtistSearches[index]
+		key, normalizedReq, entry, err := a.loadArtistSearchEntry(ctx, user, stream.Request, force)
+		if err != nil {
+			return err
+		}
+		filtered := filterSearchSubmissions(
+			entry.Response.Submissions,
+			ratingsMask,
+			nil,
+			normalizedReq.UnreadSubmissions == inkbunny.Yes,
+		)
+		pageNumber := int(entry.Response.Page)
+		if pageNumber <= 0 {
+			pageNumber = 1
+		}
+		stream.RID = entry.Response.RID
+		stream.SID = entry.Response.SID
+		stream.ExpiresAt = entry.Response.RIDExpiry
+		stream.PagesCount = int(entry.Response.PagesCount)
+		stream.NextServerPage = pageNumber + 1
+		stream.RawResultsCount = int(entry.Response.ResultsCountAll)
+		stream.FetchedResultCount = len(filtered)
+		stream.Request = normalizedReq
+		stream.CacheKey = key
+		totalRaw += stream.RawResultsCount
+		pending = append(pending, filtered...)
+	}
+
+	state.ClientPage = 1
+	state.DeliveredCount = 0
+	state.PendingResults = pending
+	state.RawResultsCount = totalRaw
+	if len(state.ArtistSearches) > 0 {
+		state.Request = state.ArtistSearches[0].Request
+	}
+	return nil
+}
+
 func (a *App) cachedLoadMore(
 	ctx context.Context,
 	state *searchState,
@@ -1608,4 +1977,153 @@ func (a *App) cachedLoadMore(
 		RID:  state.RID,
 		Page: page,
 	})
+}
+
+func (a *App) cachedLoadMoreArtist(
+	ctx context.Context,
+	stream *artistSearchState,
+	page int,
+) (inkbunny.SubmissionSearchResponse, error) {
+	if stream == nil {
+		return inkbunny.SubmissionSearchResponse{}, errors.New("artist search stream is missing")
+	}
+	a.ensureCaches(a.user)
+	return a.loadMoreCache.GetWithContext(ctx, loadMoreCacheKey{
+		SID:  stream.SID,
+		RID:  stream.RID,
+		Page: page,
+	})
+}
+
+func (a *App) ensureMultiArtistResults(
+	ctx context.Context,
+	user *inkbunny.User,
+	state *searchState,
+	requiredCount int,
+) error {
+	if state == nil {
+		return errors.New("search state is missing")
+	}
+	ratingsMask := userRatingsMask(user)
+	totalRaw := 0
+	for index := range state.ArtistSearches {
+		stream := &state.ArtistSearches[index]
+		for stream.FetchedResultCount < requiredCount && stream.NextServerPage > 0 && stream.NextServerPage <= stream.PagesCount {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			response, err := a.cachedLoadMoreArtist(ctx, stream, stream.NextServerPage)
+			if err != nil {
+				return err
+			}
+			filtered := filterSearchSubmissions(
+				response.Submissions,
+				ratingsMask,
+				nil,
+				stream.Request.UnreadSubmissions == inkbunny.Yes,
+			)
+			state.PendingResults = append(state.PendingResults, filtered...)
+			stream.FetchedResultCount += len(filtered)
+			stream.PagesCount = int(response.PagesCount)
+			stream.RawResultsCount = int(response.ResultsCountAll)
+			pageNumber := int(response.Page)
+			if pageNumber <= 0 {
+				pageNumber = stream.NextServerPage
+			}
+			stream.NextServerPage = pageNumber + 1
+		}
+		totalRaw += stream.RawResultsCount
+	}
+	state.RawResultsCount = totalRaw
+	return nil
+}
+
+func (a *App) sortPendingSearchResults(
+	ctx context.Context,
+	user *inkbunny.User,
+	state *searchState,
+) error {
+	if state == nil || len(state.PendingResults) < 2 {
+		return nil
+	}
+	orderBy := strings.TrimSpace(state.Request.OrderBy)
+	if orderBy == "" {
+		orderBy = inkbunny.OrderByCreateDatetime
+	}
+
+	detailsByID := map[string]inkbunny.SubmissionDetails{}
+	if orderBy == inkbunny.OrderByFavs || orderBy == inkbunny.OrderByViews {
+		submissionIDs := make([]string, 0, len(state.PendingResults))
+		for _, submission := range state.PendingResults {
+			if id := submission.SubmissionID.String(); id != "" {
+				submissionIDs = append(submissionIDs, id)
+			}
+		}
+		details, err := a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
+		if err != nil {
+			return err
+		}
+		detailsByID = make(map[string]inkbunny.SubmissionDetails, len(details.Submissions))
+		for _, submission := range details.Submissions {
+			detailsByID[submission.SubmissionID.String()] = submission
+		}
+	}
+
+	sort.SliceStable(state.PendingResults, func(i, j int) bool {
+		left := state.PendingResults[i]
+		right := state.PendingResults[j]
+		return compareSearchSubmissions(left, right, orderBy, detailsByID)
+	})
+	return nil
+}
+
+func compareSearchSubmissions(
+	left inkbunny.SubmissionSearch,
+	right inkbunny.SubmissionSearch,
+	orderBy string,
+	detailsByID map[string]inkbunny.SubmissionDetails,
+) bool {
+	switch orderBy {
+	case inkbunny.OrderByFavs:
+		leftDetails := detailsByID[left.SubmissionID.String()]
+		rightDetails := detailsByID[right.SubmissionID.String()]
+		if leftDetails.FavoritesCount != rightDetails.FavoritesCount {
+			return leftDetails.FavoritesCount > rightDetails.FavoritesCount
+		}
+	case inkbunny.OrderByViews:
+		leftDetails := detailsByID[left.SubmissionID.String()]
+		rightDetails := detailsByID[right.SubmissionID.String()]
+		if leftDetails.Views != rightDetails.Views {
+			return leftDetails.Views > rightDetails.Views
+		}
+	}
+
+	if left.CreateDateSystem != right.CreateDateSystem {
+		return left.CreateDateSystem > right.CreateDateSystem
+	}
+	return left.SubmissionID > right.SubmissionID
+}
+
+func multiArtistSearchExpired(state *searchState) bool {
+	if state == nil {
+		return false
+	}
+	for _, stream := range state.ArtistSearches {
+		if !stream.ExpiresAt.IsZero() && time.Now().After(stream.ExpiresAt) {
+			return true
+		}
+	}
+	return false
+}
+
+func multiArtistSearchHasMore(state *searchState) bool {
+	if state == nil {
+		return false
+	}
+	for _, stream := range state.ArtistSearches {
+		if stream.NextServerPage > 0 && stream.NextServerPage <= stream.PagesCount {
+			return true
+		}
+	}
+	return false
 }
