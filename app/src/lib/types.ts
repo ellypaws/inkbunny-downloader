@@ -56,8 +56,10 @@ export type SearchParams = {
 
 export type SubmissionCard = {
   submissionId: string
+  submissionUrl?: string
   title: string
   username: string
+  userUrl?: string
   typeName: string
   submissionTypeId: number
   ratingName: string
@@ -73,6 +75,24 @@ export type SubmissionCard = {
   fullUrl?: string
   thumbnailUrl?: string
   latestThumbnailUrl?: string
+  thumbnailUrlMedium?: string
+  thumbnailUrlLarge?: string
+  thumbnailUrlHuge?: string
+  thumbnailUrlMediumNonCustom?: string
+  thumbnailUrlLargeNonCustom?: string
+  thumbnailUrlHugeNonCustom?: string
+  thumbMediumX?: number
+  thumbLargeX?: number
+  thumbHugeX?: number
+  thumbMediumNonCustomX?: number
+  thumbLargeNonCustomX?: number
+  thumbHugeNonCustomX?: number
+  userIconUrlSmall?: string
+  userIconUrlMedium?: string
+  userIconUrlLarge?: string
+  favorite: boolean
+  favoritesCount: number
+  viewsCount: number
   badgeText?: string
   accent?: string
   fileIds?: string[]
@@ -100,6 +120,7 @@ export type SavedSearchTab = {
   activeSubmissionId: string
   selectedSubmissionIds: string[]
   searchCollapsed: boolean
+  showCustomThumbnails: boolean
   autoQueueEnabled: boolean
   trackedDownloadSubmissionIds: string[]
   autoQueueNextRunAt: number

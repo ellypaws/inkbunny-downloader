@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search as SearchIcon,
   Square,
+  Star,
 } from "lucide-react";
 import {
   useEffect,
@@ -22,7 +23,9 @@ import {
 
 import ElasticSlider from "./ElasticSlider";
 import { LoadMoreControl, type LoadMoreControlState } from "./LoadMoreControl";
+import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import { accentClass } from "../lib/format";
+import { backend } from "../lib/wails";
 import type {
   DownloadJobSnapshot,
   QueueSnapshot,
@@ -35,6 +38,8 @@ type ResultsShowcaseProps = {
   results: SubmissionCard[];
   activeSubmissionId: string;
   selectedSubmissionIds: string[];
+  showCustomThumbnails: boolean;
+  showEngagementStats?: boolean;
   allSelected: boolean;
   loading: boolean;
   loadMoreState: LoadMoreControlState;
@@ -50,6 +55,7 @@ type ResultsShowcaseProps = {
   onSelectActive: (submissionId: string) => void;
   onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
+  onShowCustomThumbnailsChange: (enabled: boolean) => void;
   onDownloadSubmission: (submissionId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
   onRetrySubmission: (submissionId: string) => void;
@@ -75,7 +81,7 @@ type SubmissionDownloadSummary = {
 
 const PANEL_WINDOW_SIZE = 5;
 const RESULT_GRID_GAP = 12;
-const RESULT_CARD_CHROME_HEIGHT = 132;
+const RESULT_CARD_CHROME_HEIGHT = 152;
 const IDLE_DOWNLOAD_SUMMARY: SubmissionDownloadSummary = {
   state: "idle",
   progress: 0,
@@ -106,8 +112,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     [props.results, panelStart],
   );
   const panelPreviewImages = useMemo(
-    () => selectPanelPreviewImages(panelItems),
-    [panelItems],
+    () => selectPanelPreviewImages(panelItems, props.showCustomThumbnails),
+    [panelItems, props.showCustomThumbnails],
   );
   const downloadSummaries = useMemo(
     () =>
@@ -371,6 +377,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   submission={item}
                   alt={item.title}
                   variant="full"
+                  preferCustomThumbnails={props.showCustomThumbnails}
                   refreshToken={props.resultsRefreshToken}
                   className="absolute inset-0 h-full w-full object-cover opacity-70 transition-opacity duration-500 group-hover:opacity-100"
                 />
@@ -407,9 +414,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                         ? "translate-x-[3.25rem] bg-[#73D216]/85 text-white"
                         : retryable
                           ? "bg-[#CC5E00] text-white hover:scale-105 hover:bg-[#A84600]"
-                        : cancellable
-                          ? "bg-[#2A7FA6] text-white hover:bg-[#CC5E00]"
-                          : "bg-[#14112C]/72 text-white hover:scale-105"
+                          : cancellable
+                            ? "bg-[#2A7FA6] text-white hover:bg-[#CC5E00]"
+                            : "bg-[#14112C]/72 text-white hover:scale-105"
                     } disabled:cursor-default disabled:hover:scale-100`}
                   >
                     {cancellable ? (
@@ -559,6 +566,35 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     className="w-24"
                   />
                 </label>
+                <label className="theme-panel-strong flex items-center gap-3 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md">
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-5 w-5 items-center justify-center rounded-[0.35rem] border ${
+                      props.showCustomThumbnails
+                        ? "border-[#76B900] bg-[#76B900] text-white"
+                        : "border-[var(--theme-subtle)] bg-transparent text-transparent"
+                    }`}
+                  >
+                    <Check size={12} />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={props.showCustomThumbnails}
+                    onChange={(event) =>
+                      props.onShowCustomThumbnailsChange(
+                        event.target.checked,
+                      )
+                    }
+                    className="sr-only"
+                  />
+                  <span className="inline-flex items-center gap-2">
+                    <FileImage
+                      size={14}
+                      className="text-[var(--theme-info)]"
+                    />
+                    Custom Thumbnails
+                  </span>
+                </label>
               </div>
             </div>
           </div>
@@ -634,6 +670,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                   submission={item}
                                   alt={item.title}
                                   variant="card"
+                                  preferCustomThumbnails={
+                                    props.showCustomThumbnails
+                                  }
                                   refreshToken={props.resultsRefreshToken}
                                   className="h-full w-full object-cover"
                                 />
@@ -651,19 +690,34 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
                               <div className="space-y-2.5 p-3">
                                 <div className="min-w-0">
-                                  <div className="theme-title truncate text-[13px] font-black">
+                                  <ExternalActionButton
+                                    url={item.submissionUrl}
+                                    className="theme-title block truncate text-left text-[13px] font-black transition-colors hover:text-[var(--theme-info)]"
+                                  >
                                     {item.title}
-                                  </div>
-                                  <div className="theme-muted mt-1 truncate text-[11px] font-bold">
-                                    @{item.username} ·{" "}
-                                    {item.ratingName || "Unrated"}
+                                  </ExternalActionButton>
+                                  <div className="mt-1 flex items-center justify-between gap-2">
+                                    <SubmissionAuthorButton
+                                      submission={item}
+                                      compact
+                                      className="theme-muted min-w-0 flex-1 text-[10px] font-bold"
+                                    />
+                                    <div className="theme-subtle shrink-0 text-[10px] font-semibold">
+                                      {item.ratingName || "Unrated"}
+                                    </div>
                                   </div>
                                 </div>
 
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="theme-subtle text-[10px] font-semibold">
-                                    {formatDownloadStatus(downloadSummary)}
-                                  </div>
+                                  {props.showEngagementStats ? (
+                                    <SubmissionEngagementStats
+                                      submission={item}
+                                      compact
+                                      className="theme-subtle text-[10px] font-semibold"
+                                    />
+                                  ) : (
+                                    <div className="h-5" />
+                                  )}
                                   <div className="flex items-center gap-2">
                                     <GridDownloadButton
                                       title={item.title}
@@ -759,9 +813,14 @@ function SubmissionPreview(props: {
   alt: string;
   className: string;
   variant?: "full" | "card";
+  preferCustomThumbnails: boolean;
   refreshToken: number;
 }) {
-  const sources = getPreviewSources(props.submission, props.variant);
+  const sources = getPreviewSources(
+    props.submission,
+    props.variant,
+    props.preferCustomThumbnails,
+  );
 
   if (sources.length === 0) {
     return (
@@ -774,7 +833,11 @@ function SubmissionPreview(props: {
 
   return (
     <SubmissionPreviewImage
-      key={getSubmissionPreviewKey(props.submission, props.refreshToken)}
+      key={getSubmissionPreviewKey(
+        props.submission,
+        props.refreshToken,
+        props.preferCustomThumbnails,
+      )}
       submission={props.submission}
       sources={sources}
       alt={props.alt}
@@ -791,7 +854,7 @@ function SubmissionPreview(props: {
 
 function SubmissionPreviewImage(props: {
   submission: SubmissionCard;
-  sources: string[];
+  sources: PreviewSource[];
   alt: string;
   className: string;
   sizes: string;
@@ -800,7 +863,7 @@ function SubmissionPreviewImage(props: {
   const [sourceIndex, setSourceIndex] = useState(0);
   const source = props.sources[sourceIndex];
 
-  if (!source) {
+  if (!source?.src) {
     return (
       <PreviewFallback
         submission={props.submission}
@@ -812,7 +875,8 @@ function SubmissionPreviewImage(props: {
   return (
     <img
       key={`${props.submission.submissionId}-${props.refreshToken}-${sourceIndex}`}
-      src={source}
+      src={source.src}
+      srcSet={source.srcSet}
       sizes={props.sizes}
       alt={props.alt}
       loading="lazy"
@@ -828,45 +892,303 @@ function SubmissionPreviewImage(props: {
 function getPreviewSources(
   submission: SubmissionCard,
   variant: "full" | "card" = "card",
+  preferCustomThumbnails = true,
 ) {
+  const thumbnailSource = getThumbnailPreviewSource(
+    submission,
+    preferCustomThumbnails,
+    variant === "full",
+  );
+
   const ordered =
     variant === "full"
       ? [
-          submission.fullUrl,
-          submission.screenUrl,
-          submission.previewUrl,
-          submission.latestPreviewUrl,
-          submission.thumbnailUrl,
-          submission.latestThumbnailUrl,
+          thumbnailSource,
+          toPreviewSource(submission.latestThumbnailUrl),
+          toPreviewSource(submission.previewUrl),
+          toPreviewSource(submission.latestPreviewUrl),
+          toPreviewSource(submission.screenUrl),
+          toPreviewSource(submission.fullUrl),
         ]
       : [
-          submission.previewUrl,
-          submission.latestPreviewUrl,
-          submission.screenUrl,
-          submission.thumbnailUrl,
-          submission.latestThumbnailUrl,
-          submission.fullUrl,
+          thumbnailSource,
+          toPreviewSource(submission.previewUrl),
+          toPreviewSource(submission.latestPreviewUrl),
+          toPreviewSource(submission.screenUrl),
+          toPreviewSource(submission.fullUrl),
+          toPreviewSource(submission.latestThumbnailUrl),
         ];
 
-  return [
-    ...new Set(ordered.filter((value): value is string => Boolean(value))),
-  ];
+  return dedupePreviewSources(ordered);
 }
 
 function getSubmissionPreviewKey(
   submission: SubmissionCard,
   refreshToken: number,
+  preferCustomThumbnails: boolean,
 ) {
   return [
     submission.submissionId,
     submission.thumbnailUrl,
+    submission.thumbnailUrlMedium,
+    submission.thumbnailUrlLarge,
+    submission.thumbnailUrlHuge,
+    submission.thumbnailUrlMediumNonCustom,
+    submission.thumbnailUrlLargeNonCustom,
+    submission.thumbnailUrlHugeNonCustom,
     submission.previewUrl,
     submission.screenUrl,
     submission.fullUrl,
     submission.latestPreviewUrl,
     submission.latestThumbnailUrl,
+    preferCustomThumbnails ? "custom" : "default",
     refreshToken,
   ].join("|");
+}
+
+type PreviewSource = {
+  src: string;
+  srcSet?: string;
+};
+
+type ThumbnailVariant = {
+  src: string;
+  width: number;
+};
+
+function getThumbnailPreviewSource(
+  submission: SubmissionCard,
+  preferCustomThumbnails: boolean,
+  includeFullFileURL = false,
+) {
+  const preferred = preferCustomThumbnails
+    ? getCustomThumbnailVariants(submission)
+    : getNonCustomThumbnailVariants(submission);
+  const fallback = preferCustomThumbnails
+    ? getNonCustomThumbnailVariants(submission)
+    : getCustomThumbnailVariants(submission);
+  const variants = preferred.length > 0 ? preferred : fallback;
+  const hugeVariant =
+    variants.find((variant) => variant.src === preferred[0]?.src) ??
+    variants.find((variant) => variant.width === submission.thumbHugeX) ??
+    variants.find((variant) => variant.width === submission.thumbHugeNonCustomX);
+  const primary = hugeVariant ?? variants[0];
+  if (!primary) {
+    return toPreviewSource(submission.thumbnailUrl);
+  }
+
+  const srcSetVariants = variants
+    .filter((variant) => variant.width > 0)
+    .sort((left, right) => right.width - left.width);
+  const fullWidth = Math.max(
+    ...srcSetVariants.map((variant) => variant.width),
+    0,
+  );
+  const srcSet = [
+    ...srcSetVariants.map((variant) => `${variant.src} ${variant.width}w`),
+    includeFullFileURL && submission.fullUrl
+      ? `${submission.fullUrl} ${Math.max(fullWidth + 1, 4096)}w`
+      : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(", ");
+  return {
+    src: primary.src,
+    srcSet: srcSet || undefined,
+  };
+}
+
+function getCustomThumbnailVariants(submission: SubmissionCard) {
+  return getThumbnailVariants([
+    [submission.thumbnailUrlHuge, submission.thumbHugeX],
+    [submission.thumbnailUrlLarge, submission.thumbLargeX],
+    [submission.thumbnailUrlMedium, submission.thumbMediumX],
+  ]);
+}
+
+function getNonCustomThumbnailVariants(submission: SubmissionCard) {
+  return getThumbnailVariants([
+    [
+      submission.thumbnailUrlHugeNonCustom,
+      submission.thumbHugeNonCustomX,
+    ],
+    [
+      submission.thumbnailUrlLargeNonCustom,
+      submission.thumbLargeNonCustomX,
+    ],
+    [
+      submission.thumbnailUrlMediumNonCustom,
+      submission.thumbMediumNonCustomX,
+    ],
+  ]);
+}
+
+function getThumbnailVariants(
+  entries: Array<[string | undefined, number | undefined]>,
+) {
+  const seen = new Set<string>();
+  const variants: ThumbnailVariant[] = [];
+
+  for (const [src, width] of entries) {
+    if (!src || seen.has(src)) {
+      continue;
+    }
+    seen.add(src);
+    variants.push({
+      src,
+      width: width ?? 0,
+    });
+  }
+
+  return variants;
+}
+
+function toPreviewSource(src?: string): PreviewSource | null {
+  if (!src) {
+    return null;
+  }
+  return { src };
+}
+
+function dedupePreviewSources(
+  sources: Array<PreviewSource | null>,
+) {
+  const seen = new Set<string>();
+  const deduped: PreviewSource[] = [];
+
+  for (const source of sources) {
+    if (!source?.src || seen.has(source.src)) {
+      continue;
+    }
+    seen.add(source.src);
+    deduped.push(source);
+  }
+
+  return deduped;
+}
+
+function buildAvatarSrcSet(submission: SubmissionCard) {
+  const seen = new Set<string>();
+  const variants = [
+    [submission.userIconUrlSmall, "1x"],
+    [submission.userIconUrlMedium, "2x"],
+    [submission.userIconUrlLarge, "3x"],
+  ] as const;
+
+  return variants
+    .filter(([src]) => {
+      if (!src || seen.has(src)) {
+        return false;
+      }
+      seen.add(src);
+      return true;
+    })
+    .map(([src, descriptor]) => `${src} ${descriptor}`)
+    .join(", ");
+}
+
+function openExternal(url?: string) {
+  if (!url) {
+    return;
+  }
+  void backend.openExternalURL(url).catch(() => undefined);
+}
+
+function ExternalActionButton(props: {
+  url?: string;
+  className: string;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        openExternal(props.url);
+      }}
+      className={props.className}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+function SubmissionAuthorButton(props: {
+  submission: SubmissionCard;
+  className?: string;
+  compact?: boolean;
+}) {
+  const avatarSrc =
+    props.submission.userIconUrlMedium ||
+    props.submission.userIconUrlSmall ||
+    props.submission.userIconUrlLarge ||
+    DEFAULT_AVATAR_URL;
+  const avatarSrcSet = buildAvatarSrcSet(props.submission);
+
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        openExternal(props.submission.userUrl);
+      }}
+      className={`inline-flex min-w-0 items-center text-left transition-opacity hover:opacity-85 ${
+        props.compact ? "gap-1.5" : "gap-2"
+      } ${props.className ?? ""}`}
+    >
+      <img
+        src={avatarSrc}
+        srcSet={avatarSrcSet || undefined}
+        sizes={props.compact ? "24px" : "32px"}
+        alt={props.submission.username}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={(event) => {
+          event.currentTarget.src = DEFAULT_AVATAR_URL;
+          event.currentTarget.srcset = "";
+        }}
+        className={`shrink-0 rounded-full border border-white/70 bg-white object-cover ${
+          props.compact ? "h-5 w-5" : "h-8 w-8"
+        }`}
+      />
+      <span className="truncate">@{props.submission.username}</span>
+    </button>
+  );
+}
+
+function SubmissionEngagementStats(props: {
+  submission: SubmissionCard;
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex min-w-0 items-center gap-3 ${props.className ?? ""}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        <Eye size={props.compact ? 12 : 14} />
+        {formatCompactCount(props.submission.viewsCount)}
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <Star
+          size={props.compact ? 12 : 14}
+          className={
+            props.submission.favorite
+              ? "fill-current text-[#F4C542]"
+              : "text-current"
+          }
+        />
+        {formatCompactCount(props.submission.favoritesCount)}
+      </span>
+    </div>
+  );
+}
+
+function formatCompactCount(value?: number) {
+  return new Intl.NumberFormat("en-US", {
+    notation: value && value >= 1000 ? "compact" : "standard",
+    maximumFractionDigits: value && value >= 1000 ? 1 : 0,
+  }).format(Math.max(0, value ?? 0));
 }
 
 function PreviewFallback(props: {
@@ -972,9 +1294,16 @@ function getPanelItems(results: SubmissionCard[], startIndex: number) {
   return results.slice(safeStart, safeStart + PANEL_WINDOW_SIZE);
 }
 
-function selectPanelPreviewImages(results: SubmissionCard[]) {
+function selectPanelPreviewImages(
+  results: SubmissionCard[],
+  preferCustomThumbnails: boolean,
+) {
   const previewImages = results
-    .map((result) => getPreviewSources(result, "full"))
+    .map((result) =>
+      getPreviewSources(result, "full", preferCustomThumbnails).map(
+        (source) => source.src,
+      ),
+    )
     .filter((value) => value.length > 0);
 
   if (previewImages.length <= 3) {
@@ -1113,22 +1442,6 @@ function getSubmissionProgress(jobs: DownloadJobSnapshot[]) {
   return 0;
 }
 
-function formatDownloadStatus(summary: SubmissionDownloadSummary) {
-  if (summary.state === "queued") {
-    return "Queued";
-  }
-  if (summary.state === "downloading") {
-    return "Downloading";
-  }
-  if (summary.state === "downloaded") {
-    return "Downloaded";
-  }
-  if (summary.state === "failed") {
-    return "Failed";
-  }
-  return "Ready";
-}
-
 function renderDownloadIcon(state: SubmissionDownloadState, size: number) {
   if (state === "queued" || state === "downloading") {
     return <LoaderCircle className="animate-spin" size={size} />;
@@ -1190,9 +1503,9 @@ function GridDownloadButton(props: {
           ? "translate-x-10 bg-[var(--theme-accent)] text-white"
           : props.retryable
             ? "bg-[var(--theme-danger)] text-white hover:scale-105 hover:bg-[#A84600]"
-          : props.cancellable
-            ? "bg-[var(--theme-info)] text-white hover:bg-[var(--theme-danger)]"
-            : "bg-[var(--theme-info)] text-white hover:scale-105"
+            : props.cancellable
+              ? "bg-[var(--theme-info)] text-white hover:bg-[var(--theme-danger)]"
+              : "bg-[var(--theme-info)] text-white hover:scale-105"
       } disabled:cursor-default disabled:hover:scale-100`}
     >
       {props.cancellable ? (
@@ -1215,7 +1528,10 @@ function GridDownloadButton(props: {
   );
 }
 
-function getDownloadActionButtonClass(mode: ResultsShowcaseProps["downloadButtonMode"], baseClassName: string) {
+function getDownloadActionButtonClass(
+  mode: ResultsShowcaseProps["downloadButtonMode"],
+  baseClassName: string,
+) {
   const tone =
     mode === "stop"
       ? "theme-button-danger"
@@ -1233,7 +1549,11 @@ function renderDownloadActionButtonContent(
   if (mode === "stop") {
     return (
       <>
-        <Square size={Math.max(12, iconSize - 2)} className="fill-current" strokeWidth={2.5} />
+        <Square
+          size={Math.max(12, iconSize - 2)}
+          className="fill-current"
+          strokeWidth={2.5}
+        />
         {label}
       </>
     );

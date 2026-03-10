@@ -66,7 +66,9 @@ export function StarBackground(props: StarBackgroundProps) {
           }}
         />
       </div>
-      <div className={`fixed inset-0 z-[1] pointer-events-none overflow-hidden transition-opacity duration-500 ${props.darkMode ? "opacity-80" : "opacity-22"}`}>
+      <div
+        className={`fixed inset-0 z-[1] pointer-events-none overflow-hidden transition-opacity duration-500 ${props.darkMode ? "opacity-80" : "opacity-22"}`}
+      >
         {stars.map((star) => (
           <div
             key={star.id}

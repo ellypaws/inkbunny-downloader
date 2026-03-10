@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 
@@ -38,7 +37,7 @@ type App struct {
 	watchingCache   *flight.Cache[watchingCacheKey, []UsernameSuggestion]
 	searchCache     *flight.Cache[searchCacheKey, cachedSearchResult]
 	loadMoreCache   *flight.Cache[loadMoreCacheKey, inkbunny.SubmissionSearchResponse]
-	detailsCache    *flight.Cache[detailsCacheKey, inkbunny.SubmissionDetailsResponse]
+	detailsCache    *flight.Cache[submissionDetailsCacheKey, inkbunny.SubmissionDetails]
 	rateLimiter     *apiRateLimiter
 	downloadManager *DownloadManager
 }
@@ -601,15 +600,31 @@ func (a *App) cachedSubmissionDetailsWithContext(
 	user *inkbunny.User,
 	submissionIDs []string,
 ) (inkbunny.SubmissionDetailsResponse, error) {
-	a.ensureCaches(user)
-
-	ids := slices.Clone(submissionIDs)
-	slices.Sort(ids)
-	key := detailsCacheKey{
-		SID:           user.SID,
-		SubmissionIDs: strings.Join(ids, ","),
+	ids := normalizeSubmissionIDs(submissionIDs)
+	response := inkbunny.SubmissionDetailsResponse{}
+	sid := ""
+	if user != nil {
+		sid = user.SID
+		response.SID = user.SID
 	}
-	return a.detailsCache.GetWithContext(ctx, key)
+	if len(ids) == 0 {
+		return response, nil
+	}
+
+	a.ensureCaches(user)
+	response.Submissions = make([]inkbunny.SubmissionDetails, 0, len(ids))
+	for _, id := range ids {
+		detail, err := a.detailsCache.GetWithContext(ctx, submissionDetailsCacheKey{
+			SID:          sid,
+			SubmissionID: id,
+		})
+		if err != nil {
+			return inkbunny.SubmissionDetailsResponse{}, err
+		}
+		response.Submissions = append(response.Submissions, detail)
+	}
+	response.ResultsCount = inkbunny.IntString(len(response.Submissions))
+	return response, nil
 }
 
 func (a *App) cachedSubmissionDetailsBatched(user *inkbunny.User, submissionIDs []string) (inkbunny.SubmissionDetailsResponse, error) {
@@ -622,26 +637,39 @@ func (a *App) cachedSubmissionDetailsBatchedWithContext(
 	submissionIDs []string,
 ) (inkbunny.SubmissionDetailsResponse, error) {
 	ids := normalizeSubmissionIDs(submissionIDs)
-	if len(ids) == 0 {
-		return inkbunny.SubmissionDetailsResponse{}, nil
-	}
-	if len(ids) <= submissionDetailsBatchSize {
-		return a.cachedSubmissionDetailsWithContext(ctx, user, ids)
-	}
-
 	response := inkbunny.SubmissionDetailsResponse{}
+	sid := ""
 	if user != nil {
+		sid = user.SID
 		response.SID = user.SID
 	}
+	if len(ids) == 0 {
+		return response, nil
+	}
+
+	a.ensureCaches(user)
 
 	detailsByID := make(map[string]inkbunny.SubmissionDetails, len(ids))
-	for start := 0; start < len(ids); start += submissionDetailsBatchSize {
-		end := start + submissionDetailsBatchSize
-		if end > len(ids) {
-			end = len(ids)
+	missingIDs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		detail, ok := a.detailsCache.Peek(submissionDetailsCacheKey{
+			SID:          sid,
+			SubmissionID: id,
+		})
+		if ok {
+			detailsByID[id] = detail
+			continue
 		}
+		missingIDs = append(missingIDs, id)
+	}
 
-		batch, err := a.cachedSubmissionDetailsWithContext(ctx, user, ids[start:end])
+	for start := 0; start < len(missingIDs); start += submissionDetailsBatchSize {
+		end := start + submissionDetailsBatchSize
+		if end > len(missingIDs) {
+			end = len(missingIDs)
+		}
+		batchIDs := missingIDs[start:end]
+		batch, err := a.fetchSubmissionDetailsBatch(ctx, user, batchIDs)
 		if err != nil {
 			return inkbunny.SubmissionDetailsResponse{}, err
 		}
@@ -652,7 +680,12 @@ func (a *App) cachedSubmissionDetailsBatchedWithContext(
 			response.UserLocation = batch.UserLocation
 		}
 		for _, submission := range batch.Submissions {
-			detailsByID[submission.SubmissionID.String()] = submission
+			id := submission.SubmissionID.String()
+			detailsByID[id] = submission
+			a.detailsCache.Store(submissionDetailsCacheKey{
+				SID:          sid,
+				SubmissionID: id,
+			}, submission)
 		}
 	}
 
@@ -666,6 +699,32 @@ func (a *App) cachedSubmissionDetailsBatchedWithContext(
 	}
 	response.ResultsCount = inkbunny.IntString(len(response.Submissions))
 	return response, nil
+}
+
+func (a *App) fetchSubmissionDetailsBatch(
+	ctx context.Context,
+	user *inkbunny.User,
+	submissionIDs []string,
+) (inkbunny.SubmissionDetailsResponse, error) {
+	if len(submissionIDs) == 0 {
+		return inkbunny.SubmissionDetailsResponse{}, nil
+	}
+
+	return executeWithRateLimitRetry(ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
+		current, err := a.ensureSearchSession()
+		if err != nil {
+			return inkbunny.SubmissionDetailsResponse{}, err
+		}
+		sid := current.SID
+		if user != nil && strings.TrimSpace(user.SID) != "" {
+			sid = user.SID
+		}
+		return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
+			SID:               sid,
+			SubmissionIDSlice: submissionIDs,
+			ShowPools:         inkbunny.Yes,
+		})
+	})
 }
 
 func normalizeSubmissionIDs(submissionIDs []string) []string {

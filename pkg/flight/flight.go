@@ -95,3 +95,20 @@ func (p *Cache[K, V]) Clear() {
 	clear(p.finished)
 	p.fmu.Unlock()
 }
+
+func (p *Cache[K, V]) Peek(k K) (V, bool) {
+	p.fmu.RLock()
+	defer p.fmu.RUnlock()
+
+	value, ok := p.finished[k]
+	return value, ok
+}
+
+func (p *Cache[K, V]) Store(k K, value V) {
+	p.pmu.Lock()
+	defer p.pmu.Unlock()
+
+	p.fmu.Lock()
+	p.finished[k] = value
+	p.fmu.Unlock()
+}

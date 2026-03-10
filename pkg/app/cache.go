@@ -42,9 +42,9 @@ type loadMoreCacheKey struct {
 	Page int
 }
 
-type detailsCacheKey struct {
-	SID           string
-	SubmissionIDs string
+type submissionDetailsCacheKey struct {
+	SID          string
+	SubmissionID string
 }
 
 type cachedSearchResult struct {

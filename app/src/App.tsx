@@ -2366,6 +2366,8 @@ export default function App() {
               results={activeResults}
               activeSubmissionId={activeSubmissionId}
               selectedSubmissionIds={activeSelectedSubmissionIds}
+              showCustomThumbnails={activeTab?.showCustomThumbnails ?? true}
+              showEngagementStats
               allSelected={allResultsSelected}
               loading={activeSearchBusy}
               loadMoreState={activeLoadMoreState}
@@ -2397,6 +2399,15 @@ export default function App() {
                   selectedSubmissionIds: currentTab.selectedSubmissionIds.includes(submissionId)
                     ? currentTab.selectedSubmissionIds.filter((value) => value !== submissionId)
                     : [...currentTab.selectedSubmissionIds, submissionId],
+                }));
+              }}
+              onShowCustomThumbnailsChange={(enabled) => {
+                if (!activeTab) {
+                  return;
+                }
+                updateTab(activeTab.id, (currentTab) => ({
+                  ...currentTab,
+                  showCustomThumbnails: enabled,
                 }));
               }}
               onDownloadSubmission={(submissionId) => void handleDownloadSubmissions([submissionId])}
@@ -2970,6 +2981,7 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     results: [],
     activeSubmissionId: "",
     selectedSubmissionIds: [],
+    showCustomThumbnails: true,
     autoQueueEnabled: false,
     trackedDownloadSubmissionIds: [],
     autoQueueNextRunAt: 0,
@@ -3129,6 +3141,7 @@ function toSavedSearchTab(tab: SearchTabState): SavedSearchTab {
     activeSubmissionId: tab.activeSubmissionId,
     selectedSubmissionIds: [...tab.selectedSubmissionIds],
     searchCollapsed: tab.searchCollapsed,
+    showCustomThumbnails: tab.showCustomThumbnails,
     autoQueueEnabled: tab.autoQueueEnabled,
     trackedDownloadSubmissionIds: [...tab.trackedDownloadSubmissionIds],
     autoQueueNextRunAt: tab.autoQueueNextRunAt,
@@ -3198,6 +3211,7 @@ function restoreSavedSearchTab(
     selectedSubmissionIds: [...(savedTab.selectedSubmissionIds ?? [])],
     searchLoading: false,
     searchCollapsed: Boolean(savedTab.searchCollapsed),
+    showCustomThumbnails: savedTab.showCustomThumbnails !== false,
     searchError: "",
     resultsRefreshToken: 0,
     loadMoreState: createIdleLoadMoreState(),
@@ -3299,6 +3313,7 @@ function isSearchTabUntouched(
     tab.results.length === 0 &&
     tab.activeSubmissionId === "" &&
     tab.selectedSubmissionIds.length === 0 &&
+    tab.showCustomThumbnails &&
     !tab.autoQueueEnabled &&
     tab.trackedDownloadSubmissionIds.length === 0 &&
     tab.autoQueueNextRunAt === 0 &&

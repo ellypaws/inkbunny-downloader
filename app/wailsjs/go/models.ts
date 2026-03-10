@@ -238,8 +238,10 @@ export namespace desktopapp {
 	}
 	export class SubmissionCard {
 	    submissionId: string;
+	    submissionUrl?: string;
 	    title: string;
 	    username: string;
+	    userUrl?: string;
 	    typeName: string;
 	    submissionTypeId: number;
 	    ratingName: string;
@@ -255,6 +257,24 @@ export namespace desktopapp {
 	    fullUrl?: string;
 	    thumbnailUrl?: string;
 	    latestThumbnailUrl?: string;
+	    thumbnailUrlMedium?: string;
+	    thumbnailUrlLarge?: string;
+	    thumbnailUrlHuge?: string;
+	    thumbnailUrlMediumNonCustom?: string;
+	    thumbnailUrlLargeNonCustom?: string;
+	    thumbnailUrlHugeNonCustom?: string;
+	    thumbMediumX?: number;
+	    thumbLargeX?: number;
+	    thumbHugeX?: number;
+	    thumbMediumNonCustomX?: number;
+	    thumbLargeNonCustomX?: number;
+	    thumbHugeNonCustomX?: number;
+	    userIconUrlSmall?: string;
+	    userIconUrlMedium?: string;
+	    userIconUrlLarge?: string;
+	    favorite: boolean;
+	    favoritesCount: number;
+	    viewsCount: number;
 	    badgeText?: string;
 	    accent?: string;
 	    fileIds?: string[];
@@ -267,8 +287,10 @@ export namespace desktopapp {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.submissionId = source["submissionId"];
+	        this.submissionUrl = source["submissionUrl"];
 	        this.title = source["title"];
 	        this.username = source["username"];
+	        this.userUrl = source["userUrl"];
 	        this.typeName = source["typeName"];
 	        this.submissionTypeId = source["submissionTypeId"];
 	        this.ratingName = source["ratingName"];
@@ -284,6 +306,24 @@ export namespace desktopapp {
 	        this.fullUrl = source["fullUrl"];
 	        this.thumbnailUrl = source["thumbnailUrl"];
 	        this.latestThumbnailUrl = source["latestThumbnailUrl"];
+	        this.thumbnailUrlMedium = source["thumbnailUrlMedium"];
+	        this.thumbnailUrlLarge = source["thumbnailUrlLarge"];
+	        this.thumbnailUrlHuge = source["thumbnailUrlHuge"];
+	        this.thumbnailUrlMediumNonCustom = source["thumbnailUrlMediumNonCustom"];
+	        this.thumbnailUrlLargeNonCustom = source["thumbnailUrlLargeNonCustom"];
+	        this.thumbnailUrlHugeNonCustom = source["thumbnailUrlHugeNonCustom"];
+	        this.thumbMediumX = source["thumbMediumX"];
+	        this.thumbLargeX = source["thumbLargeX"];
+	        this.thumbHugeX = source["thumbHugeX"];
+	        this.thumbMediumNonCustomX = source["thumbMediumNonCustomX"];
+	        this.thumbLargeNonCustomX = source["thumbLargeNonCustomX"];
+	        this.thumbHugeNonCustomX = source["thumbHugeNonCustomX"];
+	        this.userIconUrlSmall = source["userIconUrlSmall"];
+	        this.userIconUrlMedium = source["userIconUrlMedium"];
+	        this.userIconUrlLarge = source["userIconUrlLarge"];
+	        this.favorite = source["favorite"];
+	        this.favoritesCount = source["favoritesCount"];
+	        this.viewsCount = source["viewsCount"];
 	        this.badgeText = source["badgeText"];
 	        this.accent = source["accent"];
 	        this.fileIds = source["fileIds"];

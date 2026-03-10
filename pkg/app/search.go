@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -621,27 +622,61 @@ func (a *App) buildSubmissionCards(
 	user *inkbunny.User,
 	submissions []inkbunny.SubmissionSearch,
 ) ([]SubmissionCard, error) {
-	downloadedSubmissions, err := a.lookupDownloadedSubmissions(ctx, user, submissions)
+	submissionIDs := make([]string, 0, len(submissions))
+	for _, submission := range submissions {
+		id := submission.SubmissionID.String()
+		if id == "" {
+			continue
+		}
+		submissionIDs = append(submissionIDs, id)
+	}
+
+	details, err := a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
 	if err != nil {
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
 			if err != nil {
 				return nil, err
 			}
-			downloadedSubmissions, err = a.lookupDownloadedSubmissions(ctx, user, submissions)
+			details, err = a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
-	return mapSubmissionCards(submissions, user.SID, downloadedSubmissions), nil
+
+	downloadedSubmissions := make(map[string]bool, len(submissions))
+	downloadRoot := strings.TrimSpace(a.GetSession().Settings.DownloadDirectory)
+	if downloadRoot != "" {
+		downloadPattern := normalizeDownloadPattern(a.GetSession().Settings.DownloadPattern)
+		for _, submission := range details.Submissions {
+			downloadedSubmissions[submission.SubmissionID.String()] = submissionFilesDownloaded(
+				downloadRoot,
+				downloadPattern,
+				submission,
+			)
+		}
+	}
+
+	detailsByID := make(map[string]inkbunny.SubmissionDetails, len(details.Submissions))
+	for _, submission := range details.Submissions {
+		detailsByID[submission.SubmissionID.String()] = submission
+	}
+
+	return mapSubmissionCards(submissions, user.SID, downloadedSubmissions, detailsByID), nil
 }
 
-func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string, downloadedSubmissions map[string]bool) []SubmissionCard {
+func mapSubmissionCards(
+	submissions []inkbunny.SubmissionSearch,
+	sid string,
+	downloadedSubmissions map[string]bool,
+	detailsByID map[string]inkbunny.SubmissionDetails,
+) []SubmissionCard {
 	cards := make([]SubmissionCard, 0, len(submissions))
 	accents := []string{"rose", "mint", "lavender", "sky"}
 
 	for index, submission := range submissions {
+		submissionID := submission.SubmissionID.String()
 		thumbnail := firstNonEmpty(
 			submission.ThumbnailURLHuge,
 			submission.ThumbnailURLLarge,
@@ -664,10 +699,13 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string, dow
 			badge = submission.RatingName
 		}
 
+		detail := detailsByID[submissionID]
 		cards = append(cards, SubmissionCard{
-			SubmissionID:     submission.SubmissionID.String(),
+			SubmissionID:     submissionID,
+			SubmissionURL:    submissionPageURL(submissionID),
 			Title:            submission.Title,
 			Username:         submission.Username,
+			UserURL:          userPageURL(submission.Username),
 			TypeName:         submission.TypeName,
 			SubmissionTypeID: int(submission.SubmissionTypeID),
 			RatingName:       submission.RatingName,
@@ -686,52 +724,30 @@ func mapSubmissionCards(submissions []inkbunny.SubmissionSearch, sid string, dow
 				sid,
 				submission.Public.Bool(),
 			),
-			BadgeText:  badge,
-			Accent:     accents[index%len(accents)],
-			Downloaded: downloadedSubmissions[submission.SubmissionID.String()],
+			ThumbnailURLMedium:          submissionResourceURL(submission.ThumbnailURLMedium, sid, submission.Public.Bool()),
+			ThumbnailURLLarge:           submissionResourceURL(submission.ThumbnailURLLarge, sid, submission.Public.Bool()),
+			ThumbnailURLHuge:            submissionResourceURL(submission.ThumbnailURLHuge, sid, submission.Public.Bool()),
+			ThumbnailURLMediumNonCustom: submissionResourceURL(submission.ThumbnailURLMediumNonCustom, sid, submission.Public.Bool()),
+			ThumbnailURLLargeNonCustom:  submissionResourceURL(submission.ThumbnailURLLargeNonCustom, sid, submission.Public.Bool()),
+			ThumbnailURLHugeNonCustom:   submissionResourceURL(submission.ThumbnailURLHugeNonCustom, sid, submission.Public.Bool()),
+			ThumbMediumX:                int(submission.ThumbMediumX),
+			ThumbLargeX:                 int(submission.ThumbLargeX),
+			ThumbHugeX:                  int(submission.ThumbHugeX),
+			ThumbMediumNonCustomX:       int(submission.ThumbMediumNonCustomX),
+			ThumbLargeNonCustomX:        int(submission.ThumbLargeNonCustomX),
+			ThumbHugeNonCustomX:         int(submission.ThumbHugeNonCustomX),
+			UserIconURLSmall:            submissionResourceURL(detail.UserIconURLs.Small, sid, submission.Public.Bool()),
+			UserIconURLMedium:           submissionResourceURL(detail.UserIconURLs.Medium, sid, submission.Public.Bool()),
+			UserIconURLLarge:            submissionResourceURL(detail.UserIconURLs.Large, sid, submission.Public.Bool()),
+			Favorite:                    detail.Favorite.Bool(),
+			FavoritesCount:              int(detail.FavoritesCount),
+			ViewsCount:                  int(detail.Views),
+			BadgeText:                   badge,
+			Accent:                      accents[index%len(accents)],
+			Downloaded:                  downloadedSubmissions[submissionID],
 		})
 	}
 	return cards
-}
-
-func (a *App) lookupDownloadedSubmissions(
-	ctx context.Context,
-	user *inkbunny.User,
-	submissions []inkbunny.SubmissionSearch,
-) (map[string]bool, error) {
-	downloaded := make(map[string]bool, len(submissions))
-	if len(submissions) == 0 {
-		return downloaded, nil
-	}
-
-	downloadRoot := strings.TrimSpace(a.GetSession().Settings.DownloadDirectory)
-	if downloadRoot == "" {
-		return downloaded, nil
-	}
-
-	submissionIDs := make([]string, 0, len(submissions))
-	for _, submission := range submissions {
-		id := submission.SubmissionID.String()
-		if id == "" {
-			continue
-		}
-		submissionIDs = append(submissionIDs, id)
-	}
-	if len(submissionIDs) == 0 {
-		return downloaded, nil
-	}
-
-	details, err := a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	downloadPattern := normalizeDownloadPattern(a.GetSession().Settings.DownloadPattern)
-	for _, submission := range details.Submissions {
-		downloaded[submission.SubmissionID.String()] = submissionFilesDownloaded(downloadRoot, downloadPattern, submission)
-	}
-
-	return downloaded, nil
 }
 
 func submissionFilesDownloaded(downloadRoot, downloadPattern string, submission inkbunny.SubmissionDetails) bool {
@@ -750,6 +766,22 @@ func submissionFilesDownloaded(downloadRoot, downloadPattern string, submission 
 	}
 
 	return true
+}
+
+func submissionPageURL(submissionID string) string {
+	id := strings.TrimSpace(submissionID)
+	if id == "" {
+		return ""
+	}
+	return "https://inkbunny.net/s/" + id
+}
+
+func userPageURL(username string) string {
+	name := strings.TrimSpace(username)
+	if name == "" {
+		return ""
+	}
+	return "https://inkbunny.net/" + url.PathEscape(name)
 }
 
 func firstNonEmpty(values ...string) string {
@@ -1245,19 +1277,17 @@ func (a *App) ensureCaches(user *inkbunny.User) {
 		a.loadMoreCache = &cache
 	}
 	if a.detailsCache == nil {
-		cache := flight.NewCache(func(ctx context.Context, key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
-			return executeWithRateLimitRetry(ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
-				current, err := a.ensureSearchSession()
-				if err != nil {
-					return inkbunny.SubmissionDetailsResponse{}, err
+		cache := flight.NewCache(func(ctx context.Context, key submissionDetailsCacheKey) (inkbunny.SubmissionDetails, error) {
+			response, err := a.fetchSubmissionDetailsBatch(ctx, user, []string{key.SubmissionID})
+			if err != nil {
+				return inkbunny.SubmissionDetails{}, err
+			}
+			for _, submission := range response.Submissions {
+				if submission.SubmissionID.String() == key.SubmissionID {
+					return submission, nil
 				}
-				ids := strings.Split(key.SubmissionIDs, ",")
-				return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
-					SID:               key.SID,
-					SubmissionIDSlice: ids,
-					ShowPools:         inkbunny.Yes,
-				})
-			})
+			}
+			return inkbunny.SubmissionDetails{}, fmt.Errorf("submission %s not found", key.SubmissionID)
 		})
 		a.detailsCache = &cache
 	}
@@ -1355,19 +1385,17 @@ func (a *App) resetCaches(user *inkbunny.User) {
 			})
 		})
 	})
-	detailsCache := flight.NewCache(func(ctx context.Context, key detailsCacheKey) (inkbunny.SubmissionDetailsResponse, error) {
-		return executeWithRateLimitRetry(ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
-			current, err := a.ensureSearchSession()
-			if err != nil {
-				return inkbunny.SubmissionDetailsResponse{}, err
+	detailsCache := flight.NewCache(func(ctx context.Context, key submissionDetailsCacheKey) (inkbunny.SubmissionDetails, error) {
+		response, err := a.fetchSubmissionDetailsBatch(ctx, user, []string{key.SubmissionID})
+		if err != nil {
+			return inkbunny.SubmissionDetails{}, err
+		}
+		for _, submission := range response.Submissions {
+			if submission.SubmissionID.String() == key.SubmissionID {
+				return submission, nil
 			}
-			ids := strings.Split(key.SubmissionIDs, ",")
-			return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
-				SID:               key.SID,
-				SubmissionIDSlice: ids,
-				ShowPools:         inkbunny.Yes,
-			})
-		})
+		}
+		return inkbunny.SubmissionDetails{}, fmt.Errorf("submission %s not found", key.SubmissionID)
 	})
 	a.keywordCache = &keywordCache
 	a.usernameCache = &usernameCache
