@@ -164,6 +164,15 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       ),
     [gridCardWidth, resultColumnCount, resultsGridWidth],
   );
+  const resultCardWidth = useMemo(
+    () =>
+      getVirtualGridCardWidth(
+        resultsGridWidth,
+        resultColumnCount,
+        gridCardWidth,
+      ),
+    [gridCardWidth, resultColumnCount, resultsGridWidth],
+  );
   const resultRowVirtualizer = useVirtualizer({
     count: resultRowCount,
     getScrollElement: () => resultsScrollRef.current,
@@ -619,6 +628,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   return (
                     <div
                       key={virtualRow.key}
+                      data-index={virtualRow.index}
                       ref={resultRowVirtualizer.measureElement}
                       className="absolute left-0 top-0 w-full pb-3"
                       style={{
@@ -674,6 +684,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                     props.showCustomThumbnails
                                   }
                                   refreshToken={props.resultsRefreshToken}
+                                  preferredWidth={resultCardWidth}
+                                  sizes={`${Math.ceil(resultCardWidth)}px`}
                                   className="h-full w-full object-cover"
                                 />
                                 <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[rgba(46,52,54,0.78)] via-[rgba(46,52,54,0.22)] to-transparent p-3 dark:from-[#14112C]/75 dark:via-[#14112C]/20">
@@ -815,11 +827,14 @@ function SubmissionPreview(props: {
   variant?: "full" | "card";
   preferCustomThumbnails: boolean;
   refreshToken: number;
+  preferredWidth?: number;
+  sizes?: string;
 }) {
   const sources = getPreviewSources(
     props.submission,
     props.variant,
     props.preferCustomThumbnails,
+    props.preferredWidth,
   );
 
   if (sources.length === 0) {
@@ -843,9 +858,10 @@ function SubmissionPreview(props: {
       alt={props.alt}
       className={props.className}
       sizes={
-        props.variant === "full"
+        props.sizes ??
+        (props.variant === "full"
           ? "(min-width: 768px) 60vw, 100vw"
-          : "(min-width: 1280px) 26vw, (min-width: 768px) 42vw, 100vw"
+          : "(min-width: 1280px) 26vw, (min-width: 768px) 42vw, 100vw")
       }
       refreshToken={props.refreshToken}
     />
@@ -893,11 +909,13 @@ function getPreviewSources(
   submission: SubmissionCard,
   variant: "full" | "card" = "card",
   preferCustomThumbnails = true,
+  preferredWidth = 0,
 ) {
   const thumbnailSource = getThumbnailPreviewSource(
     submission,
     preferCustomThumbnails,
     variant === "full",
+    preferredWidth,
   );
 
   const ordered =
@@ -960,6 +978,7 @@ function getThumbnailPreviewSource(
   submission: SubmissionCard,
   preferCustomThumbnails: boolean,
   includeFullFileURL = false,
+  preferredWidth = 0,
 ) {
   const preferred = preferCustomThumbnails
     ? getCustomThumbnailVariants(submission)
@@ -968,18 +987,17 @@ function getThumbnailPreviewSource(
     ? getNonCustomThumbnailVariants(submission)
     : getCustomThumbnailVariants(submission);
   const variants = preferred.length > 0 ? preferred : fallback;
-  const hugeVariant =
-    variants.find((variant) => variant.src === preferred[0]?.src) ??
-    variants.find((variant) => variant.width === submission.thumbHugeX) ??
-    variants.find((variant) => variant.width === submission.thumbHugeNonCustomX);
-  const primary = hugeVariant ?? variants[0];
+  const primary = getPrimaryThumbnailVariant(
+    variants,
+    Math.ceil(preferredWidth),
+  );
   if (!primary) {
     return toPreviewSource(submission.thumbnailUrl);
   }
 
   const srcSetVariants = variants
     .filter((variant) => variant.width > 0)
-    .sort((left, right) => right.width - left.width);
+    .sort((left, right) => left.width - right.width);
   const fullWidth = Math.max(
     ...srcSetVariants.map((variant) => variant.width),
     0,
@@ -996,6 +1014,28 @@ function getThumbnailPreviewSource(
     src: primary.src,
     srcSet: srcSet || undefined,
   };
+}
+
+function getPrimaryThumbnailVariant(
+  variants: ThumbnailVariant[],
+  preferredWidth: number,
+) {
+  const sizedVariants = variants
+    .filter((variant) => variant.width > 0)
+    .sort((left, right) => left.width - right.width);
+
+  if (sizedVariants.length === 0) {
+    return variants[0];
+  }
+
+  if (preferredWidth > 0) {
+    return (
+      sizedVariants.find((variant) => variant.width >= preferredWidth) ??
+      sizedVariants[sizedVariants.length - 1]
+    );
+  }
+
+  return sizedVariants[sizedVariants.length - 1];
 }
 
 function getCustomThumbnailVariants(submission: SubmissionCard) {
@@ -1271,15 +1311,28 @@ function estimateResultRowHeight(
   columnCount: number,
   targetCardWidth: number,
 ) {
+  const cardWidth = getVirtualGridCardWidth(
+    containerWidth,
+    columnCount,
+    targetCardWidth,
+  );
+
+  return cardWidth * 0.8 + RESULT_CARD_CHROME_HEIGHT;
+}
+
+function getVirtualGridCardWidth(
+  containerWidth: number,
+  columnCount: number,
+  targetCardWidth: number,
+) {
   const totalGapWidth = Math.max(0, columnCount - 1) * RESULT_GRID_GAP;
-  const availableWidth = Math.max(
+
+  return Math.max(
     targetCardWidth,
     containerWidth > 0
       ? (containerWidth - totalGapWidth) / columnCount
       : targetCardWidth,
   );
-
-  return availableWidth * 0.8 + RESULT_CARD_CHROME_HEIGHT;
 }
 
 function getPanelItems(results: SubmissionCard[], startIndex: number) {
