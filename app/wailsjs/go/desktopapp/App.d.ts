@@ -20,6 +20,8 @@ export function EnqueueDownloads(arg1:string,arg2:desktopapp.DownloadSelection,a
 
 export function EnsureGuestSession():Promise<desktopapp.SessionInfo>;
 
+export function GetBuildInfo():Promise<desktopapp.BuildInfo>;
+
 export function GetKeywordSuggestions(arg1:string):Promise<Array<string>>;
 
 export function GetQueueSnapshot():Promise<desktopapp.QueueSnapshot>;

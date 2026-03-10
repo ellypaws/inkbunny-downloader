@@ -229,6 +229,13 @@ type ReleaseStatus struct {
 	UpdateAvailable bool   `json:"updateAvailable"`
 }
 
+type BuildInfo struct {
+	Version        string `json:"version"`
+	Commit         string `json:"commit,omitempty"`
+	DisplayVersion string `json:"displayVersion"`
+	IsDev          bool   `json:"isDev"`
+}
+
 type storedState struct {
 	Session   SessionInfo    `json:"session"`
 	User      sessionUser    `json:"user"`

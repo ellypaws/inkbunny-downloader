@@ -38,6 +38,10 @@ export function EnsureGuestSession() {
   return window['go']['desktopapp']['App']['EnsureGuestSession']();
 }
 
+export function GetBuildInfo() {
+  return window['go']['desktopapp']['App']['GetBuildInfo']();
+}
+
 export function GetKeywordSuggestions(arg1) {
   return window['go']['desktopapp']['App']['GetKeywordSuggestions'](arg1);
 }

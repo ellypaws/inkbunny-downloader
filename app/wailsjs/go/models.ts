@@ -26,6 +26,24 @@ export namespace desktopapp {
 	        this.hasLoggedInBefore = source["hasLoggedInBefore"];
 	    }
 	}
+	export class BuildInfo {
+	    version: string;
+	    commit?: string;
+	    displayVersion: string;
+	    isDev: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BuildInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.commit = source["commit"];
+	        this.displayVersion = source["displayVersion"];
+	        this.isDev = source["isDev"];
+	    }
+	}
 	export class DownloadJobSnapshot {
 	    id: string;
 	    submissionId: string;

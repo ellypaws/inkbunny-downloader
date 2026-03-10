@@ -8,8 +8,12 @@ var Version = "dev"
 // Commit is injected at build time for dev branch binaries.
 var Commit = ""
 
+func IsDevBuild() bool {
+	return strings.EqualFold(strings.TrimSpace(Version), "dev")
+}
+
 func DisplayVersion() string {
-	if Version != "dev" {
+	if !IsDevBuild() {
 		return Version
 	}
 

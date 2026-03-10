@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  BuildInfo,
   DownloadOptions,
   DownloadSelection,
   QueueSnapshot,
@@ -29,6 +30,7 @@ type BackendApi = {
   GetUsernameSuggestions(query: string): Promise<UsernameSuggestion[]>
   GetWatching(): Promise<UsernameSuggestion[]>
   GetReleaseStatus(): Promise<ReleaseStatus>
+  GetBuildInfo(): Promise<BuildInfo>
   EnqueueDownloads(
     searchId: string,
     selection: DownloadSelection,
@@ -135,6 +137,9 @@ export const backend = {
   },
   async getReleaseStatus(): Promise<ReleaseStatus> {
     return getBackend().GetReleaseStatus()
+  },
+  async getBuildInfo(): Promise<BuildInfo> {
+    return getBackend().GetBuildInfo()
   },
   async enqueueDownloads(
     searchId: string,

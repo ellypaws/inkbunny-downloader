@@ -231,3 +231,10 @@ export type ReleaseStatus = {
   releaseURL: string
   updateAvailable: boolean
 }
+
+export type BuildInfo = {
+  version: string
+  commit?: string
+  displayVersion: string
+  isDev: boolean
+}

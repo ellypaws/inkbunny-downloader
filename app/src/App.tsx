@@ -20,11 +20,13 @@ import {
   MAX_CONCURRENT_DOWNLOADS,
   MIN_CONCURRENT_DOWNLOADS,
 } from "./lib/constants";
+import { registerDebugControls, type DebugPanelName } from "./lib/debugControls";
 import type {
   AppNotification,
   AppSettings,
   ArtistValidationState,
   BackendDebugEvent,
+  BuildInfo,
   DownloadProgressEvent,
   QueueSnapshot,
   ReleaseStatus,
@@ -46,17 +48,6 @@ const UNREAD_POLL_INTERVAL_MS = 60_000;
 const LOAD_ALL_DELAY_MS = 500;
 const AUTO_QUEUE_INTERVAL_MS = 60_000;
 const AUTO_QUEUE_TICK_MS = 1_000;
-
-declare global {
-  interface Window {
-    __inkbunnyDebug?: InkbunnyDebugControls;
-  }
-}
-
-type InkbunnyDebugControls = {
-  showUpdateToast: () => void;
-  showOnboarding: () => void;
-};
 
 type SearchTabLoadMoreMode = "idle" | "more" | "all";
 type AutoQueuePhase = "idle" | "searching" | "queueing";
@@ -91,6 +82,7 @@ export default function App() {
   }
 
   const [session, setSession] = useState<SessionInfo>(EMPTY_SESSION);
+  const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SESSION.settings);
   const [loginOpen, setLoginOpen] = useState(true);
   const [loginUsername, setLoginUsername] = useState("");
@@ -143,6 +135,7 @@ export default function App() {
   const pendingDownloadSubmissionIdsRef = useRef(pendingDownloadSubmissionIds);
   const sessionRef = useRef(session);
   const settingsRef = useRef(settings);
+  const buildInfoRef = useRef<BuildInfo | null>(buildInfo);
   const unreadTotalRef = useRef(unreadTotal);
   const workspaceLoadedRef = useRef(false);
   const workspacePersistTimeoutRef = useRef<number | null>(null);
@@ -557,6 +550,55 @@ export default function App() {
     }
   }
 
+  function clearAllToasts() {
+    for (const timeoutId of toastTimeoutsRef.current.values()) {
+      window.clearTimeout(timeoutId);
+    }
+    toastTimeoutsRef.current.clear();
+    toastsRef.current = [];
+    setToasts([]);
+  }
+
+  function handleAppNotification(event: AppNotification) {
+    if (event.retryAfterMs && event.retryAfterMs > 0) {
+      setApiCooldownUntil(Date.now() + event.retryAfterMs);
+    }
+    pushToast({
+      id: event.id,
+      level: event.level,
+      message: event.message,
+      dedupeKey: event.dedupeKey,
+      retryAfterMs: event.retryAfterMs,
+    });
+  }
+
+  function openDebugPanel(panel: DebugPanelName) {
+    if (panel === "login") {
+      setTabMenuOpen(false);
+      setLoginOpen(true);
+      return;
+    }
+    if (panel === "tabs") {
+      setLoginOpen(false);
+      setTabMenuOpen(true);
+      return;
+    }
+    if (panel === "unread") {
+      setLoginOpen(false);
+      setTabMenuOpen(false);
+      void handleOpenUnreadTab();
+      return;
+    }
+
+    setLoginOpen(false);
+    setTabMenuOpen(false);
+    window.setTimeout(() => {
+      document
+        .querySelector('[data-tour-anchor="queue-panel"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+
   function syncSettings(nextSettings: AppSettings) {
     applySession(
       {
@@ -708,6 +750,7 @@ export default function App() {
   );
   useEffect(() => void (sessionRef.current = session), [session]);
   useEffect(() => void (settingsRef.current = settings), [settings]);
+  useEffect(() => void (buildInfoRef.current = buildInfo), [buildInfo]);
   useEffect(() => void (unreadTotalRef.current = unreadTotal), [unreadTotal]);
   useEffect(() => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds), [downloadedSubmissionIds]);
   useEffect(() => void (unavailableSubmissionIdsRef.current = unavailableSubmissionIds), [unavailableSubmissionIds]);
@@ -836,33 +879,21 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV) {
-      return;
-    }
-    class DevDebugControls implements InkbunnyDebugControls {
-      showUpdateToast() {
-        showReleaseUpdateToast(
-          {
-            currentVersion: "0.1.2",
-            currentTag: "v0.1.2",
-            latestTag: "v0.1.3",
-            releaseURL: "https://github.com/ellypaws/inkbunny-downloader/releases/latest",
-            updateAvailable: true,
-          },
-          settings,
-        );
-      }
-
-      showOnboarding() {
+    return registerDebugControls({
+      getSettings: () => settingsRef.current,
+      getBuildInfo: () => buildInfoRef.current,
+      showNotification: handleAppNotification,
+      pushToast,
+      clearToasts: clearAllToasts,
+      openPanel: openDebugPanel,
+      cancelSearch: () => stopActiveSearch(),
+      showOnboarding: () => {
         setLoginOpen(false);
         startTutorial();
-      }
-    }
-    window.__inkbunnyDebug = new DevDebugControls();
-    return () => {
-      delete window.__inkbunnyDebug;
-    };
-  }, [settings]);
+      },
+      showReleaseUpdateToast,
+    });
+  }, []);
 
   useEffect(
     () => () => {
@@ -895,14 +926,16 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
     Promise.all([
+      backend.getBuildInfo(),
       backend.getSession(),
       backend.getWorkspaceState(),
       backend.getQueueSnapshot(),
     ])
-      .then(([nextSession, workspace, snapshot]) => {
+      .then(([nextBuildInfo, nextSession, workspace, snapshot]) => {
         if (!mounted) {
           return;
         }
+        setBuildInfo(nextBuildInfo);
         applySession(nextSession);
         const restoredTabs = restoreWorkspaceTabs(
           workspace,
@@ -946,16 +979,7 @@ export default function App() {
       writeBackendDebugEvent(event);
     });
     const unsubscribeNotifications = onRuntimeEvent<AppNotification>("app-notification", (event) => {
-      if (event.retryAfterMs && event.retryAfterMs > 0) {
-        setApiCooldownUntil(Date.now() + event.retryAfterMs);
-      }
-      pushToast({
-        id: event.id,
-        level: event.level,
-        message: event.message,
-        dedupeKey: event.dedupeKey,
-        retryAfterMs: event.retryAfterMs,
-      });
+      handleAppNotification(event);
     });
     return () => {
       unsubscribeProgress();
