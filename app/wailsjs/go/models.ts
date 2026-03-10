@@ -1,4 +1,4 @@
-export namespace desktopapp {
+export namespace types {
 	
 	export class AppSettings {
 	    downloadDirectory: string;

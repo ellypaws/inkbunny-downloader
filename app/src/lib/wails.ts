@@ -64,6 +64,9 @@ declare global {
       desktopapp?: {
         App?: BackendApi
       }
+      state?: {
+        App?: BackendApi
+      }
     }
     runtime?: {
       EventsOn?: (
@@ -76,7 +79,10 @@ declare global {
 }
 
 function getBackend(): BackendApi {
-  const backend = window.go?.main?.App ?? window.go?.desktopapp?.App
+  const backend =
+    window.go?.state?.App ??
+    window.go?.main?.App ??
+    window.go?.desktopapp?.App
   if (!backend) {
     throw new Error('Wails backend unavailable')
   }

@@ -62,7 +62,7 @@ jobs:
           if [[ "${GITHUB_REF:-}" == "refs/heads/dev" ]]; then
             build_commit="${GITHUB_SHA::7}"
           fi
-          ldflags="-s -w -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo.Version=${release_version} -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo.Commit=${build_commit}"
+          ldflags="-s -w -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo.Version=${release_version} -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo.Commit=${build_commit}"
 
           output="${APP_NAME}-tui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
@@ -180,7 +180,7 @@ jobs:
             -clean \
             -trimpath \
               -devtools \
-            -ldflags "-X github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo.Version=${release_version} -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo.Commit=${build_commit}" \
+            -ldflags "-X github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo.Version=${release_version} -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo.Commit=${build_commit}" \
             -m \
             $nopackage_flag \
             -s \

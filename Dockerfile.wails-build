@@ -7,6 +7,9 @@ FROM node:24-bookworm
 ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}" \
     CGO_ENABLED=1
 
+ARG RELEASE_VERSION=dev
+ARG BUILD_COMMIT=""
+
 COPY --from=go-toolchain /usr/local/go /usr/local/go
 COPY --from=bun-toolchain /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=bun-toolchain /usr/local/bin/bunx /usr/local/bin/bunx
@@ -49,6 +52,7 @@ RUN cd app && bun run build
 RUN wails build \
     -clean \
     -trimpath \
+    -ldflags "-X github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo.Version=${RELEASE_VERSION} -X github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo.Commit=${BUILD_COMMIT}" \
     -m \
     -nopackage \
     -s \
