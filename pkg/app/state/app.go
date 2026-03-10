@@ -762,12 +762,8 @@ func (a *App) fetchSubmissionDetailsBatch(
 		if err != nil {
 			return inkbunny.SubmissionDetailsResponse{}, err
 		}
-		sid := current.SID
-		if user != nil && strings.TrimSpace(user.SID) != "" {
-			sid = user.SID
-		}
 		return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
-			SID:                         sid,
+			SID:                         current.SID,
 			SubmissionIDSlice:           submissionIDs,
 			ShowDescription:             inkbunny.Yes,
 			ShowDescriptionBbcodeParsed: inkbunny.Yes,

@@ -151,6 +151,7 @@ export default function App() {
   const workspaceLoadedRef = useRef(false);
   const workspacePersistTimeoutRef = useRef<number | null>(null);
   const suppressNextWorkspacePersistRef = useRef(false);
+  const lastWorkspacePersistSkipKeyRef = useRef("");
   const pendingWorkspaceEchoesRef = useRef<string[]>([]);
   const autoQueueRunningRef = useRef(false);
   const tourAdvanceTimeoutRef = useRef<number | null>(null);
@@ -1474,15 +1475,22 @@ export default function App() {
     }
     if (suppressNextWorkspacePersistRef.current) {
       suppressNextWorkspacePersistRef.current = false;
+      lastWorkspacePersistSkipKeyRef.current = "";
       return;
     }
-    if (hasTransientWorkspaceState(tabsRef.current)) {
-      writeFrontendSearchLog("skipping workspace persist", {
-        reason: "transient-search-state",
-        tabCount: tabsRef.current.length,
-      });
+    const transientWorkspaceState = describeTransientWorkspaceState(tabsRef.current);
+    if (transientWorkspaceState !== null) {
+      if (lastWorkspacePersistSkipKeyRef.current !== transientWorkspaceState.key) {
+        lastWorkspacePersistSkipKeyRef.current = transientWorkspaceState.key;
+        writeFrontendSearchLog("skipping workspace persist", {
+          reason: "transient-search-state",
+          tabCount: tabsRef.current.length,
+          transientTabCount: transientWorkspaceState.count,
+        });
+      }
       return;
     }
+    lastWorkspacePersistSkipKeyRef.current = "";
     if (workspacePersistTimeoutRef.current !== null) {
       window.clearTimeout(workspacePersistTimeoutRef.current);
     }
@@ -3827,13 +3835,23 @@ function serializeWorkspaceState(workspace: WorkspaceState | null | undefined) {
   return JSON.stringify(workspace ?? null);
 }
 
-function hasTransientWorkspaceState(tabs: SearchTabState[]) {
-  return tabs.some(
-    (tab) =>
-      tab.searchLoading ||
-      tab.loadMoreState.mode !== "idle" ||
-      tab.autoQueuePhase === "searching",
-  );
+function describeTransientWorkspaceState(tabs: SearchTabState[]) {
+  const transientTabIds = tabs
+    .filter(
+      (tab) =>
+        tab.searchLoading ||
+        tab.loadMoreState.mode !== "idle" ||
+        tab.autoQueuePhase === "searching",
+    )
+    .map((tab) => tab.id)
+    .sort();
+  if (transientTabIds.length === 0) {
+    return null;
+  }
+  return {
+    key: transientTabIds.join("|"),
+    count: transientTabIds.length,
+  };
 }
 
 function parseSearchSequence(searchId: string | null | undefined) {
