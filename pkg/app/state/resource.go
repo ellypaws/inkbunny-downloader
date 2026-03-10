@@ -14,14 +14,15 @@ func (a *App) ResolveRemoteURL(raw string) string {
 		return ""
 	}
 
-	sid := a.currentSessionSID()
-	if sid == "" {
-		return trimmed
-	}
 	if !shouldAttachSessionID(trimmed) {
 		return trimmed
 	}
-	return baseutils.AppendSID(trimmed, sid)
+
+	sid := a.currentSessionSID()
+	if sid == "" {
+		return baseutils.StripSID(trimmed)
+	}
+	return baseutils.SetSID(trimmed, sid)
 }
 
 func (a *App) currentSessionSID() string {

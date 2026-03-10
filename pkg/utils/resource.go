@@ -43,6 +43,33 @@ func AppendSID(raw string, sid string) string {
 	return parsed.String()
 }
 
+// SetSID replaces any existing sid query parameter with the supplied value.
+// Passing an empty sid removes the parameter.
+func SetSID(raw string, sid string) string {
+	if strings.TrimSpace(raw) == "" {
+		return raw
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+
+	query := parsed.Query()
+	if strings.TrimSpace(sid) == "" {
+		query.Del("sid")
+	} else {
+		query.Set("sid", sid)
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+// StripSID removes any sid query parameter from the URL.
+func StripSID(raw string) string {
+	return SetSID(raw, "")
+}
+
 // LooksPrivate reports whether the resource path clearly points at a private asset.
 func LooksPrivate(raw string) bool {
 	lower := strings.ToLower(strings.TrimSpace(raw))
@@ -66,5 +93,5 @@ func ResourceURL(raw string, sid string, isPublic bool) string {
 	if isPublic && !LooksPrivate(raw) {
 		return raw
 	}
-	return AppendSID(raw, sid)
+	return SetSID(raw, sid)
 }
