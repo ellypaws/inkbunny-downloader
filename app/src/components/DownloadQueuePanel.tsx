@@ -476,7 +476,7 @@ function QueueRow(props: {
   const progress =
     job.status === "completed"
       ? 100
-      : Math.max(Math.round((job.progress || 0) * 100), actionable ? 4 : 0);
+      : Math.round((job.progress || 0) * 100);
 
   return (
     <div
