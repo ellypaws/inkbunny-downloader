@@ -1013,7 +1013,7 @@ func normalizeScrapsMode(value string) inkbunny.Scraps {
 
 func (a *App) buildSubmissionCards(user *inkbunny.User, submissions []inkbunny.SubmissionSearch) ([]types.SubmissionCard, []string) {
 	if len(submissions) == 0 || user == nil {
-		return nil, nil
+		return []types.SubmissionCard{}, []string{}
 	}
 
 	a.ensureCaches(user)

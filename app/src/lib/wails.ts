@@ -164,6 +164,15 @@ function isDesktopRuntimeAvailable(): boolean {
   return Boolean(window.go && typeof window.go === 'object')
 }
 
+function normalizeSearchResponse(response: SearchResponse): SearchResponse {
+  const results = Array.isArray(response?.results) ? response.results : []
+  return {
+    ...response,
+    results,
+    resultsCount: Math.max(response?.resultsCount ?? results.length, results.length),
+  }
+}
+
 function getDesktopBackend(): BackendApi {
   if (cachedDesktopBackend) {
     return cachedDesktopBackend
@@ -575,7 +584,7 @@ export const backend = {
     return getBackend().ProxyAvatarImageURL(url)
   },
   async search(params: SearchParams): Promise<SearchResponse> {
-    return getBackend().Search(params)
+    return normalizeSearchResponse(await getBackend().Search(params))
   },
   async cancelSearchRequests(): Promise<void> {
     return getBackend().CancelSearchRequests()
@@ -584,13 +593,13 @@ export const backend = {
     return getBackend().GetUnreadSubmissionCount()
   },
   async refreshSearch(searchId: string): Promise<SearchResponse> {
-    return getBackend().RefreshSearch(searchId)
+    return normalizeSearchResponse(await getBackend().RefreshSearch(searchId))
   },
   async loadMoreResults(
     searchId: string,
     page: number,
   ): Promise<SearchResponse> {
-    return getBackend().LoadMoreResults(searchId, page)
+    return normalizeSearchResponse(await getBackend().LoadMoreResults(searchId, page))
   },
   async getKeywordSuggestions(query: string): Promise<KeywordSuggestion[]> {
     return getBackend().GetKeywordSuggestions(query)
