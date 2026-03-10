@@ -244,6 +244,7 @@ export default function App() {
   );
   const newUnreadCount =
     trackedUnreadBaseline < 0 ? 0 : Math.max(unreadTotal - trackedUnreadBaseline, 0);
+  const hasActiveResult = activeResults.length > 0;
   const hasSelectableActiveResult = activeResults.some(
     (item) => !downloadedSubmissionIds.has(item.submissionId),
   );
@@ -258,6 +259,7 @@ export default function App() {
   const canRetryAllDownloads = queue.failedCount > 0;
   const currentTourStep = getTourStepPresentation(tourStepId, {
     tabMenuOpen,
+    hasActiveResult,
     hasSelectableActiveResult,
     searchAttempted: tourSearchAttempted,
     selectedCount: activeSelectedSubmissionIds.length,
@@ -1064,7 +1066,7 @@ export default function App() {
     }
     if (
       tourStepId === "run-search" &&
-      hasSelectableActiveResult &&
+      hasActiveResult &&
       !activeSearchLoading
     ) {
       scheduleTourAdvance("select-images");
@@ -1079,6 +1081,7 @@ export default function App() {
     }
   }, [
     activeSearchLoading,
+    hasActiveResult,
     activeSelectedSubmissionIds.length,
     hasSelectableActiveResult,
     queueReadyForTour,
@@ -1498,6 +1501,9 @@ export default function App() {
       setTourAdvancing(false);
       setTabMenuOpen(false);
       return;
+    }
+    if (nextStep === "tabs-menu") {
+      setTabMenuOpen(true);
     }
     if (nextStep === "search-words") {
       setTabMenuOpen(false);
@@ -3653,6 +3659,7 @@ function getTourStepPresentation(
   stepId: TourStepId,
   context: {
     tabMenuOpen: boolean;
+    hasActiveResult: boolean;
     hasSelectableActiveResult: boolean;
     searchAttempted: boolean;
     selectedCount: number;
@@ -3665,11 +3672,8 @@ function getTourStepPresentation(
       anchor: "tabs-toggle",
       title: "Search tabs",
       body: "This button opens your search sessions. You can keep multiple searches around and switch between them without losing your place.",
-      helper: context.tabMenuOpen
-        ? "Tabs are open. Continue to see the session menu."
-        : "Open the tabs menu to continue.",
       nagText: "Open tabs",
-      canAdvance: context.tabMenuOpen,
+      canAdvance: true,
       advanceLabel: "Next",
     };
   }
@@ -3679,11 +3683,8 @@ function getTourStepPresentation(
       anchor: "tabs-menu",
       title: "Session menu",
       body: "Each bubble is a search tab. Pick one to switch context, or use the plus bubble to start a fresh search session.",
-      helper: context.tabMenuOpen
-        ? "Use Next when you are ready to return to the search form."
-        : "Open the tabs menu again to continue.",
       nagText: "Tabs live here",
-      canAdvance: context.tabMenuOpen,
+      canAdvance: true,
       advanceLabel: "Next",
     };
   }
@@ -3716,11 +3717,11 @@ function getTourStepPresentation(
       title: "Run the search",
       body: "Start a search from here. The guide waits for real results so the next steps can show selection and queueing on actual submissions.",
       helper:
-        context.searchAttempted && !context.hasSelectableActiveResult
-          ? "That search did not produce selectable results. Try broader search words or clear the artist name field, then search again."
-          : "Run a search that returns at least one selectable result to continue.",
+        context.searchAttempted && !context.hasActiveResult
+          ? "That search did not return results. Try broader search words or clear the artist name field, then search again."
+          : "Run a search that returns at least one result to continue.",
       nagText: "Search now",
-      canAdvance: context.hasSelectableActiveResult,
+      canAdvance: context.hasActiveResult,
       advanceLabel: "Next",
     };
   }
