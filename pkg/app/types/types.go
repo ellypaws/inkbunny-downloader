@@ -278,6 +278,11 @@ type QueueStateUpdate struct {
 	Queue    QueueSnapshot `json:"queue"`
 }
 
+type SearchResultsHydratedUpdate struct {
+	SearchID string           `json:"searchId"`
+	Results  []SubmissionCard `json:"results"`
+}
+
 type SharedSnapshot struct {
 	BuildInfo         BuildInfo      `json:"buildInfo"`
 	SessionRevision   int64          `json:"sessionRevision"`

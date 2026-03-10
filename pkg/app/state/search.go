@@ -174,10 +174,8 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 	_ = a.persist()
 	a.broadcastSessionState()
 
-	cards, err := a.buildSubmissionCards(ctx, user, visible)
-	if err != nil {
-		return types.SearchResponse{}, err
-	}
+	cards, missingSubmissionIDs := a.buildSubmissionCards(user, visible)
+	a.hydrateSubmissionCardsAsync(searchID, user, visible, missingSubmissionIDs)
 
 	resp = types.SearchResponse{
 		SearchID:     searchID,
@@ -261,10 +259,8 @@ func (a *App) searchMultipleArtists(
 	}
 	state.DeliveredCount = len(visible)
 
-	cards, err := a.buildSubmissionCards(ctx, user, visible)
-	if err != nil {
-		return types.SearchResponse{}, err
-	}
+	cards, missingSubmissionIDs := a.buildSubmissionCards(user, visible)
+	a.hydrateSubmissionCardsAsync(searchID, user, visible, missingSubmissionIDs)
 
 	a.mu.Lock()
 	a.searches[searchID] = state
@@ -331,10 +327,8 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 		state.DeliveredCount = len(visible)
 		a.mu.Unlock()
 
-		cards, err := a.buildSubmissionCards(ctx, user, visible)
-		if err != nil {
-			return types.SearchResponse{}, err
-		}
+		cards, missingSubmissionIDs := a.buildSubmissionCards(user, visible)
+		a.hydrateSubmissionCardsAsync(searchID, user, visible, missingSubmissionIDs)
 
 		resp = types.SearchResponse{
 			SearchID:     searchID,
@@ -404,10 +398,8 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 	state.DeliveredCount = len(visible)
 	a.mu.Unlock()
 
-	cards, err := a.buildSubmissionCards(ctx, user, visible)
-	if err != nil {
-		return types.SearchResponse{}, err
-	}
+	cards, missingSubmissionIDs := a.buildSubmissionCards(user, visible)
+	a.hydrateSubmissionCardsAsync(searchID, user, visible, missingSubmissionIDs)
 
 	resp = types.SearchResponse{
 		SearchID:     searchID,
@@ -517,10 +509,8 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 		state.DeliveredCount += len(visible)
 		a.mu.Unlock()
 
-		cards, err := a.buildSubmissionCards(ctx, user, visible)
-		if err != nil {
-			return types.SearchResponse{}, err
-		}
+		cards, missingSubmissionIDs := a.buildSubmissionCards(user, visible)
+		a.hydrateSubmissionCardsAsync(searchID, user, visible, missingSubmissionIDs)
 
 		resp = types.SearchResponse{
 			SearchID:     searchID,
@@ -584,10 +574,8 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 	state.DeliveredCount += len(visible)
 	a.mu.Unlock()
 
-	cards, err := a.buildSubmissionCards(ctx, user, visible)
-	if err != nil {
-		return types.SearchResponse{}, err
-	}
+	cards, missingSubmissionIDs := a.buildSubmissionCards(user, visible)
+	a.hydrateSubmissionCardsAsync(searchID, user, visible, missingSubmissionIDs)
 
 	resp = types.SearchResponse{
 		SearchID:     searchID,
@@ -1020,53 +1008,111 @@ func normalizeScrapsMode(value string) inkbunny.Scraps {
 	}
 }
 
-func (a *App) buildSubmissionCards(
-	ctx context.Context,
-	user *inkbunny.User,
-	submissions []inkbunny.SubmissionSearch,
-) ([]types.SubmissionCard, error) {
-	submissionIDs := make([]string, 0, len(submissions))
-	for _, submission := range submissions {
-		id := submission.SubmissionID.String()
-		if id == "" {
-			continue
-		}
-		submissionIDs = append(submissionIDs, id)
+func (a *App) buildSubmissionCards(user *inkbunny.User, submissions []inkbunny.SubmissionSearch) ([]types.SubmissionCard, []string) {
+	if len(submissions) == 0 || user == nil {
+		return nil, nil
 	}
 
-	details, err := a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
-	if err != nil {
-		if a.handleSessionError(err) {
-			user, err = a.ensureSearchSession()
-			if err != nil {
-				return nil, err
-			}
-			details, err = a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-
+	a.ensureCaches(user)
+	detailsByID := make(map[string]inkbunny.SubmissionDetails, len(submissions))
+	missingSubmissionIDs := make([]string, 0, len(submissions))
 	downloadedSubmissions := make(map[string]bool, len(submissions))
 	downloadRoot := strings.TrimSpace(a.GetSession().Settings.DownloadDirectory)
-	if downloadRoot != "" {
-		downloadPattern := downloads.NormalizePattern(a.GetSession().Settings.DownloadPattern)
-		for _, submission := range details.Submissions {
-			downloadedSubmissions[submission.SubmissionID.String()] = submissionFilesDownloaded(
+	downloadPattern := downloads.NormalizePattern(a.GetSession().Settings.DownloadPattern)
+
+	for _, submission := range submissions {
+		submissionID := submission.SubmissionID.String()
+		if submissionID == "" {
+			continue
+		}
+		detail, ok := a.detailsCache.Peek(submissionDetailsCacheKey{
+			SID:          user.SID,
+			SubmissionID: submissionID,
+		})
+		if !ok {
+			missingSubmissionIDs = append(missingSubmissionIDs, submissionID)
+			continue
+		}
+		detailsByID[submissionID] = detail
+		if downloadRoot != "" {
+			downloadedSubmissions[submissionID] = submissionFilesDownloaded(
 				downloadRoot,
 				downloadPattern,
-				submission,
+				detail,
 			)
 		}
 	}
 
-	detailsByID := make(map[string]inkbunny.SubmissionDetails, len(details.Submissions))
-	for _, submission := range details.Submissions {
-		detailsByID[submission.SubmissionID.String()] = submission
+	return mapSubmissionCards(submissions, user.SID, downloadedSubmissions, detailsByID), missingSubmissionIDs
+}
+
+func (a *App) hydrateSubmissionCardsAsync(
+	searchID string,
+	user *inkbunny.User,
+	submissions []inkbunny.SubmissionSearch,
+	missingSubmissionIDs []string,
+) {
+	if user == nil || len(submissions) == 0 || len(missingSubmissionIDs) == 0 {
+		return
 	}
 
-	return mapSubmissionCards(submissions, user.SID, downloadedSubmissions, detailsByID), nil
+	submissionsByID := make(map[string]inkbunny.SubmissionSearch, len(submissions))
+	for _, submission := range submissions {
+		submissionID := submission.SubmissionID.String()
+		if submissionID == "" {
+			continue
+		}
+		submissionsByID[submissionID] = submission
+	}
+
+	missingSubmissions := make([]inkbunny.SubmissionSearch, 0, len(missingSubmissionIDs))
+	for _, submissionID := range missingSubmissionIDs {
+		submission, ok := submissionsByID[submissionID]
+		if !ok {
+			continue
+		}
+		missingSubmissions = append(missingSubmissions, submission)
+	}
+	if len(missingSubmissions) == 0 {
+		return
+	}
+
+	go func(searchID string, user *inkbunny.User, submissions []inkbunny.SubmissionSearch, submissionIDs []string) {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+
+		details, err := a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
+		if err != nil {
+			a.emitDebugLog("warn", "search.hydrate", "submission detail hydration failed", withDebugError(map[string]any{
+				"searchId":        searchID,
+				"submissionCount": len(submissionIDs),
+			}, err))
+			return
+		}
+
+		detailsByID := make(map[string]inkbunny.SubmissionDetails, len(details.Submissions))
+		downloadedSubmissions := make(map[string]bool, len(details.Submissions))
+		downloadRoot := strings.TrimSpace(a.GetSession().Settings.DownloadDirectory)
+		downloadPattern := downloads.NormalizePattern(a.GetSession().Settings.DownloadPattern)
+		for _, submission := range details.Submissions {
+			submissionID := submission.SubmissionID.String()
+			detailsByID[submissionID] = submission
+			if downloadRoot != "" {
+				downloadedSubmissions[submissionID] = submissionFilesDownloaded(
+					downloadRoot,
+					downloadPattern,
+					submission,
+				)
+			}
+		}
+
+		a.broadcastSearchResultsHydrated(types.SearchResultsHydratedUpdate{
+			SearchID: searchID,
+			Results:  mapSubmissionCards(submissions, user.SID, downloadedSubmissions, detailsByID),
+		})
+	}(searchID, user, missingSubmissions, missingSubmissionIDs)
 }
 
 func mapSubmissionCards(

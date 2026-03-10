@@ -14,6 +14,7 @@ import type {
   ReleaseStatus,
   RemoteAccessInfo,
   SearchParams,
+  SearchResultsHydratedUpdate,
   SearchResponse,
   SessionInfo,
   SessionStateUpdate,
@@ -78,6 +79,7 @@ type BackendEventMap = {
   'settings.updated': SettingsStateUpdate
   'workspace.updated': WorkspaceStateUpdate
   'queue.updated': QueueStateUpdate
+  'search.resultsHydrated': SearchResultsHydratedUpdate
   notification: AppNotification
   debug: BackendDebugEvent
 }

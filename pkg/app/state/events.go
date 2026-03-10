@@ -10,13 +10,14 @@ import (
 )
 
 const (
-	sessionUpdatedEvent   = "session.updated"
-	settingsUpdatedEvent  = "settings.updated"
-	workspaceUpdatedEvent = "workspace.updated"
-	queueUpdatedEvent     = "queue.updated"
-	notificationEvent     = "notification"
-	debugEvent            = "debug"
-	snapshotInitialEvent  = "snapshot.initial"
+	sessionUpdatedEvent        = "session.updated"
+	settingsUpdatedEvent       = "settings.updated"
+	workspaceUpdatedEvent      = "workspace.updated"
+	queueUpdatedEvent          = "queue.updated"
+	searchResultsHydratedEvent = "search.resultsHydrated"
+	notificationEvent          = "notification"
+	debugEvent                 = "debug"
+	snapshotInitialEvent       = "snapshot.initial"
 )
 
 type sharedEvent struct {
@@ -178,6 +179,11 @@ func (a *App) broadcastQueueStateFromSnapshot(snapshot types.QueueSnapshot) {
 	}
 	a.emitRuntimeEvent(queueUpdatedEvent, update)
 	a.publishSharedEvent(queueUpdatedEvent, update)
+}
+
+func (a *App) broadcastSearchResultsHydrated(update types.SearchResultsHydratedUpdate) {
+	a.emitRuntimeEvent(searchResultsHydratedEvent, update)
+	a.publishSharedEvent(searchResultsHydratedEvent, update)
 }
 
 func extractQueueSnapshot(payload any) types.QueueSnapshot {

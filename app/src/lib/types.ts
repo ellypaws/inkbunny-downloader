@@ -274,6 +274,11 @@ export type QueueStateUpdate = {
   queue: QueueSnapshot
 }
 
+export type SearchResultsHydratedUpdate = {
+  searchId: string
+  results: SubmissionCard[]
+}
+
 export type SharedSnapshot = {
   buildInfo: BuildInfo
   sessionRevision: number
