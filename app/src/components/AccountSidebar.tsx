@@ -2,6 +2,7 @@ import { Check, Copy, FolderOpen, Smartphone, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { DownloadPatternInput } from "./DownloadPatternInput";
+import FolderPopout from "./FolderPopout";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import type {
   AppSettings,
@@ -17,6 +18,8 @@ type AccountSidebarProps = {
   capabilities: BackendCapabilities;
   remoteAccessInfo: RemoteAccessInfo | null;
   remoteAccessLoading: boolean;
+  canOpenDownloadFolder: boolean;
+  folderPreviewImages: string[][];
   searchParams: SearchParams;
   onNotify: (toast: {
     level: "success" | "error";
@@ -27,6 +30,7 @@ type AccountSidebarProps = {
   onDisableRemoteAccess: () => void;
   onSelectRemoteAccessHost: (host: string) => void;
   onPickDirectory: () => void;
+  onOpenDownloadFolder: () => void;
   onDownloadPatternCommit: (pattern: string) => void;
   onToggleSaveKeywords: (checked: boolean) => void;
   onLogout: () => void;
@@ -197,13 +201,26 @@ export function AccountSidebar(props: AccountSidebarProps) {
 
           <div className="space-y-3">
             {props.capabilities.nativeDialogs ? (
-              <button
-                onClick={props.onPickDirectory}
-                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#3465A4] px-4 py-3.5 text-sm font-black text-white shadow-pop transition-all hover:bg-[#204A87]"
-              >
-                <FolderOpen size={18} />
-                Choose Download Folder
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={props.onOpenDownloadFolder}
+                  disabled={!props.canOpenDownloadFolder}
+                  className="flex h-12 w-14 shrink-0 items-center justify-center overflow-visible rounded-2xl transition-transform motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45"
+                  aria-label="Open download folder"
+                  title="Open download folder"
+                >
+                  <FolderPopout images={props.folderPreviewImages} />
+                </button>
+                <button
+                  type="button"
+                  onClick={props.onPickDirectory}
+                  className="flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#3465A4] px-4 py-3.5 text-sm font-black text-white shadow-pop transition-all hover:bg-[#204A87]"
+                >
+                  <FolderOpen size={18} />
+                  Choose Folder
+                </button>
+              </div>
             ) : (
               <div className="rounded-2xl border border-[#2D2D44]/10 bg-white/55 px-4 py-3 text-sm font-bold text-[#2D2D44]/70 dark:border-white/10 dark:bg-[#1A1733]/60 dark:text-white/70">
                 Download folder changes are only available on desktop.

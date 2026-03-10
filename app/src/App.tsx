@@ -2969,6 +2969,8 @@ export default function App() {
                   capabilities={backend.capabilities}
                   remoteAccessInfo={remoteAccessInfo}
                   remoteAccessLoading={remoteAccessLoading}
+                  canOpenDownloadFolder={backend.capabilities.openLocalPaths}
+                  folderPreviewImages={folderPreviewImages}
                   searchParams={activeSearchParams}
                   onNotify={pushToast}
                   onLogout={() => void handleLogout()}
@@ -2997,6 +2999,13 @@ export default function App() {
                         pushErrorToast(message, "download-folder-picker-error");
                       })
                   }
+                  onOpenDownloadFolder={() => {
+                    backend.openDownloadDirectory().catch((error: unknown) => {
+                      const message = getErrorMessage(error, "Could not open the download folder.");
+                      updateQueueMessage(message);
+                      pushErrorToast(message, "open-download-folder-error");
+                    });
+                  }}
                   onToggleSaveKeywords={(checked) => {
                     if (!activeTab) {
                       return;
