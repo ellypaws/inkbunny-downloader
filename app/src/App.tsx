@@ -219,6 +219,13 @@ export default function App() {
   const activeAutoQueueArmed =
     Boolean(activeTab?.autoQueueEnabled) &&
     (activeTab?.autoQueueNextRunAt ?? 0) > 0;
+  const hasAutoQueueCountdown = useMemo(
+    () =>
+      tabs.some(
+        (tab) => tab.autoQueueEnabled && tab.autoQueueNextRunAt > 0,
+      ),
+    [tabs],
+  );
   const activeSearchButtonMode = activeSearchBusy
     ? "searching"
     : activeTabDownloading || activeTabQueueing
@@ -328,6 +335,15 @@ export default function App() {
       })),
     [activeTabId, autoQueueClock, pendingDownloadSubmissionIds, queue, tabs],
   );
+  const recentCompletedPreviewImages = useMemo(
+    () => getRecentCompletedPreviewImages(queue, tabs),
+    [queue, tabs],
+  );
+  const recentCompletedPreviewImagesKey = useMemo(
+    () => getPreviewImageSetsKey(recentCompletedPreviewImages),
+    [recentCompletedPreviewImages],
+  );
+  const recentCompletedPreviewImagesRef = useRef(recentCompletedPreviewImages);
 
   function applySession(nextSession: SessionInfo, nextSettings = nextSession.settings) {
     sessionRef.current = nextSession;
@@ -1283,6 +1299,10 @@ export default function App() {
   useEffect(() => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds), [downloadedSubmissionIds]);
   useEffect(() => void (unavailableSubmissionIdsRef.current = unavailableSubmissionIds), [unavailableSubmissionIds]);
   useEffect(() => void (toastsRef.current = toasts), [toasts]);
+  useEffect(
+    () => void (recentCompletedPreviewImagesRef.current = recentCompletedPreviewImages),
+    [recentCompletedPreviewImages],
+  );
   useEffect(() => {
     writeFrontendSearchLog("active tab state", {
       tabId: activeTab?.id ?? "",
@@ -1305,12 +1325,16 @@ export default function App() {
     activeTab?.mode,
   ]);
   useEffect(() => {
+    if (!hasAutoQueueCountdown) {
+      return;
+    }
+    setAutoQueueClock(Date.now());
     const intervalId = window.setInterval(
       () => setAutoQueueClock(Date.now()),
       AUTO_QUEUE_TICK_MS,
     );
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [hasAutoQueueCountdown]);
   useEffect(() => {
     setWatchingUsers(null);
     setWatchingLoading(false);
@@ -1736,7 +1760,7 @@ export default function App() {
   }, [completedQueueSubmissionIds]);
 
   useEffect(() => {
-    const completedPreviewImages = getRecentCompletedPreviewImages(queue, tabs);
+    const completedPreviewImages = recentCompletedPreviewImagesRef.current;
     if (completedPreviewImages.length === 0) {
       return;
     }
@@ -1747,7 +1771,7 @@ export default function App() {
       ]).slice(0, 3);
       return arePreviewImageSetsEqual(nextImages, current) ? current : nextImages;
     });
-  }, [queue, tabs]);
+  }, [recentCompletedPreviewImagesKey]);
 
   useEffect(() => {
     const requestId = ++keywordRequestRef.current;
@@ -3448,6 +3472,10 @@ function dedupePreviewImageSets(imageSets: unknown) {
   }
 
   return unique;
+}
+
+function getPreviewImageSetsKey(imageSets: string[][]) {
+  return JSON.stringify(imageSets);
 }
 
 function arePreviewImageSetsEqual(left: string[][], right: string[][]) {

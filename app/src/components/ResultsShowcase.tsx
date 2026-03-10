@@ -146,6 +146,11 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     () => selectPanelPreviewImages(panelItems, props.showCustomThumbnails),
     [panelItems, props.showCustomThumbnails],
   );
+  const panelPreviewImagesKey = useMemo(
+    () => JSON.stringify(panelPreviewImages),
+    [panelPreviewImages],
+  );
+  const reportedPanelPreviewImagesKeyRef = useRef("");
   const downloadSummaries = useMemo(
     () =>
       buildSubmissionDownloadSummaries(
@@ -343,8 +348,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   ]);
 
   useEffect(() => {
+    if (reportedPanelPreviewImagesKeyRef.current === panelPreviewImagesKey) {
+      return;
+    }
+    reportedPanelPreviewImagesKeyRef.current = panelPreviewImagesKey;
     props.onPanelPreviewImagesChange(panelPreviewImages);
-  }, [panelPreviewImages, props.onPanelPreviewImagesChange]);
+  }, [panelPreviewImages, panelPreviewImagesKey, props.onPanelPreviewImagesChange]);
 
   useEffect(() => {
     if (!activeModal) {
@@ -1669,15 +1678,7 @@ function selectPanelPreviewImages(
     return previewImages;
   }
 
-  const shuffled = [...previewImages];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [
-      shuffled[swapIndex]!,
-      shuffled[index]!,
-    ];
-  }
-  return shuffled.slice(0, 3);
+  return previewImages.slice(0, 3);
 }
 
 function getPanelWindowStart(resultCount: number, activeIndex: number) {
