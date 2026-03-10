@@ -52,6 +52,7 @@ export type SearchParams = {
   timeRangeDays: number
   submissionTypes: number[]
   orderBy: string
+  randomize: boolean
   page: number
   perPage: number
   maxDownloads: number

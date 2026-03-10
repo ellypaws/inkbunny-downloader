@@ -4,6 +4,7 @@ import {
   Eye,
   LoaderCircle,
   Search as SearchIcon,
+  Shuffle,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -99,7 +100,9 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
     [props.session.ratingsMask],
   );
   const visibleKeywordSuggestions =
-    pinnedField === "query" ? pinnedKeywordSuggestions : props.keywordSuggestions;
+    pinnedField === "query"
+      ? pinnedKeywordSuggestions
+      : props.keywordSuggestions;
   const visibleArtistSuggestions =
     pinnedField === "artistName"
       ? pinnedArtistSuggestions
@@ -181,15 +184,12 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                         setPinnedField(null);
                       }}
                       onBlur={() =>
-                        window.setTimeout(
-                          () => {
-                            setFocusedField((current) =>
-                              current === "query" ? null : current,
-                            );
-                            clearPinnedField("query");
-                          },
-                          100,
-                        )
+                        window.setTimeout(() => {
+                          setFocusedField((current) =>
+                            current === "query" ? null : current,
+                          );
+                          clearPinnedField("query");
+                        }, 100)
                       }
                       onChange={(event) =>
                         props.onChange((previous) => ({
@@ -350,15 +350,12 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     setPinnedField(null);
                   }}
                   onBlur={() =>
-                    window.setTimeout(
-                      () => {
-                        setFocusedField((current) =>
-                          current === "artistName" ? null : current,
-                        );
-                        clearPinnedField("artistName");
-                      },
-                      100,
-                    )
+                    window.setTimeout(() => {
+                      setFocusedField((current) =>
+                        current === "artistName" ? null : current,
+                      );
+                      clearPinnedField("artistName");
+                    }, 100)
                   }
                   onDraftChange={props.onArtistDraftChange}
                   onAddArtist={props.onAddArtist}
@@ -368,9 +365,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     setPinnedField("artistName");
                     setPinnedArtistSuggestions(visibleArtistSuggestions);
                   }}
-                  onReleaseSuggestions={() =>
-                    clearPinnedField("artistName")
-                  }
+                  onReleaseSuggestions={() => clearPinnedField("artistName")}
                   inputTourAnchor="artist-name"
                   onUseMyName={() =>
                     props.onAddArtist({
@@ -396,15 +391,12 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     setPinnedField(null);
                   }}
                   onBlur={() =>
-                    window.setTimeout(
-                      () => {
-                        setFocusedField((current) =>
-                          current === "favoritesBy" ? null : current,
-                        );
-                        clearPinnedField("favoritesBy");
-                      },
-                      100,
-                    )
+                    window.setTimeout(() => {
+                      setFocusedField((current) =>
+                        current === "favoritesBy" ? null : current,
+                      );
+                      clearPinnedField("favoritesBy");
+                    }, 100)
                   }
                   onChange={(value) =>
                     props.onChange((previous) => ({
@@ -417,9 +409,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                     setPinnedField("favoritesBy");
                     setPinnedFavoriteSuggestions(visibleFavoriteSuggestions);
                   }}
-                  onReleaseSuggestions={() =>
-                    clearPinnedField("favoritesBy")
-                  }
+                  onReleaseSuggestions={() => clearPinnedField("favoritesBy")}
                   onUseMyName={() =>
                     props.onChange((previous) => ({
                       ...previous,
@@ -575,6 +565,54 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     />
                   </label>
+                  <div className="block">
+                    <span
+                      aria-hidden="true"
+                      className="invisible text-sm font-bold"
+                    >
+                      Randomize
+                    </span>
+                    <label
+                      className={`mt-2 flex h-[46px] cursor-pointer items-center gap-3 rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm backdrop-blur-md transition-all duration-150 select-none active:translate-y-[1px] active:scale-[0.99] ${
+                        props.searchParams.randomize
+                          ? "border-[#76B900]/70 bg-[#CFE8AE]/65 text-[#2F5A12] hover:bg-[#CFE8AE]/90"
+                          : "theme-panel-soft text-[var(--theme-title)] hover:border-[var(--theme-info)]/35 hover:bg-[var(--theme-surface-strong)]"
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-5 w-5 items-center justify-center rounded-[0.35rem] border ${
+                          props.searchParams.randomize
+                            ? "border-[#76B900] bg-[#76B900] text-white"
+                            : "border-[var(--theme-subtle)] bg-transparent text-transparent"
+                        }`}
+                      >
+                        <Check size={12} />
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={props.searchParams.randomize}
+                        onChange={(event) =>
+                          props.onChange((previous) => ({
+                            ...previous,
+                            randomize: event.target.checked,
+                          }))
+                        }
+                        className="sr-only"
+                      />
+                      <span className="inline-flex items-center gap-2">
+                        <Shuffle
+                          size={16}
+                          className={
+                            props.searchParams.randomize
+                              ? "text-[#4E9A06]"
+                              : "text-[var(--theme-info)]"
+                          }
+                        />
+                        Randomize
+                      </span>
+                    </label>
+                  </div>
                   <label className="block">
                     <span className="theme-title text-sm font-bold">
                       Maximum files
@@ -688,9 +726,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
 function FieldLabel(props: { title: string; subtitle?: string }) {
   return (
     <div>
-      <div className="theme-title text-sm font-semibold">
-        {props.title}:
-      </div>
+      <div className="theme-title text-sm font-semibold">{props.title}:</div>
       {props.subtitle ? (
         <div className="theme-subtle mt-1 text-xs font-medium">
           {props.subtitle}
@@ -844,9 +880,7 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
       </label>
       <div className="theme-muted mt-1 text-sm leading-5">
         {props.subtitle}{" "}
-        <span className="theme-subtle">
-          ({props.optionalText})
-        </span>
+        <span className="theme-subtle">({props.optionalText})</span>
       </div>
       <div className="relative mt-3" data-tour-anchor={props.inputTourAnchor}>
         <div className="theme-input min-h-[3.125rem] rounded-xl border px-4 py-3 backdrop-blur-md">
@@ -867,35 +901,35 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
                         : "border-[var(--theme-border)] bg-[var(--theme-surface-strong)] text-[var(--theme-title)]"
                     }`}
                   >
-                  <img
-                    src={
-                      props.artistAvatarUrls[artist.trim().toLowerCase()] ||
-                      DEFAULT_AVATAR_URL
-                    }
-                    alt={artist}
-                    onError={(event) => {
-                      event.currentTarget.src = DEFAULT_AVATAR_URL;
-                    }}
-                    className="h-5 w-5 shrink-0 rounded-full border border-white/70 bg-white object-cover"
-                  />
-                  <span>{artist}</span>
-                  {isInvalid ? (
-                    <span className="rounded-full bg-[#FEE4E2] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-[#B42318]">
-                      Invalid
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      props.onRemoveArtist(artist);
-                    }}
-                    className="opacity-0 transition-opacity group-hover:opacity-100"
-                    aria-label={`Remove ${artist}`}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
+                    <img
+                      src={
+                        props.artistAvatarUrls[artist.trim().toLowerCase()] ||
+                        DEFAULT_AVATAR_URL
+                      }
+                      alt={artist}
+                      onError={(event) => {
+                        event.currentTarget.src = DEFAULT_AVATAR_URL;
+                      }}
+                      className="h-5 w-5 shrink-0 rounded-full border border-white/70 bg-white object-cover"
+                    />
+                    <span>{artist}</span>
+                    {isInvalid ? (
+                      <span className="rounded-full bg-[#FEE4E2] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-[#B42318]">
+                        Invalid
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        props.onRemoveArtist(artist);
+                      }}
+                      className="opacity-0 transition-opacity group-hover:opacity-100"
+                      aria-label={`Remove ${artist}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
                 );
               })}
             </div>
@@ -965,9 +999,7 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
             >
               Use my name
             </button>
-            <span className="theme-muted">
-              (Add my uploads)
-            </span>
+            <span className="theme-muted">(Add my uploads)</span>
           </>
         ) : null}
         <button
@@ -1001,7 +1033,9 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
           >
             My watches
           </span>
-          <span className={props.useWatchingArtists ? "font-black" : "theme-muted"}>
+          <span
+            className={props.useWatchingArtists ? "font-black" : "theme-muted"}
+          >
             (Search my follow list)
           </span>
         </button>
@@ -1018,9 +1052,7 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
       </label>
       <div className="theme-muted mt-1 text-sm leading-5">
         {props.subtitle}{" "}
-        <span className="theme-subtle">
-          ({props.optionalText})
-        </span>
+        <span className="theme-subtle">({props.optionalText})</span>
       </div>
       <div className="relative mt-3">
         <input
@@ -1058,9 +1090,7 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
         >
           Use my name
         </button>
-        <span className="theme-muted">
-          ({props.useMyNameLabel})
-        </span>
+        <span className="theme-muted">({props.useMyNameLabel})</span>
       </div>
     </div>
   );

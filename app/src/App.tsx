@@ -3703,6 +3703,7 @@ function normalizeSavedSearchParams(
   const base = {
     ...buildDefaultSearch(session, settings),
     ...value,
+    randomize: getBoolean(value.randomize, buildDefaultSearch(session, settings).randomize),
     artistNames: getStringArray(value.artistNames),
     submissionTypes: Array.isArray(value.submissionTypes)
       ? value.submissionTypes.filter(
@@ -4122,6 +4123,7 @@ function areSearchParamsEqual(left: SearchParams, right: SearchParams) {
     left.scraps === right.scraps &&
     left.timeRangeDays === right.timeRangeDays &&
     left.orderBy === right.orderBy &&
+    left.randomize === right.randomize &&
     left.page === right.page &&
     left.perPage === right.perPage &&
     left.maxDownloads === right.maxDownloads &&

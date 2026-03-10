@@ -740,6 +740,9 @@ func (a *App) buildSearchRequest(
 		SubmissionsPerPage: inkbunny.IntString(perPage),
 		Scraps:             normalizeScrapsMode(params.Scraps),
 	}
+	if params.Randomize {
+		req.Random = inkbunny.Yes
+	}
 	if params.UnreadSubmissions {
 		req.UnreadSubmissions = inkbunny.Yes
 	}

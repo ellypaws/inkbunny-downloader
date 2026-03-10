@@ -352,6 +352,7 @@ export namespace types {
 	    timeRangeDays: number;
 	    submissionTypes: number[];
 	    orderBy: string;
+	    randomize: boolean;
 	    page: number;
 	    perPage: number;
 	    maxDownloads: number;
@@ -379,6 +380,7 @@ export namespace types {
 	        this.timeRangeDays = source["timeRangeDays"];
 	        this.submissionTypes = source["submissionTypes"];
 	        this.orderBy = source["orderBy"];
+	        this.randomize = source["randomize"];
 	        this.page = source["page"];
 	        this.perPage = source["perPage"];
 	        this.maxDownloads = source["maxDownloads"];

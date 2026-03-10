@@ -76,6 +76,7 @@ export const DEFAULT_SEARCH: SearchParams = {
   timeRangeDays: 0,
   submissionTypes: [],
   orderBy: 'create_datetime',
+  randomize: false,
   page: 1,
   perPage: 30,
   maxDownloads: 0,

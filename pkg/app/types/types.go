@@ -50,6 +50,7 @@ type SearchParams struct {
 	TimeRangeDays       int      `json:"timeRangeDays"`
 	SubmissionTypes     []int    `json:"submissionTypes"`
 	OrderBy             string   `json:"orderBy"`
+	Randomize           bool     `json:"randomize"`
 	Page                int      `json:"page"`
 	PerPage             int      `json:"perPage"`
 	MaxDownloads        int      `json:"maxDownloads"`
