@@ -1,5 +1,5 @@
 import { Check, Copy, FolderOpen, Smartphone, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { DownloadPatternInput } from "./DownloadPatternInput";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
@@ -35,6 +35,7 @@ type AccountSidebarProps = {
 export function AccountSidebar(props: AccountSidebarProps) {
   const [remoteOpen, setRemoteOpen] = useState(false);
   const [remoteHostsOpen, setRemoteHostsOpen] = useState(false);
+  const remoteHostsCloseTimeoutRef = useRef<number | null>(null);
   const displayName = props.session.hasSession
     ? props.session.username
     : "Not signed in";
@@ -62,6 +63,30 @@ export function AccountSidebar(props: AccountSidebarProps) {
     });
   }
 
+  useEffect(() => {
+    return () => {
+      if (remoteHostsCloseTimeoutRef.current !== null) {
+        window.clearTimeout(remoteHostsCloseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function cancelRemoteHostsClose() {
+    if (remoteHostsCloseTimeoutRef.current === null) {
+      return;
+    }
+    window.clearTimeout(remoteHostsCloseTimeoutRef.current);
+    remoteHostsCloseTimeoutRef.current = null;
+  }
+
+  function scheduleRemoteHostsClose() {
+    cancelRemoteHostsClose();
+    remoteHostsCloseTimeoutRef.current = window.setTimeout(() => {
+      setRemoteHostsOpen(false);
+      remoteHostsCloseTimeoutRef.current = null;
+    }, 180);
+  }
+
   return (
     <aside className="xl:sticky xl:top-28">
       <div className="relative rounded-toy-lg bg-gradient-to-b from-[#FF34A5]/75 to-[#00A372]/75 p-1 shadow-pop">
@@ -75,7 +100,8 @@ export function AccountSidebar(props: AccountSidebarProps) {
                 {props.capabilities.remoteAccessHost ? (
                   <div
                     className="relative"
-                    onMouseLeave={() => setRemoteHostsOpen(false)}
+                    onMouseEnter={cancelRemoteHostsClose}
+                    onMouseLeave={scheduleRemoteHostsClose}
                   >
                     <button
                       type="button"
@@ -96,29 +122,31 @@ export function AccountSidebar(props: AccountSidebarProps) {
                       <Smartphone size={16} />
                     </button>
                     {remoteHostsOpen && (props.remoteAccessInfo?.availableHosts?.length ?? 0) > 0 ? (
-                      <div className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-2.5rem))] rounded-2xl border border-[#2D2D44]/10 bg-white/95 p-3 text-sm shadow-pop backdrop-blur-md dark:border-white/10 dark:bg-[#14112C]/95">
-                        <div className="mb-2 pl-2 text-xs font-semibold text-[#2D2D44]/55 dark:text-white/45">
-                          Choose an address
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          {props.remoteAccessInfo?.availableHosts?.map((host) => (
-                            <button
-                              key={host}
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                props.onSelectRemoteAccessHost(host);
-                                setRemoteHostsOpen(false);
-                              }}
-                              className={`cursor-pointer break-all rounded-xl px-3 py-2 text-left text-[13px] font-semibold leading-5 transition-colors ${
-                                props.remoteAccessInfo?.selectedHost === host
-                                  ? "bg-[#cfeeff] text-[#0f5d7a] dark:bg-[#0f4156] dark:text-[#d6f6ff]"
-                                  : "text-[#2D2D44]/80 hover:bg-[#d9edff] hover:text-[#0f5d7a] dark:text-white/75 dark:hover:bg-[#1a3950] dark:hover:text-[#d6f6ff]"
-                              }`}
-                            >
-                              {host}
-                            </button>
-                          ))}
+                      <div className="absolute right-0 top-full z-30 w-[min(22rem,calc(100vw-2.5rem))] pt-2">
+                        <div className="rounded-2xl border border-[#2D2D44]/10 bg-white/95 p-3 text-sm shadow-pop backdrop-blur-md dark:border-white/10 dark:bg-[#14112C]/95">
+                          <div className="mb-2 pl-2 text-xs font-semibold text-[#2D2D44]/55 dark:text-white/45">
+                            Choose an address
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            {props.remoteAccessInfo?.availableHosts?.map((host) => (
+                              <button
+                                key={host}
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  props.onSelectRemoteAccessHost(host);
+                                  setRemoteHostsOpen(false);
+                                }}
+                                className={`cursor-pointer break-all rounded-xl px-3 py-2 text-left text-[13px] font-semibold leading-5 transition-colors ${
+                                  props.remoteAccessInfo?.selectedHost === host
+                                    ? "bg-[#cfeeff] text-[#0f5d7a] dark:bg-[#0f4156] dark:text-[#d6f6ff]"
+                                    : "text-[#2D2D44]/80 hover:bg-[#d9edff] hover:text-[#0f5d7a] dark:text-white/75 dark:hover:bg-[#1a3950] dark:hover:text-[#d6f6ff]"
+                                }`}
+                              >
+                                {host}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ) : null}
