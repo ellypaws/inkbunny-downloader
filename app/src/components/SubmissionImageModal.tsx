@@ -2,6 +2,8 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Download,
   Eye,
   File,
@@ -16,6 +18,7 @@ import {
 import { gsap } from "gsap";
 import {
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -58,8 +61,18 @@ type SubmissionImageModalProps = {
 export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const hasMultipleItems = props.items.length > 1;
   const modalRootRef = useRef<HTMLDivElement | null>(null);
+  const panelShellRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const preLayersRef = useRef<HTMLDivElement | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<
+    "open" | "opening" | "closing" | "closed"
+  >(() =>
+    typeof window === "undefined" || window.innerWidth >= 1180
+      ? "open"
+      : "closed",
+  );
+  const sidebarTweenRef = useRef<gsap.core.Timeline | null>(null);
+  const initialSidebarOpenRef = useRef(sidebarMode !== "closed");
   const avatarCandidates = useMemo(
     () => getAvatarCandidates(props.submission),
     [props.submission],
@@ -71,6 +84,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const [avatarIndex, setAvatarIndex] = useState(0);
   const avatarSrc = avatarCandidates[avatarIndex] ?? DEFAULT_AVATAR_URL;
   const [resolvedAvatarSrc, setResolvedAvatarSrc] = useState(avatarSrc);
+  const isSidebarRendered = sidebarMode !== "closed";
 
   useEffect(() => {
     setAvatarIndex(0);
@@ -121,10 +135,11 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
+      const shell = panelShellRef.current;
       const panel = panelRef.current;
       const preContainer = preLayersRef.current;
 
-      if (!panel) {
+      if (!shell || !panel) {
         return;
       }
 
@@ -140,21 +155,51 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       const panelItems = Array.from(
         panel.querySelectorAll(".sim-panel-item"),
       ) as HTMLElement[];
+      const dimensionProp = getSidebarDimensionProperty();
+      const setClosedState = () => {
+        gsap.set(shell, { [dimensionProp]: 0 });
+        gsap.set([...preLayers, panel], { xPercent: -100 });
+        if (panelItems.length) {
+          gsap.set(panelItems, { yPercent: 140, rotate: 10, opacity: 0 });
+        }
+      };
 
       if (reduceMotion) {
-        gsap.set([...preLayers, panel], { xPercent: 0 });
-        if (panelItems.length) {
-          gsap.set(panelItems, { yPercent: 0, rotate: 0, opacity: 1 });
+        if (initialSidebarOpenRef.current) {
+          gsap.set(shell, { clearProps: dimensionProp });
+          gsap.set([...preLayers, panel], { xPercent: 0 });
+          if (panelItems.length) {
+            gsap.set(panelItems, { yPercent: 0, rotate: 0, opacity: 1 });
+          }
+        } else {
+          setClosedState();
         }
         return;
       }
 
-      gsap.set([...preLayers, panel], { xPercent: -100 });
-      if (panelItems.length) {
-        gsap.set(panelItems, { yPercent: 140, rotate: 10, opacity: 0 });
+      if (!initialSidebarOpenRef.current) {
+        setClosedState();
+        return;
       }
 
-      const tl = gsap.timeline();
+      setClosedState();
+
+      const tl = gsap.timeline({
+        onComplete: () => {
+          gsap.set(shell, { clearProps: dimensionProp });
+          setSidebarMode("open");
+        },
+      });
+      shell.style.overflow = "hidden";
+      tl.to(
+        shell,
+        {
+          [dimensionProp]: measureSidebarExpandedSize(shell),
+          duration: 0.6,
+          ease: "power4.out",
+        },
+        0,
+      );
       preLayers.forEach((layer, index) => {
         tl.to(
           layer,
@@ -197,10 +242,228 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
           panelInsertTime + panelDuration * 0.15,
         );
       }
+      sidebarTweenRef.current = tl;
     }, modalRootRef);
 
-    return () => ctx.revert();
+    return () => {
+      sidebarTweenRef.current?.kill();
+      sidebarTweenRef.current = null;
+      ctx.revert();
+    };
   }, []);
+
+  const runSidebarOpenAnimation = useCallback(() => {
+    const shell = panelShellRef.current;
+    const panel = panelRef.current;
+    const preContainer = preLayersRef.current;
+    if (!shell || !panel) {
+      setSidebarMode("open");
+      return;
+    }
+
+    const reduceMotion =
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      document.documentElement.classList.contains("motion-reduced") ||
+      document.body.classList.contains("motion-reduced");
+    const preLayers = preContainer
+      ? (Array.from(
+          preContainer.querySelectorAll(".sim-prelayer"),
+        ) as HTMLElement[])
+      : [];
+    const panelItems = Array.from(
+      panel.querySelectorAll(".sim-panel-item"),
+    ) as HTMLElement[];
+    const dimensionProp = getSidebarDimensionProperty();
+
+    sidebarTweenRef.current?.kill();
+
+    if (reduceMotion) {
+      gsap.set(shell, { clearProps: dimensionProp });
+      gsap.set([...preLayers, panel], { xPercent: 0 });
+      if (panelItems.length) {
+        gsap.set(panelItems, { yPercent: 0, rotate: 0, opacity: 1 });
+      }
+      setSidebarMode("open");
+      return;
+    }
+
+    shell.style.overflow = "hidden";
+    gsap.set(shell, { [dimensionProp]: 0 });
+    gsap.set([...preLayers, panel], { xPercent: -100 });
+    if (panelItems.length) {
+      gsap.set(panelItems, { yPercent: 140, rotate: 10, opacity: 0 });
+    }
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        gsap.set(shell, { clearProps: dimensionProp });
+        setSidebarMode("open");
+      },
+    });
+    tl.to(
+      shell,
+      {
+        [dimensionProp]: measureSidebarExpandedSize(shell),
+        duration: 0.6,
+        ease: "power4.out",
+      },
+      0,
+    );
+    preLayers.forEach((layer, index) => {
+      tl.to(
+        layer,
+        {
+          xPercent: 0,
+          duration: 0.5,
+          ease: "power4.out",
+        },
+        index * 0.07,
+      );
+    });
+
+    const lastLayerTime = preLayers.length
+      ? (preLayers.length - 1) * 0.07
+      : 0;
+    const panelInsertTime = lastLayerTime + (preLayers.length ? 0.08 : 0);
+    const panelDuration = 0.65;
+
+    tl.to(
+      panel,
+      {
+        xPercent: 0,
+        duration: panelDuration,
+        ease: "power4.out",
+      },
+      panelInsertTime,
+    );
+
+    if (panelItems.length) {
+      tl.to(
+        panelItems,
+        {
+          yPercent: 0,
+          rotate: 0,
+          opacity: 1,
+          duration: 1,
+          ease: "power4.out",
+          stagger: { each: 0.1, from: "start" },
+        },
+        panelInsertTime + panelDuration * 0.15,
+      );
+    }
+    sidebarTweenRef.current = tl;
+  }, []);
+
+  const runSidebarCloseAnimation = useCallback(() => {
+    const shell = panelShellRef.current;
+    const panel = panelRef.current;
+    const preContainer = preLayersRef.current;
+    if (!shell || !panel) {
+      setSidebarMode("closed");
+      return;
+    }
+
+    const reduceMotion =
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      document.documentElement.classList.contains("motion-reduced") ||
+      document.body.classList.contains("motion-reduced");
+    const preLayers = preContainer
+      ? (Array.from(
+          preContainer.querySelectorAll(".sim-prelayer"),
+        ) as HTMLElement[])
+      : [];
+    const panelItems = Array.from(
+      panel.querySelectorAll(".sim-panel-item"),
+    ) as HTMLElement[];
+    const dimensionProp = getSidebarDimensionProperty();
+
+    sidebarTweenRef.current?.kill();
+
+    if (reduceMotion) {
+      gsap.set(shell, { [dimensionProp]: 0 });
+      gsap.set([...preLayers, panel], { xPercent: -100 });
+      if (panelItems.length) {
+        gsap.set(panelItems, { yPercent: 140, rotate: 10, opacity: 0 });
+      }
+      setSidebarMode("closed");
+      return;
+    }
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setSidebarMode("closed");
+      },
+    });
+
+    if (panelItems.length) {
+      tl.to(
+        panelItems,
+        {
+          yPercent: 140,
+          rotate: 10,
+          opacity: 0,
+          duration: 0.28,
+          ease: "power3.in",
+          stagger: { each: 0.04, from: "end" },
+        },
+        0,
+      );
+    }
+
+    gsap.set(shell, { [dimensionProp]: measureSidebarExpandedSize(shell) });
+    tl.to(
+      [panel, ...preLayers],
+      {
+        xPercent: -100,
+        duration: 0.34,
+        ease: "power3.in",
+        stagger: 0.05,
+      },
+      0.08,
+    );
+    tl.to(
+      shell,
+      {
+        [dimensionProp]: 0,
+        duration: 0.52,
+        ease: "power4.inOut",
+      },
+      0.02,
+    );
+    sidebarTweenRef.current = tl;
+  }, []);
+
+  const showSidebar = useCallback(() => {
+    if (sidebarMode === "open" || sidebarMode === "opening") {
+      return;
+    }
+    setSidebarMode("opening");
+  }, [sidebarMode]);
+
+  const hideSidebar = useCallback(() => {
+    if (sidebarMode !== "open") {
+      return;
+    }
+    setSidebarMode("closing");
+  }, [sidebarMode]);
+
+  useEffect(() => {
+    if (sidebarMode !== "opening") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      runSidebarOpenAnimation();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [runSidebarOpenAnimation, sidebarMode]);
+
+  useEffect(() => {
+    if (sidebarMode !== "closing") {
+      return;
+    }
+    runSidebarCloseAnimation();
+  }, [runSidebarCloseAnimation, sidebarMode]);
 
   return (
     <div
@@ -212,8 +475,16 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       aria-modal="true"
       aria-label={`${props.submission.title} image viewer`}
     >
-      <div className="grid h-full w-full grid-rows-[minmax(0,1fr)_auto] md:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] md:grid-rows-1">
-        <div className="relative min-h-0 overflow-hidden border-b border-[var(--theme-border-soft)] md:border-r md:border-b-0">
+      <div className="flex h-full w-full flex-col md:flex-row">
+        <div
+          ref={panelShellRef}
+          className={`relative min-h-0 overflow-hidden border-b border-[var(--theme-border-soft)] transition-[max-width,opacity,border-color] duration-300 md:border-b-0 ${
+            isSidebarRendered
+              ? "w-full shrink-0 opacity-100 md:w-[clamp(14rem,20vw,22rem)] md:border-r"
+              : "pointer-events-none w-0 shrink-0 opacity-0 md:border-r-0"
+          }`}
+          aria-hidden={!isSidebarRendered}
+        >
           <div
             ref={preLayersRef}
             className="pointer-events-none absolute inset-0 z-0"
@@ -237,6 +508,9 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
           />
           <aside
             ref={panelRef}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
             className="theme-panel-strong relative z-10 flex h-full flex-col px-5 py-6 shadow-[0_18px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl md:px-6 md:py-7"
           >
             <div className="sim-panel-item flex items-start gap-3">
@@ -312,10 +586,23 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               descriptionHtml={props.submission.descriptionHtml}
               description={props.submission.description}
             />
+            <div className="sim-panel-item mt-auto flex justify-end pt-4">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  hideSidebar();
+                }}
+                aria-label="Hide information panel"
+                className="theme-muted inline-flex items-center justify-center transition-colors hover:text-[var(--theme-title)]"
+              >
+                <ChevronsLeft size={24} />
+              </button>
+            </div>
           </aside>
         </div>
 
-        <div className="relative flex min-h-0 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div
             className="pointer-events-none absolute inset-0 opacity-80"
             style={{
@@ -323,6 +610,21 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                 "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 28%, rgba(0,0,0,0.2) 100%)",
             }}
           />
+          {!isSidebarRendered ? (
+            <div className="absolute bottom-4 left-4 z-30">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  showSidebar();
+                }}
+                aria-label="Show information panel"
+                className="theme-muted inline-flex items-center justify-center transition-colors hover:text-[var(--theme-title)]"
+              >
+                <ChevronsRight size={26} />
+              </button>
+            </div>
+          ) : null}
           <div className="absolute right-4 top-4 z-30 flex items-center gap-2">
             <button
               type="button"
@@ -367,7 +669,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
             </button>
           </div>
 
-          <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 py-2 md:px-4 md:py-4">
+          <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden px-2 py-2 md:px-4 md:py-4">
             {hasMultipleItems ? (
               <button
                 type="button"
@@ -453,31 +755,43 @@ function SubmissionModalImage(props: {
   sources: SubmissionModalPreviewSource[];
   alt: string;
 }) {
+  const imageRef = useRef<HTMLImageElement | null>(null);
   const [sourceIndex, setSourceIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const source = props.sources[sourceIndex];
+  const sourcesKey = useMemo(
+    () =>
+      props.sources
+        .map((item) => `${item.src}|${item.srcSet ?? ""}`)
+        .join("||"),
+    [props.sources],
+  );
 
   useEffect(() => {
     setSourceIndex(0);
     setLoaded(false);
-  }, [props.sources]);
+  }, [sourcesKey]);
 
   useEffect(() => {
     setLoaded(false);
-  }, [sourceIndex]);
+    if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) {
+      setLoaded(true);
+    }
+  }, [source?.src, source?.srcSet]);
 
   if (!source?.src) {
     return (
       <ModalPreviewFallback
         submission={props.submission}
-        className="h-[min(86vh,72rem)] w-[min(98vw,110rem)]"
+        className="h-[min(86vh,72rem)] w-full max-w-full"
       />
     );
   }
 
   return (
     <img
-      key={`${props.alt}-${sourceIndex}`}
+      ref={imageRef}
+      key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
       src={source.src}
       srcSet={source.srcSet}
       alt={props.alt}
@@ -490,7 +804,7 @@ function SubmissionModalImage(props: {
         setLoaded(false);
         setSourceIndex((current) => current + 1);
       }}
-      className={`max-h-[min(90vh,80rem)] max-w-[min(98vw,112rem)] object-contain transition-opacity duration-[250ms] ${loaded ? "opacity-100" : "opacity-0"}`}
+      className={`max-h-[min(90vh,80rem)] max-w-full min-w-0 object-contain transition-opacity duration-[250ms] ${loaded ? "opacity-100" : "opacity-0"}`}
     />
   );
 }
@@ -699,6 +1013,24 @@ function buildAvatarSrcSet(submission: SubmissionCard) {
     })
     .map(([src, descriptor]) => `${src} ${descriptor}`)
     .join(", ");
+}
+
+function getSidebarDimensionProperty() {
+  return window.innerWidth >= 768 ? "width" : "height";
+}
+
+function measureSidebarExpandedSize(element: HTMLElement) {
+  const dimensionProp = getSidebarDimensionProperty();
+  const previousValue = element.style.getPropertyValue(dimensionProp);
+  element.style.removeProperty(dimensionProp);
+  const measured =
+    dimensionProp === "width" ? element.scrollWidth : element.scrollHeight;
+  if (previousValue) {
+    element.style.setProperty(dimensionProp, previousValue);
+  } else {
+    element.style.removeProperty(dimensionProp);
+  }
+  return measured;
 }
 
 const proxiedAvatarImageRequests = new Map<string, Promise<string>>();
