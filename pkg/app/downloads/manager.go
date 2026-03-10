@@ -340,6 +340,26 @@ func (m *Manager) Clear() types.QueueSnapshot {
 	return snapshot
 }
 
+func (m *Manager) Reset() types.QueueSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, job := range m.jobs {
+		if job != nil && job.cancel != nil {
+			job.cancel()
+		}
+	}
+
+	m.paused = false
+	m.jobs = make(map[string]*downloadJob)
+	m.pending = nil
+	m.active = 0
+
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
+	return snapshot
+}
+
 func (m *Manager) ClearCompleted() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()

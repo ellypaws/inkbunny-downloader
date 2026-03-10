@@ -32,6 +32,15 @@ func (l *RateLimiter) SetNotifier(notify func(types.AppNotification)) {
 	l.mu.Unlock()
 }
 
+func (l *RateLimiter) Reset() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.cooldownUntil = time.Time{}
+	l.mu.Unlock()
+}
+
 func (l *RateLimiter) Wait(ctx context.Context) error {
 	if l == nil {
 		return nil

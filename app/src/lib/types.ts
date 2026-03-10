@@ -238,3 +238,21 @@ export type BuildInfo = {
   displayVersion: string
   isDev: boolean
 }
+
+export type DebugResetScope =
+  | 'cache'
+  | 'state'
+  | 'settings'
+  | 'workspace'
+  | 'login'
+  | 'queue'
+  | 'all'
+
+export type DebugResetResult = {
+  scope: DebugResetScope
+  cachesCleared: boolean
+  session: SessionInfo
+  settings: AppSettings
+  workspace: WorkspaceState
+  queue: QueueSnapshot
+}

@@ -86,68 +86,6 @@ export namespace types {
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
-	export class DownloadOptions {
-	    saveKeywords: boolean;
-	    maxActive: number;
-	    downloadDirectory: string;
-	    downloadPattern: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new DownloadOptions(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.saveKeywords = source["saveKeywords"];
-	        this.maxActive = source["maxActive"];
-	        this.downloadDirectory = source["downloadDirectory"];
-	        this.downloadPattern = source["downloadPattern"];
-	    }
-	}
-	export class SelectedSubmission {
-	    submissionId: string;
-	    fileIds?: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new SelectedSubmission(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.submissionId = source["submissionId"];
-	        this.fileIds = source["fileIds"];
-	    }
-	}
-	export class DownloadSelection {
-	    submissions: SelectedSubmission[];
-	
-	    static createFrom(source: any = {}) {
-	        return new DownloadSelection(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.submissions = this.convertValues(source["submissions"], SelectedSubmission);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class QueueSnapshot {
 	    jobs: DownloadJobSnapshot[];
 	    paused: boolean;
@@ -170,70 +108,6 @@ export namespace types {
 	        this.completedCount = source["completedCount"];
 	        this.failedCount = source["failedCount"];
 	        this.cancelledCount = source["cancelledCount"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class ReleaseStatus {
-	    currentVersion: string;
-	    currentTag: string;
-	    latestTag?: string;
-	    releaseURL?: string;
-	    updateAvailable: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new ReleaseStatus(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.currentVersion = source["currentVersion"];
-	        this.currentTag = source["currentTag"];
-	        this.latestTag = source["latestTag"];
-	        this.releaseURL = source["releaseURL"];
-	        this.updateAvailable = source["updateAvailable"];
-	    }
-	}
-	export class SessionInfo {
-	    hasSession: boolean;
-	    username: string;
-	    isGuest: boolean;
-	    avatarUrl: string;
-	    ratingsMask: string;
-	    settings: AppSettings;
-	    lastSearchId?: string;
-	    effectiveTheme?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new SessionInfo(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.hasSession = source["hasSession"];
-	        this.username = source["username"];
-	        this.isGuest = source["isGuest"];
-	        this.avatarUrl = source["avatarUrl"];
-	        this.ratingsMask = source["ratingsMask"];
-	        this.settings = this.convertValues(source["settings"], AppSettings);
-	        this.lastSearchId = source["lastSearchId"];
-	        this.effectiveTheme = source["effectiveTheme"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -570,30 +444,6 @@ export namespace types {
 		    return a;
 		}
 	}
-	
-	
-	
-	
-	
-	
-	export class UsernameSuggestion {
-	    userId: string;
-	    value: string;
-	    username: string;
-	    avatarUrl: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new UsernameSuggestion(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.userId = source["userId"];
-	        this.value = source["value"];
-	        this.username = source["username"];
-	        this.avatarUrl = source["avatarUrl"];
-	    }
-	}
 	export class WorkspaceState {
 	    activeTabId: string;
 	    tabs: SavedSearchTab[];
@@ -625,6 +475,199 @@ export namespace types {
 		    }
 		    return a;
 		}
+	}
+	export class SessionInfo {
+	    hasSession: boolean;
+	    username: string;
+	    isGuest: boolean;
+	    avatarUrl: string;
+	    ratingsMask: string;
+	    settings: AppSettings;
+	    lastSearchId?: string;
+	    effectiveTheme?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasSession = source["hasSession"];
+	        this.username = source["username"];
+	        this.isGuest = source["isGuest"];
+	        this.avatarUrl = source["avatarUrl"];
+	        this.ratingsMask = source["ratingsMask"];
+	        this.settings = this.convertValues(source["settings"], AppSettings);
+	        this.lastSearchId = source["lastSearchId"];
+	        this.effectiveTheme = source["effectiveTheme"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DebugResetResult {
+	    scope: string;
+	    cachesCleared: boolean;
+	    session: SessionInfo;
+	    settings: AppSettings;
+	    workspace: WorkspaceState;
+	    queue: QueueSnapshot;
+	
+	    static createFrom(source: any = {}) {
+	        return new DebugResetResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.scope = source["scope"];
+	        this.cachesCleared = source["cachesCleared"];
+	        this.session = this.convertValues(source["session"], SessionInfo);
+	        this.settings = this.convertValues(source["settings"], AppSettings);
+	        this.workspace = this.convertValues(source["workspace"], WorkspaceState);
+	        this.queue = this.convertValues(source["queue"], QueueSnapshot);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class DownloadOptions {
+	    saveKeywords: boolean;
+	    maxActive: number;
+	    downloadDirectory: string;
+	    downloadPattern: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DownloadOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.saveKeywords = source["saveKeywords"];
+	        this.maxActive = source["maxActive"];
+	        this.downloadDirectory = source["downloadDirectory"];
+	        this.downloadPattern = source["downloadPattern"];
+	    }
+	}
+	export class SelectedSubmission {
+	    submissionId: string;
+	    fileIds?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectedSubmission(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.submissionId = source["submissionId"];
+	        this.fileIds = source["fileIds"];
+	    }
+	}
+	export class DownloadSelection {
+	    submissions: SelectedSubmission[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DownloadSelection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.submissions = this.convertValues(source["submissions"], SelectedSubmission);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class ReleaseStatus {
+	    currentVersion: string;
+	    currentTag: string;
+	    latestTag?: string;
+	    releaseURL?: string;
+	    updateAvailable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReleaseStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currentVersion = source["currentVersion"];
+	        this.currentTag = source["currentTag"];
+	        this.latestTag = source["latestTag"];
+	        this.releaseURL = source["releaseURL"];
+	        this.updateAvailable = source["updateAvailable"];
+	    }
+	}
+	
+	
+	
+	
+	
+	
+	
+	export class UsernameSuggestion {
+	    userId: string;
+	    value: string;
+	    username: string;
+	    avatarUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UsernameSuggestion(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.userId = source["userId"];
+	        this.value = source["value"];
+	        this.username = source["username"];
+	        this.avatarUrl = source["avatarUrl"];
+	    }
 	}
 
 }

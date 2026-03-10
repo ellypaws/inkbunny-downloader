@@ -237,6 +237,15 @@ type BuildInfo struct {
 	IsDev          bool   `json:"isDev"`
 }
 
+type DebugResetResult struct {
+	Scope         string         `json:"scope"`
+	CachesCleared bool           `json:"cachesCleared"`
+	Session       SessionInfo    `json:"session"`
+	Settings      AppSettings    `json:"settings"`
+	Workspace     WorkspaceState `json:"workspace"`
+	Queue         QueueSnapshot  `json:"queue"`
+}
+
 type StoredState struct {
 	Session   SessionInfo    `json:"session"`
 	User      SessionUser    `json:"user"`

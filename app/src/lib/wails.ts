@@ -1,4 +1,6 @@
 import type {
+  DebugResetResult,
+  DebugResetScope,
   AppSettings,
   BuildInfo,
   DownloadOptions,
@@ -53,6 +55,7 @@ type BackendApi = {
   PickDownloadDirectory(): Promise<string>
   SkipReleaseTag(tag: string): Promise<AppSettings>
   UpdateSettings(settings: AppSettings): Promise<AppSettings>
+  DebugResetState(scope: DebugResetScope): Promise<DebugResetResult>
 }
 
 type WindowGoNamespace = {
@@ -109,6 +112,7 @@ const backendMethodNames = [
   'PickDownloadDirectory',
   'SkipReleaseTag',
   'UpdateSettings',
+  'DebugResetState',
 ] as const satisfies readonly (keyof BackendApi)[]
 
 let cachedBackend: BackendApi | null = null
@@ -286,6 +290,9 @@ export const backend = {
   },
   async updateSettings(settings: AppSettings): Promise<AppSettings> {
     return getBackend().UpdateSettings(settings)
+  },
+  async debugResetState(scope: DebugResetScope): Promise<DebugResetResult> {
+    return getBackend().DebugResetState(scope)
   },
 }
 

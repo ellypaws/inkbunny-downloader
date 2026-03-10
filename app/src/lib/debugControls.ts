@@ -1,5 +1,11 @@
 import type { ToastItem } from "../components/ToastHost";
-import type { AppNotification, AppSettings, BuildInfo, ReleaseStatus } from "./types";
+import type {
+  AppNotification,
+  AppSettings,
+  BuildInfo,
+  DebugResetScope,
+  ReleaseStatus,
+} from "./types";
 
 export type InkbunnyDebugControls = {
   help: () => string;
@@ -15,6 +21,17 @@ export type InkbunnyDebugControls = {
   clearToasts(): void;
   logBuildInfo(): string;
   cancelSearch(): Promise<void>;
+  clearCache(): Promise<string>;
+  clearState(): Promise<string>;
+  clearSettings(): Promise<string>;
+  clearWorkspace(): Promise<string>;
+  clearLogin(): Promise<string>;
+  clearQueueState(): Promise<string>;
+  clearDeferredState(): Promise<string>;
+  resetState(scope?: DebugResetTarget): Promise<string>;
+  refreshBackend(): Promise<string>;
+  refreshEverything(): Promise<string>;
+  refreshPage(): string;
 };
 
 type DebugCommandDefinition = {
@@ -33,12 +50,17 @@ type RegisterDebugControlsOptions = {
   clearToasts: () => void;
   openPanel: (panel: DebugPanelName) => void;
   cancelSearch: () => Promise<void>;
+  resetState: (scope: DebugResetTarget) => Promise<string>;
+  refreshBackend: () => Promise<string>;
+  refreshEverything: () => Promise<string>;
+  refreshPage: () => string;
 };
 
 type DebugToastLevel = ToastItem["level"];
 type DebugNotificationLevel = AppNotification["level"];
 
 export type DebugPanelName = "queue" | "login" | "tabs" | "unread";
+export type DebugResetTarget = DebugResetScope | "deferred";
 
 export type DebugErrorPreset =
   | "backend-unavailable"
@@ -129,6 +151,61 @@ const DEBUG_COMMANDS: DebugCommandDefinition[] = [
     description: "Trigger the real stop-search path for the active tab.",
     example: "debug.cancelSearch()",
   },
+  {
+    command: "debug.clearCache()",
+    description: "Flush backend caches and active search state without resetting saved settings.",
+    example: "debug.clearCache()",
+  },
+  {
+    command: "debug.clearState()",
+    description: "Reset persisted workspace and settings back to defaults.",
+    example: "debug.clearState()",
+  },
+  {
+    command: "debug.clearSettings()",
+    description: "Restore app settings to their defaults while leaving the current login alone.",
+    example: "debug.clearSettings()",
+  },
+  {
+    command: "debug.clearWorkspace()",
+    description: "Reset saved tabs, search sessions, and workspace layout.",
+    example: "debug.clearWorkspace()",
+  },
+  {
+    command: "debug.clearLogin()",
+    description: "Drop the local session and reopen the login flow without touching the server.",
+    example: "debug.clearLogin()",
+  },
+  {
+    command: "debug.clearQueueState()",
+    description: "Reset the download queue, including paused state and tracked jobs.",
+    example: "debug.clearQueueState()",
+  },
+  {
+    command: "debug.clearDeferredState()",
+    description: "Cancel deferred UI updates such as timers, pending saves, cooldowns, and in-flight guards.",
+    example: "debug.clearDeferredState()",
+  },
+  {
+    command: "debug.resetState()",
+    description: "Run a broader reset. Supported scopes: cache, state, settings, workspace, login, queue, deferred, all.",
+    example: "debug.resetState('all')",
+  },
+  {
+    command: "debug.refreshBackend()",
+    description: "Rehydrate the frontend from the current backend session, workspace, queue, and build info.",
+    example: "debug.refreshBackend()",
+  },
+  {
+    command: "debug.refreshEverything()",
+    description: "Refresh backend state and then reload the page.",
+    example: "debug.refreshEverything()",
+  },
+  {
+    command: "debug.refreshPage()",
+    description: "Reload the current page immediately.",
+    example: "debug.refreshPage()",
+  },
 ];
 
 const SAMPLE_RELEASE_STATUS: ReleaseStatus = {
@@ -207,6 +284,50 @@ class InkbunnyDebug implements InkbunnyDebugControls {
   async cancelSearch() {
     await this.options.cancelSearch();
   }
+
+  async clearCache() {
+    return this.options.resetState("cache");
+  }
+
+  async clearState() {
+    return this.options.resetState("state");
+  }
+
+  async clearSettings() {
+    return this.options.resetState("settings");
+  }
+
+  async clearWorkspace() {
+    return this.options.resetState("workspace");
+  }
+
+  async clearLogin() {
+    return this.options.resetState("login");
+  }
+
+  async clearQueueState() {
+    return this.options.resetState("queue");
+  }
+
+  async clearDeferredState() {
+    return this.options.resetState("deferred");
+  }
+
+  async resetState(scope: DebugResetTarget = "all") {
+    return this.options.resetState(scope);
+  }
+
+  async refreshBackend() {
+    return this.options.refreshBackend();
+  }
+
+  async refreshEverything() {
+    return this.options.refreshEverything();
+  }
+
+  refreshPage() {
+    return this.options.refreshPage();
+  }
 }
 
 function mountDebugGlobal(instance: InkbunnyDebugControls) {
@@ -260,6 +381,17 @@ function showDebugCommandHelp() {
     "  debug.openPanel('tabs')",
     "  debug.logBuildInfo()",
     "  debug.cancelSearch()",
+    "  debug.clearCache()",
+    "  debug.clearState()",
+    "  debug.clearSettings()",
+    "  debug.clearWorkspace()",
+    "  debug.clearLogin()",
+    "  debug.clearQueueState()",
+    "  debug.clearDeferredState()",
+    "  debug.resetState('all')",
+    "  debug.refreshBackend()",
+    "  debug.refreshEverything()",
+    "  debug.refreshPage()",
   ].join("\n");
   console.info(message);
   return message;

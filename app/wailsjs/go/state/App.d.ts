@@ -14,6 +14,8 @@ export function ClearCompletedSubmissions(arg1:Array<string>):Promise<types.Queu
 
 export function ClearQueue():Promise<types.QueueSnapshot>;
 
+export function DebugResetState(arg1:string):Promise<types.DebugResetResult>;
+
 export function DiagnosticState():Promise<string>;
 
 export function EnqueueDownloads(arg1:string,arg2:types.DownloadSelection,arg3:types.DownloadOptions):Promise<types.QueueSnapshot>;

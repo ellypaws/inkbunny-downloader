@@ -26,6 +26,10 @@ export function ClearQueue() {
   return window['go']['state']['App']['ClearQueue']();
 }
 
+export function DebugResetState(arg1) {
+  return window['go']['state']['App']['DebugResetState'](arg1);
+}
+
 export function DiagnosticState() {
   return window['go']['state']['App']['DiagnosticState']();
 }

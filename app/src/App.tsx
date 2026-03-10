@@ -20,13 +20,18 @@ import {
   MAX_CONCURRENT_DOWNLOADS,
   MIN_CONCURRENT_DOWNLOADS,
 } from "./lib/constants";
-import { registerDebugControls, type DebugPanelName } from "./lib/debugControls";
+import {
+  registerDebugControls,
+  type DebugPanelName,
+  type DebugResetTarget,
+} from "./lib/debugControls";
 import type {
   AppNotification,
   AppSettings,
   ArtistValidationState,
   BackendDebugEvent,
   BuildInfo,
+  DebugResetResult,
   DownloadProgressEvent,
   QueueSnapshot,
   ReleaseStatus,
@@ -610,6 +615,206 @@ export default function App() {
     );
   }
 
+  function applyWorkspaceSnapshot(
+    workspace: WorkspaceState,
+    nextSession = sessionRef.current,
+    nextSettings = settingsRef.current,
+  ) {
+    const restoredTabs = restoreWorkspaceTabs(workspace, nextSession, nextSettings);
+    const nextActiveTabId = resolveActiveWorkspaceTabId(workspace, restoredTabs);
+    tabsRef.current = restoredTabs;
+    activeTabIdRef.current = nextActiveTabId;
+    setTabs(restoredTabs);
+    setActiveTabId(nextActiveTabId);
+  }
+
+  async function clearDeferredDebugState() {
+    const toastCount = toastsRef.current.length;
+    const pendingDownloadCount = pendingDownloadSubmissionIdsRef.current.length;
+    const autoClearTimerCount = autoClearTimeoutsRef.current.size;
+
+    clearAllToasts();
+    clearScheduledTourAdvance();
+
+    if (workspacePersistTimeoutRef.current !== null) {
+      window.clearTimeout(workspacePersistTimeoutRef.current);
+      workspacePersistTimeoutRef.current = null;
+    }
+    if (ratingDebounceRef.current !== null) {
+      window.clearTimeout(ratingDebounceRef.current);
+      ratingDebounceRef.current = null;
+    }
+    for (const timeoutId of autoClearTimeoutsRef.current.values()) {
+      window.clearTimeout(timeoutId);
+    }
+    autoClearTimeoutsRef.current.clear();
+    autoClearPendingSubmissionIdsRef.current.clear();
+    autoClearRunningRef.current = false;
+    autoQueueRunningRef.current = false;
+    shouldScrollToResultsRef.current = false;
+    pendingRatingsMaskRef.current = sessionRef.current.ratingsMask;
+    keywordRequestRef.current += 1;
+    artistRequestRef.current += 1;
+    favoritesRequestRef.current += 1;
+    loadMoreControllersRef.current = new Map();
+    searchRequestControllersRef.current = new Map();
+
+    setAuthLoading(false);
+    setAuthError("");
+    setWatchingLoading(false);
+    setWatchingUsers(null);
+    setKeywordSuggestions([]);
+    setArtistSuggestions([]);
+    setFavoriteSuggestions([]);
+    setPendingDownloadSubmissionIds([]);
+    setPanelPreviewImages([]);
+    setRecentDownloadedImages([]);
+    setQueueMessage("");
+    setApiCooldownUntil(0);
+    setTourOpen(false);
+    setTourStepId("tabs-toggle");
+    setTourSearchAttempted(false);
+    setTourAdvancing(false);
+    setTabs((previous) =>
+      previous.map((tab) => ({
+        ...tab,
+        searchLoading: false,
+        searchError: "",
+        loadMoreState: createIdleLoadMoreState(),
+        autoQueuePhase: "idle",
+        autoQueueNextRunAt: 0,
+        trackedDownloadSubmissionIds: [],
+      })),
+    );
+
+    await backend.cancelSearchRequests().catch(() => undefined);
+
+    return `Cleared deferred state (${toastCount} toasts, ${autoClearTimerCount} timers, ${pendingDownloadCount} pending downloads).`;
+  }
+
+  function formatDebugResetMessage(scope: DebugResetTarget, result?: DebugResetResult) {
+    switch (scope) {
+      case "cache":
+        return "Cleared backend caches and active search state.";
+      case "state":
+        return "Reset persisted settings and workspace state.";
+      case "settings":
+        return "Reset persisted settings to defaults.";
+      case "workspace":
+        return "Reset saved workspace tabs and search sessions.";
+      case "login":
+        return "Cleared the local login session.";
+      case "queue":
+        return result
+          ? `Reset the download queue (${result.queue.jobs.length} jobs remaining).`
+          : "Reset the download queue.";
+      case "deferred":
+        return "Cleared deferred frontend state.";
+      case "all":
+      default:
+        return "Reset caches, persisted state, login, queue, and deferred frontend state.";
+    }
+  }
+
+  async function runDebugStateReset(scope: DebugResetTarget) {
+    const deferredMessage = await clearDeferredDebugState();
+    if (scope === "deferred") {
+      console.info("Inkbunny debug reset:", {
+        scope,
+        deferred: deferredMessage,
+      });
+      return deferredMessage;
+    }
+
+    const result = await backend.debugResetState(scope);
+    applySession(result.session, result.settings);
+
+    if (scope === "state" || scope === "workspace" || scope === "all") {
+      applyWorkspaceSnapshot(result.workspace, result.session, result.settings);
+    }
+
+    if (scope === "queue" || scope === "all") {
+      setQueue(result.queue);
+    }
+
+    if (scope === "login" || scope === "state" || scope === "all") {
+      setLoginUsername("");
+      setLoginPassword("");
+      setLoginTeachMe(!result.settings.hasLoggedInBefore);
+    }
+    if (scope === "login" || scope === "all") {
+      setLoginOpen(true);
+      setUnreadTotal(0);
+      setTrackedUnreadBaseline(-1);
+    }
+
+    const message = formatDebugResetMessage(scope, result);
+    console.info("Inkbunny debug reset:", {
+      scope,
+      deferred: deferredMessage,
+      backend: result,
+    });
+    return message;
+  }
+
+  async function fetchAppSnapshotFromBackend() {
+    const [nextBuildInfo, nextSession, workspace, snapshot] = await Promise.all([
+      backend.getBuildInfo(),
+      backend.getSession(),
+      backend.getWorkspaceState(),
+      backend.getQueueSnapshot(),
+    ]);
+
+    return {
+      buildInfo: nextBuildInfo,
+      session: nextSession,
+      workspace,
+      queue: snapshot,
+    };
+  }
+
+  function applyBackendSnapshot(snapshot: Awaited<ReturnType<typeof fetchAppSnapshotFromBackend>>) {
+    setBuildInfo(snapshot.buildInfo);
+    applySession(snapshot.session);
+    applyWorkspaceSnapshot(snapshot.workspace, snapshot.session, snapshot.session.settings);
+    setQueue(snapshot.queue);
+    setLoginOpen(!snapshot.session.hasSession);
+    setAuthError("");
+    workspaceLoadedRef.current = true;
+
+    if (!snapshot.session.hasSession) {
+      setUnreadTotal(0);
+      setTrackedUnreadBaseline(-1);
+    }
+
+    void backend
+      .getReleaseStatus()
+      .then((status) => {
+        showReleaseUpdateToast(status, snapshot.session.settings);
+      })
+      .catch(() => undefined);
+  }
+
+  function reloadDebugPage() {
+    window.location.reload();
+    return "Reloading page.";
+  }
+
+  async function runDebugBackendRefresh() {
+    const deferredMessage = await clearDeferredDebugState();
+    applyBackendSnapshot(await fetchAppSnapshotFromBackend());
+    console.info("Inkbunny debug refresh:", {
+      scope: "backend",
+      deferred: deferredMessage,
+    });
+    return "Refreshed frontend from backend state.";
+  }
+
+  async function runDebugFullRefresh() {
+    await runDebugBackendRefresh();
+    return reloadDebugPage();
+  }
+
   function showReleaseUpdateToast(status: ReleaseStatus, currentSettings: AppSettings) {
     if (
       !status.updateAvailable ||
@@ -887,6 +1092,10 @@ export default function App() {
       clearToasts: clearAllToasts,
       openPanel: openDebugPanel,
       cancelSearch: () => stopActiveSearch(),
+      resetState: runDebugStateReset,
+      refreshBackend: runDebugBackendRefresh,
+      refreshEverything: runDebugFullRefresh,
+      refreshPage: reloadDebugPage,
       showOnboarding: () => {
         setLoginOpen(false);
         startTutorial();
@@ -925,36 +1134,12 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([
-      backend.getBuildInfo(),
-      backend.getSession(),
-      backend.getWorkspaceState(),
-      backend.getQueueSnapshot(),
-    ])
-      .then(([nextBuildInfo, nextSession, workspace, snapshot]) => {
+    fetchAppSnapshotFromBackend()
+      .then((snapshot) => {
         if (!mounted) {
           return;
         }
-        setBuildInfo(nextBuildInfo);
-        applySession(nextSession);
-        const restoredTabs = restoreWorkspaceTabs(
-          workspace,
-          nextSession,
-          nextSession.settings,
-        );
-        setTabs(restoredTabs);
-        setActiveTabId(resolveActiveWorkspaceTabId(workspace, restoredTabs));
-        setQueue(snapshot);
-        setLoginOpen(!nextSession.hasSession);
-        workspaceLoadedRef.current = true;
-        void backend
-          .getReleaseStatus()
-          .then((status) => {
-            if (mounted) {
-              showReleaseUpdateToast(status, nextSession.settings);
-            }
-          })
-          .catch(() => undefined);
+        applyBackendSnapshot(snapshot);
       })
       .catch((error: unknown) => {
         if (!mounted) {
