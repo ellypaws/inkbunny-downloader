@@ -3744,9 +3744,11 @@ function normalizeSearchParamsForMode(
   session: SessionInfo,
   settings: AppSettings,
 ) {
+  const normalizedPerPage = normalizeSearchPerPage(searchParams.perPage);
   return {
     ...cloneSearchParams(searchParams),
     unreadSubmissions: mode === "unread",
+    perPage: normalizedPerPage,
     maxActive: settings.maxActive || searchParams.maxActive || DEFAULT_SEARCH.maxActive,
     maxDownloads:
       session.isGuest && searchParams.maxDownloads <= 0
@@ -3873,6 +3875,13 @@ function getBoolean(value: unknown, fallback: boolean) {
 
 function getNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeSearchPerPage(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return DEFAULT_SEARCH.perPage;
+  }
+  return Math.min(Math.trunc(value), 100);
 }
 
 function normalizeSavedSearchParams(

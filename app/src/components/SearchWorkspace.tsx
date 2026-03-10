@@ -558,7 +558,10 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       onChange={(event) =>
                         props.onChange((previous) => ({
                           ...previous,
-                          perPage: Number(event.target.value) || 0,
+                          perPage: Math.min(
+                            100,
+                            Math.max(0, Number(event.target.value) || 0),
+                          ),
                         }))
                       }
                       placeholder="30"

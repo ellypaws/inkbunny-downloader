@@ -54,6 +54,7 @@ type artistSearchState struct {
 }
 
 const defaultSearchPerPage = 30
+const maxSearchPerPage = 100
 
 func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err error) {
 	startedAt := time.Now()
@@ -132,10 +133,7 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 		}
 	}
 	response := entry.Response
-	perPage := int(normalizedReq.SubmissionsPerPage)
-	if perPage <= 0 {
-		perPage = defaultSearchPerPage
-	}
+	perPage := normalizeSearchPerPage(int(normalizedReq.SubmissionsPerPage))
 	a.emitDebugLog("debug", "search.run", "search response cached", map[string]any{
 		"query":    params.Query,
 		"cache":    debugSearchCacheKeyFields(key),
@@ -199,10 +197,7 @@ func (a *App) searchMultipleArtists(
 		return types.SearchResponse{}, err
 	}
 
-	perPage := params.PerPage
-	if perPage <= 0 || perPage > 100 {
-		perPage = defaultSearchPerPage
-	}
+	perPage := normalizeSearchPerPage(params.PerPage)
 	ratingsMask := userRatingsMask(user)
 	streams := make([]artistSearchState, 0, len(requests))
 	pending := make([]inkbunny.SubmissionSearch, 0, perPage*len(requests))
@@ -721,10 +716,7 @@ func (a *App) buildSearchRequest(
 	params types.SearchParams,
 	artistFilters []string,
 ) (inkbunny.SubmissionSearchRequest, error) {
-	perPage := params.PerPage
-	if perPage <= 0 || perPage > 100 {
-		perPage = defaultSearchPerPage
-	}
+	perPage := normalizeSearchPerPage(params.PerPage)
 	page := params.Page
 	if page <= 0 {
 		page = 1
@@ -812,6 +804,16 @@ func (a *App) buildSearchRequest(
 	}
 
 	return req, nil
+}
+
+func normalizeSearchPerPage(perPage int) int {
+	if perPage <= 0 {
+		return defaultSearchPerPage
+	}
+	if perPage > maxSearchPerPage {
+		return maxSearchPerPage
+	}
+	return perPage
 }
 
 func (a *App) buildArtistSearchRequests(
