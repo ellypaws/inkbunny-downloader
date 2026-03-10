@@ -127,16 +127,13 @@ export default function App() {
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [trackedUnreadBaseline, setTrackedUnreadBaseline] = useState(-1);
 
-  const lagTextRef = useRef<HTMLHeadingElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
-  const requestRef = useRef<number | null>(null);
   const shouldScrollToResultsRef = useRef(false);
   const ratingDebounceRef = useRef<number | null>(null);
   const autoClearTimeoutsRef = useRef<Map<string, number>>(new Map());
   const autoClearPendingSubmissionIdsRef = useRef<Set<string>>(new Set());
   const autoClearRunningRef = useRef(false);
   const pendingRatingsMaskRef = useRef("");
-  const currentY = useRef(0);
   const toastTimeoutsRef = useRef<Map<string, number>>(new Map());
   const toastsRef = useRef<ToastItem[]>([]);
   const keywordRequestRef = useRef(0);
@@ -1466,25 +1463,6 @@ export default function App() {
   }, [autoQueueClock, pendingDownloadSubmissionIds, queue, session.hasSession, tabs]);
 
   useEffect(() => {
-    const animate = () => {
-      if (settings.motionEnabled && lagTextRef.current) {
-        const targetY = window.scrollY;
-        currentY.current += (targetY - currentY.current) * 0.05;
-        const translateY = currentY.current * 0.55;
-        const rotate = Math.sin(currentY.current * 0.002) * 2;
-        lagTextRef.current.style.transform = `translateY(${translateY}px) translateX(-2rem) rotate(${rotate}deg)`;
-      }
-      requestRef.current = window.requestAnimationFrame(animate);
-    };
-    requestRef.current = window.requestAnimationFrame(animate);
-    return () => {
-      if (requestRef.current !== null) {
-        window.cancelAnimationFrame(requestRef.current);
-      }
-    };
-  }, [settings.motionEnabled]);
-
-  useEffect(() => {
     document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
   }, [settings.darkMode]);
 
@@ -2615,19 +2593,6 @@ export default function App() {
       <ToastHost toasts={toasts} onDismiss={dismissToast} />
       <StarBackground darkMode={settings.darkMode} motionEnabled={settings.motionEnabled} />
       <div className="theme-shell min-h-screen overflow-x-hidden font-sans text-[var(--theme-text)] selection:bg-[var(--theme-accent)] selection:text-white transition-colors duration-300">
-        <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none select-none z-0">
-          <h1
-            ref={lagTextRef}
-            className="font-teko text-[12rem] md:text-[20rem] leading-none transform translate-x-[-2rem] tracking-tight will-change-transform"
-            style={{
-              transform: "translateY(0) translateX(-2rem)",
-              opacity: settings.darkMode ? 0.07 : 0.12,
-              color: settings.darkMode ? "var(--theme-accent-strong)" : "var(--theme-border)",
-            }}
-          >
-            BUNNY
-          </h1>
-        </div>
         <NavigationPill
           darkMode={settings.darkMode}
           motionEnabled={settings.motionEnabled}
