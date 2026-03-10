@@ -720,9 +720,13 @@ func (a *App) fetchSubmissionDetailsBatch(
 			sid = user.SID
 		}
 		return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
-			SID:               sid,
-			SubmissionIDSlice: submissionIDs,
-			ShowPools:         inkbunny.Yes,
+			SID:                         sid,
+			SubmissionIDSlice:           submissionIDs,
+			ShowDescription:             inkbunny.Yes,
+			ShowDescriptionBbcodeParsed: inkbunny.Yes,
+			ShowWriting:                 inkbunny.Yes,
+			ShowWritingBbcodeParsed:     inkbunny.Yes,
+			ShowPools:                   inkbunny.Yes,
 		})
 	})
 }

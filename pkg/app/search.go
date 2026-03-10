@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -701,9 +702,18 @@ func mapSubmissionCards(
 
 		detail := detailsByID[submissionID]
 		cards = append(cards, SubmissionCard{
-			SubmissionID:     submissionID,
-			SubmissionURL:    submissionPageURL(submissionID),
-			Title:            submission.Title,
+			SubmissionID:  submissionID,
+			SubmissionURL: submissionPageURL(submissionID),
+			Title:         submission.Title,
+			Description: firstNonEmpty(
+				strings.TrimSpace(detail.Description),
+				strings.TrimSpace(detail.Writing),
+				strings.TrimSpace(detail.SalesDescription),
+			),
+			DescriptionHTML: firstNonEmpty(
+				strings.TrimSpace(detail.DescriptionBBCodeParsed),
+				strings.TrimSpace(detail.WritingBBCodeParsed),
+			),
 			Username:         submission.Username,
 			UserURL:          userPageURL(submission.Username),
 			TypeName:         submission.TypeName,
@@ -744,10 +754,58 @@ func mapSubmissionCards(
 			ViewsCount:                  int(detail.Views),
 			BadgeText:                   badge,
 			Accent:                      accents[index%len(accents)],
+			MediaFiles:                  mapSubmissionMediaFiles(detail.Files, sid, submission.Public.Bool()),
 			Downloaded:                  downloadedSubmissions[submissionID],
 		})
 	}
 	return cards
+}
+
+func mapSubmissionMediaFiles(files []inkbunny.File, sid string, isPublic bool) []SubmissionMediaFile {
+	if len(files) == 0 {
+		return nil
+	}
+
+	sorted := append([]inkbunny.File(nil), files...)
+	sort.SliceStable(sorted, func(left, right int) bool {
+		return int(sorted[left].SubmissionFileOrder) < int(sorted[right].SubmissionFileOrder)
+	})
+
+	mediaFiles := make([]SubmissionMediaFile, 0, len(sorted))
+	for _, file := range sorted {
+		thumbnail := firstNonEmpty(
+			file.ThumbnailURLHuge,
+			file.ThumbnailURLLarge,
+			file.ThumbnailURLMedium,
+			file.ThumbnailURLHugeNonCustom,
+			file.ThumbnailURLLargeNonCustom,
+			file.ThumbnailURLMediumNonCustom,
+		)
+		mediaFiles = append(mediaFiles, SubmissionMediaFile{
+			FileID:                      file.FileID.String(),
+			FileName:                    file.FileName,
+			MimeType:                    file.MimeType,
+			Order:                       int(file.SubmissionFileOrder),
+			PreviewURL:                  submissionResourceURL(file.FileURLPreview.String(), sid, isPublic),
+			ScreenURL:                   submissionResourceURL(file.FileURLScreen.String(), sid, isPublic),
+			FullURL:                     submissionResourceURL(file.FileURLFull.String(), sid, isPublic),
+			ThumbnailURL:                submissionResourceURL(thumbnail, sid, isPublic),
+			ThumbnailURLMedium:          submissionResourceURL(file.ThumbnailURLMedium, sid, isPublic),
+			ThumbnailURLLarge:           submissionResourceURL(file.ThumbnailURLLarge, sid, isPublic),
+			ThumbnailURLHuge:            submissionResourceURL(file.ThumbnailURLHuge, sid, isPublic),
+			ThumbnailURLMediumNonCustom: submissionResourceURL(file.ThumbnailURLMediumNonCustom, sid, isPublic),
+			ThumbnailURLLargeNonCustom:  submissionResourceURL(file.ThumbnailURLLargeNonCustom, sid, isPublic),
+			ThumbnailURLHugeNonCustom:   submissionResourceURL(file.ThumbnailURLHugeNonCustom, sid, isPublic),
+			ThumbMediumX:                int(file.ThumbMediumX),
+			ThumbLargeX:                 int(file.ThumbLargeX),
+			ThumbHugeX:                  int(file.ThumbHugeX),
+			ThumbMediumNonCustomX:       int(file.ThumbMediumNonCustomX),
+			ThumbLargeNonCustomX:        int(file.ThumbLargeNonCustomX),
+			ThumbHugeNonCustomX:         int(file.ThumbHugeNonCustomX),
+		})
+	}
+
+	return mediaFiles
 }
 
 func submissionFilesDownloaded(downloadRoot, downloadPattern string, submission inkbunny.SubmissionDetails) bool {

@@ -236,10 +236,62 @@ export namespace desktopapp {
 		    return a;
 		}
 	}
+	export class SubmissionMediaFile {
+	    fileId?: string;
+	    fileName?: string;
+	    mimeType?: string;
+	    order: number;
+	    previewUrl?: string;
+	    screenUrl?: string;
+	    fullUrl?: string;
+	    thumbnailUrl?: string;
+	    thumbnailUrlMedium?: string;
+	    thumbnailUrlLarge?: string;
+	    thumbnailUrlHuge?: string;
+	    thumbnailUrlMediumNonCustom?: string;
+	    thumbnailUrlLargeNonCustom?: string;
+	    thumbnailUrlHugeNonCustom?: string;
+	    thumbMediumX?: number;
+	    thumbLargeX?: number;
+	    thumbHugeX?: number;
+	    thumbMediumNonCustomX?: number;
+	    thumbLargeNonCustomX?: number;
+	    thumbHugeNonCustomX?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubmissionMediaFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fileId = source["fileId"];
+	        this.fileName = source["fileName"];
+	        this.mimeType = source["mimeType"];
+	        this.order = source["order"];
+	        this.previewUrl = source["previewUrl"];
+	        this.screenUrl = source["screenUrl"];
+	        this.fullUrl = source["fullUrl"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.thumbnailUrlMedium = source["thumbnailUrlMedium"];
+	        this.thumbnailUrlLarge = source["thumbnailUrlLarge"];
+	        this.thumbnailUrlHuge = source["thumbnailUrlHuge"];
+	        this.thumbnailUrlMediumNonCustom = source["thumbnailUrlMediumNonCustom"];
+	        this.thumbnailUrlLargeNonCustom = source["thumbnailUrlLargeNonCustom"];
+	        this.thumbnailUrlHugeNonCustom = source["thumbnailUrlHugeNonCustom"];
+	        this.thumbMediumX = source["thumbMediumX"];
+	        this.thumbLargeX = source["thumbLargeX"];
+	        this.thumbHugeX = source["thumbHugeX"];
+	        this.thumbMediumNonCustomX = source["thumbMediumNonCustomX"];
+	        this.thumbLargeNonCustomX = source["thumbLargeNonCustomX"];
+	        this.thumbHugeNonCustomX = source["thumbHugeNonCustomX"];
+	    }
+	}
 	export class SubmissionCard {
 	    submissionId: string;
 	    submissionUrl?: string;
 	    title: string;
+	    description?: string;
+	    descriptionHtml?: string;
 	    username: string;
 	    userUrl?: string;
 	    typeName: string;
@@ -277,6 +329,7 @@ export namespace desktopapp {
 	    viewsCount: number;
 	    badgeText?: string;
 	    accent?: string;
+	    mediaFiles?: SubmissionMediaFile[];
 	    fileIds?: string[];
 	    downloaded: boolean;
 	
@@ -289,6 +342,8 @@ export namespace desktopapp {
 	        this.submissionId = source["submissionId"];
 	        this.submissionUrl = source["submissionUrl"];
 	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.descriptionHtml = source["descriptionHtml"];
 	        this.username = source["username"];
 	        this.userUrl = source["userUrl"];
 	        this.typeName = source["typeName"];
@@ -326,9 +381,28 @@ export namespace desktopapp {
 	        this.viewsCount = source["viewsCount"];
 	        this.badgeText = source["badgeText"];
 	        this.accent = source["accent"];
+	        this.mediaFiles = this.convertValues(source["mediaFiles"], SubmissionMediaFile);
 	        this.fileIds = source["fileIds"];
 	        this.downloaded = source["downloaded"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class SearchResponse {
 	    searchId: string;
@@ -476,6 +550,7 @@ export namespace desktopapp {
 		    return a;
 		}
 	}
+	
 	
 	
 	

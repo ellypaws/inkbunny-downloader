@@ -23,6 +23,7 @@ import {
 
 import ElasticSlider from "./ElasticSlider";
 import { LoadMoreControl, type LoadMoreControlState } from "./LoadMoreControl";
+import { SubmissionImageModal } from "./SubmissionImageModal";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import { accentClass } from "../lib/format";
 import { backend } from "../lib/wails";
@@ -31,6 +32,7 @@ import type {
   QueueSnapshot,
   SearchResponse,
   SubmissionCard,
+  SubmissionMediaFile,
 } from "../lib/types";
 
 type ResultsShowcaseProps = {
@@ -79,6 +81,28 @@ type SubmissionDownloadSummary = {
   progress: number;
 };
 
+type ActiveModalState = {
+  submissionId: string;
+  fileIndex: number;
+};
+
+type ThumbnailSourceInput = {
+  thumbnailUrl?: string;
+  thumbnailUrlMedium?: string;
+  thumbnailUrlLarge?: string;
+  thumbnailUrlHuge?: string;
+  thumbnailUrlMediumNonCustom?: string;
+  thumbnailUrlLargeNonCustom?: string;
+  thumbnailUrlHugeNonCustom?: string;
+  thumbMediumX?: number;
+  thumbLargeX?: number;
+  thumbHugeX?: number;
+  thumbMediumNonCustomX?: number;
+  thumbLargeNonCustomX?: number;
+  thumbHugeNonCustomX?: number;
+  fullUrl?: string;
+};
+
 const PANEL_WINDOW_SIZE = 5;
 const RESULT_GRID_GAP = 12;
 const RESULT_CARD_CHROME_HEIGHT = 152;
@@ -106,6 +130,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const [panelVisible, setPanelVisible] = useState(true);
   const [gridCardWidth, setGridCardWidth] = useState(220);
   const [resultsGridWidth, setResultsGridWidth] = useState(0);
+  const [activeModal, setActiveModal] = useState<ActiveModalState | null>(null);
 
   const panelItems = useMemo(
     () => getPanelItems(props.results, panelStart),
@@ -179,6 +204,39 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     estimateSize: () => estimatedResultRowHeight,
     overscan: 4,
   });
+  const activeModalSubmission = useMemo(
+    () =>
+      activeModal
+        ? props.results.find(
+            (item) => item.submissionId === activeModal.submissionId,
+          ) ?? null
+        : null,
+    [activeModal, props.results],
+  );
+  const activeModalMediaItems = useMemo(
+    () =>
+      activeModalSubmission
+        ? getSubmissionModalMediaItems(
+            activeModalSubmission,
+            props.showCustomThumbnails,
+          )
+        : [],
+    [activeModalSubmission, props.showCustomThumbnails],
+  );
+  const activeModalIndex = activeModal
+    ? clampIndex(activeModal.fileIndex, activeModalMediaItems.length)
+    : 0;
+  const activeModalItem = activeModalMediaItems[activeModalIndex] ?? null;
+  const activeModalDownloadSummary = activeModalSubmission
+    ? (downloadSummaries.get(activeModalSubmission.submissionId) ??
+      IDLE_DOWNLOAD_SUMMARY)
+    : null;
+  const activeModalCancellable = isSubmissionCancellable(
+    activeModalDownloadSummary?.state ?? "idle",
+  );
+  const activeModalRetryable = isSubmissionRetryable(
+    activeModalDownloadSummary?.state ?? "idle",
+  );
 
   useEffect(() => {
     return () => {
@@ -281,6 +339,114 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   useEffect(() => {
     props.onPanelPreviewImagesChange(panelPreviewImages);
   }, [panelPreviewImages, props.onPanelPreviewImagesChange]);
+
+  useEffect(() => {
+    if (!activeModal) {
+      return;
+    }
+    if (!activeModalSubmission) {
+      setActiveModal(null);
+      return;
+    }
+    if (activeModal.fileIndex !== activeModalIndex) {
+      setActiveModal((current) =>
+        current
+          ? {
+              ...current,
+              fileIndex: activeModalIndex,
+            }
+          : current,
+      );
+    }
+  }, [activeModal, activeModalIndex, activeModalSubmission]);
+
+  useEffect(() => {
+    if (!activeModal) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeModal]);
+
+  useEffect(() => {
+    if (!activeModal) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveModal(null);
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setActiveModal((current) =>
+          current
+            ? {
+                ...current,
+                fileIndex: current.fileIndex - 1,
+              }
+            : current,
+        );
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setActiveModal((current) =>
+          current
+            ? {
+                ...current,
+                fileIndex: current.fileIndex + 1,
+              }
+            : current,
+        );
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeModal]);
+
+  const openSubmissionModal = (submissionId: string, fileIndex = 0) => {
+    props.onSelectActive(submissionId);
+    setActiveModal({
+      submissionId,
+      fileIndex,
+    });
+  };
+
+  const setActiveModalIndex = (fileIndex: number) => {
+    setActiveModal((current) =>
+      current
+        ? {
+            ...current,
+            fileIndex,
+          }
+        : current,
+    );
+  };
+
+  const handleActiveModalDownload = () => {
+    if (!activeModalSubmission || !activeModalDownloadSummary) {
+      return;
+    }
+    if (activeModalDownloadSummary.state === "downloaded") {
+      return;
+    }
+    if (activeModalCancellable) {
+      props.onCancelSubmission(activeModalSubmission.submissionId);
+      return;
+    }
+    if (activeModalRetryable) {
+      props.onRetrySubmission(activeModalSubmission.submissionId);
+      return;
+    }
+    props.onDownloadSubmission(activeModalSubmission.submissionId);
+  };
 
   return (
     <section className="relative mt-4">
@@ -389,6 +555,23 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                   preferCustomThumbnails={props.showCustomThumbnails}
                   refreshToken={props.resultsRefreshToken}
                   className="absolute inset-0 h-full w-full object-cover opacity-70 transition-opacity duration-500 group-hover:opacity-100"
+                />
+                <button
+                  type="button"
+                  aria-label={
+                    props.activeSubmissionId === item.submissionId
+                      ? `Open ${item.title}`
+                      : `Focus ${item.title}`
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (props.activeSubmissionId === item.submissionId) {
+                      openSubmissionModal(item.submissionId);
+                      return;
+                    }
+                    props.onSelectActive(item.submissionId);
+                  }}
+                  className="absolute inset-0 z-[15]"
                 />
                 <div
                   className={`absolute inset-0 bg-gradient-to-t ${accentClass(item.accent)} via-transparent to-transparent`}
@@ -688,6 +871,15 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                   sizes={`${Math.ceil(resultCardWidth)}px`}
                                   className="h-full w-full object-cover"
                                 />
+                                <button
+                                  type="button"
+                                  aria-label={`Open ${item.title}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openSubmissionModal(item.submissionId);
+                                  }}
+                                  className="absolute inset-0 z-10"
+                                />
                                 <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-[rgba(46,52,54,0.78)] via-[rgba(46,52,54,0.22)] to-transparent p-3 dark:from-[#14112C]/75 dark:via-[#14112C]/20">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className="rounded-full bg-[var(--theme-surface-strong)] px-3 py-1 text-[11px] font-black text-[var(--theme-title)]">
@@ -807,6 +999,23 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       ) : null}
 
+      {activeModalSubmission && activeModalItem ? (
+        <SubmissionImageModal
+          submission={activeModalSubmission}
+          item={activeModalItem}
+          items={activeModalMediaItems}
+          activeIndex={activeModalIndex}
+          downloadState={
+            (activeModalDownloadSummary ?? IDLE_DOWNLOAD_SUMMARY).state
+          }
+          cancellable={activeModalCancellable}
+          retryable={activeModalRetryable}
+          onClose={() => setActiveModal(null)}
+          onNavigate={setActiveModalIndex}
+          onDownload={handleActiveModalDownload}
+        />
+      ) : null}
+
       <LoadMoreControl
         canLoadMore={canLoadMore}
         disabled={props.loading}
@@ -905,6 +1114,66 @@ function SubmissionPreviewImage(props: {
   );
 }
 
+function getSubmissionModalMediaItems(
+  submission: SubmissionCard,
+  preferCustomThumbnails: boolean,
+) {
+  const mediaFiles = submission.mediaFiles ?? [];
+  if (mediaFiles.length > 0) {
+    return mediaFiles.map((file, index) => ({
+      key: file.fileId || `${submission.submissionId}-${index}`,
+      alt: `${submission.title} - page ${index + 1}`,
+      label: `Page ${index + 1}`,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      sources: getMediaFilePreviewSources(file, preferCustomThumbnails),
+      thumbnail: getThumbnailPreviewSource(file, preferCustomThumbnails),
+    }));
+  }
+
+  return [
+    {
+      key: `${submission.submissionId}-fallback`,
+      alt: submission.title,
+      label: "Page 1",
+      fileName: submission.fileName,
+      mimeType: submission.mimeType,
+      sources: getSubmissionModalPreviewSources(
+        submission,
+        preferCustomThumbnails,
+      ),
+      thumbnail: getThumbnailPreviewSource(submission, preferCustomThumbnails),
+    },
+  ];
+}
+
+function getSubmissionModalPreviewSources(
+  submission: SubmissionCard,
+  preferCustomThumbnails: boolean,
+) {
+  return dedupePreviewSources([
+    toPreviewSource(submission.fullUrl),
+    toPreviewSource(submission.screenUrl),
+    toPreviewSource(submission.previewUrl),
+    getThumbnailPreviewSource(submission, preferCustomThumbnails),
+    toPreviewSource(submission.latestPreviewUrl),
+    toPreviewSource(submission.latestThumbnailUrl),
+  ]);
+}
+
+function getMediaFilePreviewSources(
+  file: SubmissionMediaFile,
+  preferCustomThumbnails: boolean,
+) {
+  return dedupePreviewSources([
+    toPreviewSource(file.fullUrl),
+    toPreviewSource(file.screenUrl),
+    toPreviewSource(file.previewUrl),
+    getThumbnailPreviewSource(file, preferCustomThumbnails),
+    toPreviewSource(file.thumbnailUrl),
+  ]);
+}
+
 function getPreviewSources(
   submission: SubmissionCard,
   variant: "full" | "card" = "card",
@@ -975,24 +1244,24 @@ type ThumbnailVariant = {
 };
 
 function getThumbnailPreviewSource(
-  submission: SubmissionCard,
+  item: ThumbnailSourceInput,
   preferCustomThumbnails: boolean,
   includeFullFileURL = false,
   preferredWidth = 0,
 ) {
   const preferred = preferCustomThumbnails
-    ? getCustomThumbnailVariants(submission)
-    : getNonCustomThumbnailVariants(submission);
+    ? getCustomThumbnailVariants(item)
+    : getNonCustomThumbnailVariants(item);
   const fallback = preferCustomThumbnails
-    ? getNonCustomThumbnailVariants(submission)
-    : getCustomThumbnailVariants(submission);
+    ? getNonCustomThumbnailVariants(item)
+    : getCustomThumbnailVariants(item);
   const variants = preferred.length > 0 ? preferred : fallback;
   const primary = getPrimaryThumbnailVariant(
     variants,
     Math.ceil(preferredWidth),
   );
   if (!primary) {
-    return toPreviewSource(submission.thumbnailUrl);
+    return toPreviewSource(item.thumbnailUrl);
   }
 
   const srcSetVariants = variants
@@ -1004,8 +1273,8 @@ function getThumbnailPreviewSource(
   );
   const srcSet = [
     ...srcSetVariants.map((variant) => `${variant.src} ${variant.width}w`),
-    includeFullFileURL && submission.fullUrl
-      ? `${submission.fullUrl} ${Math.max(fullWidth + 1, 4096)}w`
+    includeFullFileURL && item.fullUrl
+      ? `${item.fullUrl} ${Math.max(fullWidth + 1, 4096)}w`
       : null,
   ]
     .filter((value): value is string => Boolean(value))
@@ -1038,7 +1307,7 @@ function getPrimaryThumbnailVariant(
   return sizedVariants[sizedVariants.length - 1];
 }
 
-function getCustomThumbnailVariants(submission: SubmissionCard) {
+function getCustomThumbnailVariants(submission: ThumbnailSourceInput) {
   return getThumbnailVariants([
     [submission.thumbnailUrlHuge, submission.thumbHugeX],
     [submission.thumbnailUrlLarge, submission.thumbLargeX],
@@ -1046,7 +1315,7 @@ function getCustomThumbnailVariants(submission: SubmissionCard) {
   ]);
 }
 
-function getNonCustomThumbnailVariants(submission: SubmissionCard) {
+function getNonCustomThumbnailVariants(submission: ThumbnailSourceInput) {
   return getThumbnailVariants([
     [
       submission.thumbnailUrlHugeNonCustom,
@@ -1289,6 +1558,17 @@ function getPreviewFallbackContent(submission: SubmissionCard) {
 function formatFileCount(pageCount: number) {
   const count = Math.max(1, pageCount || 0);
   return `${count} file${count === 1 ? "" : "s"}`;
+}
+
+function clampIndex(value: number, size: number) {
+  if (size <= 0) {
+    return 0;
+  }
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  const normalized = Math.round(value);
+  return ((normalized % size) + size) % size;
 }
 
 function getVirtualGridColumnCount(

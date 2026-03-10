@@ -50,6 +50,7 @@ export function NavigationPill(props: NavigationPillProps) {
 
   return (
     <nav
+      data-navigation-pill="true"
       className={`theme-panel static md:fixed mt-5 md:mt-0 md:top-6 left-0 right-0 mx-auto flex w-[92%] max-w-6xl items-center justify-between overflow-visible rounded-full border px-6 py-3 backdrop-blur-xl shadow-pop transition-all duration-500 ease-out z-50 ${
         isHidden
           ? "opacity-0 -translate-y-6 pointer-events-none scale-[0.985]"

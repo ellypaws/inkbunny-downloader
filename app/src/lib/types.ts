@@ -58,6 +58,8 @@ export type SubmissionCard = {
   submissionId: string
   submissionUrl?: string
   title: string
+  description?: string
+  descriptionHtml?: string
   username: string
   userUrl?: string
   typeName: string
@@ -95,8 +97,32 @@ export type SubmissionCard = {
   viewsCount: number
   badgeText?: string
   accent?: string
+  mediaFiles?: SubmissionMediaFile[]
   fileIds?: string[]
   downloaded: boolean
+}
+
+export type SubmissionMediaFile = {
+  fileId?: string
+  fileName?: string
+  mimeType?: string
+  order: number
+  previewUrl?: string
+  screenUrl?: string
+  fullUrl?: string
+  thumbnailUrl?: string
+  thumbnailUrlMedium?: string
+  thumbnailUrlLarge?: string
+  thumbnailUrlHuge?: string
+  thumbnailUrlMediumNonCustom?: string
+  thumbnailUrlLargeNonCustom?: string
+  thumbnailUrlHugeNonCustom?: string
+  thumbMediumX?: number
+  thumbLargeX?: number
+  thumbHugeX?: number
+  thumbMediumNonCustomX?: number
+  thumbLargeNonCustomX?: number
+  thumbHugeNonCustomX?: number
 }
 
 export type SearchResponse = {
