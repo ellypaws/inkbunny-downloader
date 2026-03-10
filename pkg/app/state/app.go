@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ellypaws/inkbunny"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -21,30 +22,39 @@ import (
 )
 
 type App struct {
-	ctx             context.Context
-	store           *storage.StateStore
-	mu              sync.RWMutex
-	cacheMu         sync.Mutex
-	searchIDMu      sync.Mutex
-	searchOpMu      sync.Mutex
-	user            *inkbunny.User
-	settings        types.AppSettings
-	workspace       types.WorkspaceState
-	sessionAvatar   string
-	searches        map[string]*searchState
-	lastSearchID    string
-	searchCounter   int
-	searchOpID      uint64
-	searchOpCancel  context.CancelFunc
-	keywordCache    *flight.Cache[keywordCacheKey, []inkbunny.KeywordAutocomplete]
-	usernameCache   *flight.Cache[usernameCacheKey, []types.UsernameSuggestion]
-	avatarCache     *flight.Cache[avatarCacheKey, string]
-	watchingCache   *flight.Cache[watchingCacheKey, []types.UsernameSuggestion]
-	searchCache     *flight.Cache[searchCacheKey, cachedSearchResult]
-	loadMoreCache   *flight.Cache[loadMoreCacheKey, inkbunny.SubmissionSearchResponse]
-	detailsCache    *flight.Cache[submissionDetailsCacheKey, inkbunny.SubmissionDetails]
-	rateLimiter     *apputils.RateLimiter
-	downloadManager *downloads.Manager
+	ctx               context.Context
+	store             *storage.StateStore
+	mu                sync.RWMutex
+	cacheMu           sync.Mutex
+	searchIDMu        sync.Mutex
+	searchOpMu        sync.Mutex
+	user              *inkbunny.User
+	settings          types.AppSettings
+	workspace         types.WorkspaceState
+	sessionAvatar     string
+	searches          map[string]*searchState
+	lastSearchID      string
+	searchCounter     int
+	searchOpID        uint64
+	searchOpCancel    context.CancelFunc
+	keywordCache      *flight.Cache[keywordCacheKey, []inkbunny.KeywordAutocomplete]
+	usernameCache     *flight.Cache[usernameCacheKey, []types.UsernameSuggestion]
+	avatarCache       *flight.Cache[avatarCacheKey, string]
+	watchingCache     *flight.Cache[watchingCacheKey, []types.UsernameSuggestion]
+	searchCache       *flight.Cache[searchCacheKey, cachedSearchResult]
+	loadMoreCache     *flight.Cache[loadMoreCacheKey, inkbunny.SubmissionSearchResponse]
+	detailsCache      *flight.Cache[submissionDetailsCacheKey, inkbunny.SubmissionDetails]
+	rateLimiter       *apputils.RateLimiter
+	downloadManager   *downloads.Manager
+	eventHub          *sharedEventHub
+	sessionRevision   atomic.Int64
+	settingsRevision  atomic.Int64
+	workspaceRevision atomic.Int64
+	queueRevision     atomic.Int64
+	remoteStarter     RemoteStarter
+	remoteControl     RemoteControl
+	remoteInfoMu      sync.RWMutex
+	remoteInfo        types.RemoteAccessInfo
 }
 
 const submissionDetailsBatchSize = 100
@@ -63,6 +73,11 @@ func NewApp() *App {
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	a.eventHub = newSharedEventHub()
+	a.sessionRevision.Store(1)
+	a.settingsRevision.Store(1)
+	a.workspaceRevision.Store(1)
+	a.queueRevision.Store(1)
 	a.rateLimiter.SetNotifier(a.emitNotification)
 	if a.store != nil {
 		state, err := a.store.Load()
@@ -79,10 +94,16 @@ func (a *App) Startup(ctx context.Context) {
 	}
 	a.resetCaches(a.user)
 	a.downloadManager = downloads.NewManager(ctx, a.settings.MaxActive, a.rateLimiter, func(event string, payload any) {
-		if a.ctx != nil {
-			wruntime.EventsEmit(a.ctx, event, payload)
+		a.emitRuntimeEvent(event, payload)
+		if event == "download-progress" {
+			a.broadcastQueueStateFromSnapshot(extractQueueSnapshot(payload))
 		}
 	})
+	a.broadcastSessionState()
+	a.broadcastSettingsState()
+	a.broadcastWorkspaceState()
+	a.broadcastQueueState()
+	a.initializeRemoteAccessInfo()
 	a.emitDebugLog("info", "app.startup", "desktop app startup complete", map[string]any{
 		"hasSession":     a.user != nil && a.user.SID != "",
 		"maxActive":      a.settings.MaxActive,
@@ -91,7 +112,11 @@ func (a *App) Startup(ctx context.Context) {
 	})
 }
 
-func (a *App) Shutdown(context.Context) {}
+func (a *App) Shutdown(context.Context) {
+	if a.remoteControl != nil {
+		_ = a.remoteControl.Close()
+	}
+}
 
 func (a *App) beginSearchOperation() (context.Context, func()) {
 	base := a.ctx
@@ -133,9 +158,6 @@ func (a *App) CancelSearchRequests() {
 }
 
 func (a *App) emitNotification(notification types.AppNotification) {
-	if a.ctx == nil {
-		return
-	}
 	a.emitDebugLog("info", "notification", "app notification emitted", map[string]any{
 		"id":           notification.ID,
 		"level":        notification.Level,
@@ -144,7 +166,9 @@ func (a *App) emitNotification(notification types.AppNotification) {
 		"dedupeKey":    notification.DedupeKey,
 		"retryAfterMs": notification.RetryAfterMS,
 	})
-	wruntime.EventsEmit(a.ctx, "app-notification", notification)
+	a.emitRuntimeEvent("app-notification", notification)
+	a.emitRuntimeEvent(notificationEvent, notification)
+	a.publishSharedEvent(notificationEvent, notification)
 }
 
 func (a *App) GetSession() types.SessionInfo {
@@ -232,7 +256,11 @@ func (a *App) UpdateRatings(mask string) (types.SessionInfo, error) {
 	a.lastSearchID = ""
 	a.mu.Unlock()
 	a.resetCaches(user)
-	return a.GetSession(), a.persist()
+	if err := a.persist(); err != nil {
+		return types.SessionInfo{}, err
+	}
+	a.broadcastSessionState()
+	return a.GetSession(), nil
 }
 
 func (a *App) UpdateSettings(settings types.AppSettings) (types.AppSettings, error) {
@@ -255,7 +283,12 @@ func (a *App) UpdateSettings(settings types.AppSettings) (types.AppSettings, err
 	if a.downloadManager != nil {
 		a.downloadManager.SetMaxActive(current.MaxActive)
 	}
-	return current, a.persist()
+	if err := a.persist(); err != nil {
+		return types.AppSettings{}, err
+	}
+	a.broadcastSettingsState()
+	a.broadcastSessionState()
+	return current, nil
 }
 
 func (a *App) GetWorkspaceState() types.WorkspaceState {
@@ -269,7 +302,11 @@ func (a *App) SaveWorkspaceState(workspace types.WorkspaceState) error {
 	a.mu.Lock()
 	a.workspace = workspace
 	a.mu.Unlock()
-	return a.persist()
+	if err := a.persist(); err != nil {
+		return err
+	}
+	a.broadcastWorkspaceState()
+	return nil
 }
 
 func (a *App) PickDownloadDirectory() (string, error) {
@@ -518,6 +555,8 @@ func (a *App) setSession(user *inkbunny.User) {
 	a.resetCaches(user)
 	a.syncSessionAvatar(user)
 	_ = a.persist()
+	a.broadcastSessionState()
+	a.broadcastSettingsState()
 }
 
 func (a *App) clearSession() {
@@ -527,6 +566,7 @@ func (a *App) clearSession() {
 	a.mu.Unlock()
 	a.resetCaches(nil)
 	_ = a.persist()
+	a.broadcastSessionState()
 }
 
 func (a *App) persist() error {
@@ -579,6 +619,7 @@ func (a *App) syncSessionAvatar(user *inkbunny.User) {
 		a.mu.Lock()
 		a.sessionAvatar = apputils.DefaultAvatarURL
 		a.mu.Unlock()
+		a.broadcastSessionState()
 		return
 	}
 	a.ensureCaches(user)
@@ -594,6 +635,7 @@ func (a *App) syncSessionAvatar(user *inkbunny.User) {
 		a.sessionAvatar = avatar
 	}
 	a.mu.Unlock()
+	a.broadcastSessionState()
 }
 
 func (a *App) cachedSubmissionDetails(user *inkbunny.User, submissionIDs []string) (inkbunny.SubmissionDetailsResponse, error) {

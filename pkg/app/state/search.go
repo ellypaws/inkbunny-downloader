@@ -146,6 +146,7 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 	a.lastSearchID = searchID
 	a.mu.Unlock()
 	_ = a.persist()
+	a.broadcastSessionState()
 
 	cards, err := a.buildSubmissionCards(ctx, user, visible)
 	if err != nil {

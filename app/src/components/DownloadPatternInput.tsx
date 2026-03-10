@@ -139,7 +139,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
   }
 
   return (
-    <div className="space-y-2.5 rounded-[1.75rem] border border-[#2D2D44]/10 bg-white/58 p-3 dark:border-white/10 dark:bg-[#1A1733]/60">
+    <div className="space-y-2.5 rounded-[0.75rem] border border-[#2D2D44]/10 bg-white/58 p-3 dark:border-white/10 dark:bg-[#1A1733]/60">
       <div className="flex items-start justify-between gap-4">
         <div className="text-sm font-black text-[#2D2D44] dark:text-white">
           Download pattern
@@ -149,7 +149,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
         </div>
       </div>
 
-      <div className="rounded-[1.35rem] border border-[#2D2D44]/12 bg-[#FCFBF7]/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:border-white/10 dark:bg-[#120F28]/88">
+      <div className="rounded-[0.35rem] border border-[#2D2D44]/12 bg-[#FCFBF7]/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:border-white/10 dark:bg-[#120F28]/88">
         <div className="relative">
           <div
             ref={mirrorRef}
@@ -223,7 +223,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
         <div className="text-[11px] font-semibold text-[#2D2D44]/55 dark:text-white/45">
           Download folder
         </div>
-        <div className="break-all rounded-[1.2rem] bg-white/60 px-3 py-2.5 font-mono text-xs font-semibold text-[#2D2D44]/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:bg-[#120F28]/88 dark:text-white/72">
+        <div className="break-all rounded-[0.4rem] bg-white/60 px-3 py-2.5 font-mono text-xs font-semibold text-[#2D2D44]/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:bg-[#120F28]/88 dark:text-white/72">
           {props.downloadDirectory || "No download folder selected yet."}
         </div>
       </div>
@@ -232,7 +232,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
         <div className="text-[11px] font-semibold text-[#2D2D44]/55 dark:text-white/45">
           Preview
         </div>
-        <div className="space-y-1.5 rounded-[1.2rem] bg-[#0F172A] px-3 py-2.5 font-mono text-xs text-[#D8F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="space-y-1.5 rounded-[0.2rem] bg-[#0F172A] px-3 py-2.5 font-mono text-xs text-[#D8F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
           {combinedPreviewPaths.map((previewPath: string) => (
             <div key={previewPath} className="break-all">
               {previewPath}

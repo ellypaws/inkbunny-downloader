@@ -11,6 +11,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/remote"
 	desktopapp "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/state"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/modes"
@@ -36,6 +37,16 @@ func main() {
 	}
 
 	app := desktopapp.NewApp()
+	app.ConfigureRemoteStarter(func(app *desktopapp.App) (desktopapp.RemoteControl, error) {
+		devServerURL := ""
+		if buildinfo.IsDevBuild() {
+			devServerURL = "http://127.0.0.1:34115"
+		}
+		return remote.NewServer(app, remote.Config{
+			Assets:       assets,
+			DevServerURL: devServerURL,
+		})
+	})
 
 	err := wails.Run(&options.App{
 		Title:     fmt.Sprintf("Inkbunny Downloader [%s]", buildinfo.DisplayVersion()),

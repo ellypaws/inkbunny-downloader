@@ -66,6 +66,7 @@ type DownloadQueuePanelProps = {
   canRetryAll: boolean;
   allSelected: boolean;
   autoClearCompleted: boolean;
+  canOpenDownloadFolder: boolean;
   folderPreviewImages: string[][];
   onOpenDownloadFolder: () => void;
   onClearQueue: () => void;
@@ -257,7 +258,8 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             <button
               type="button"
               onClick={props.onOpenDownloadFolder}
-              className="relative z-30 flex h-12 w-14 items-center justify-center overflow-visible px-1 py-1 transition-transform motion-safe:duration-300 motion-safe:hover:-translate-y-0.5"
+              disabled={!props.canOpenDownloadFolder}
+              className="relative z-30 flex h-12 w-14 items-center justify-center overflow-visible px-1 py-1 transition-transform motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-45"
               aria-label="Open download folder"
               title="Open download folder"
             >

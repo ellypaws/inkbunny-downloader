@@ -644,11 +644,81 @@ export namespace types {
 	        this.updateAvailable = source["updateAvailable"];
 	    }
 	}
+	export class RemoteAccessInfo {
+	    enabled: boolean;
+	    listenAddress?: string;
+	    pairingUrl?: string;
+	    pairingToken?: string;
+	    selectedHost?: string;
+	    availableHosts?: string[];
+	    qrCodeDataUrl?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RemoteAccessInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.listenAddress = source["listenAddress"];
+	        this.pairingUrl = source["pairingUrl"];
+	        this.pairingToken = source["pairingToken"];
+	        this.selectedHost = source["selectedHost"];
+	        this.availableHosts = source["availableHosts"];
+	        this.qrCodeDataUrl = source["qrCodeDataUrl"];
+	    }
+	}
 	
 	
 	
 	
 	
+	export class SharedSnapshot {
+	    buildInfo: BuildInfo;
+	    sessionRevision: number;
+	    session: SessionInfo;
+	    settingsRevision: number;
+	    settings: AppSettings;
+	    workspaceRevision: number;
+	    workspace: WorkspaceState;
+	    queueRevision: number;
+	    queue: QueueSnapshot;
+	
+	    static createFrom(source: any = {}) {
+	        return new SharedSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.buildInfo = this.convertValues(source["buildInfo"], BuildInfo);
+	        this.sessionRevision = source["sessionRevision"];
+	        this.session = this.convertValues(source["session"], SessionInfo);
+	        this.settingsRevision = source["settingsRevision"];
+	        this.settings = this.convertValues(source["settings"], AppSettings);
+	        this.workspaceRevision = source["workspaceRevision"];
+	        this.workspace = this.convertValues(source["workspace"], WorkspaceState);
+	        this.queueRevision = source["queueRevision"];
+	        this.queue = this.convertValues(source["queue"], QueueSnapshot);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	
 	export class UsernameSuggestion {

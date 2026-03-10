@@ -239,6 +239,54 @@ export type BuildInfo = {
   isDev: boolean
 }
 
+export type RemoteAccessInfo = {
+  enabled: boolean
+  listenAddress?: string
+  pairingUrl?: string
+  pairingToken?: string
+  selectedHost?: string
+  availableHosts?: string[]
+  qrCodeDataUrl?: string
+}
+
+export type SessionStateUpdate = {
+  revision: number
+  session: SessionInfo
+}
+
+export type SettingsStateUpdate = {
+  revision: number
+  settings: AppSettings
+}
+
+export type WorkspaceStateUpdate = {
+  revision: number
+  workspace: WorkspaceState
+}
+
+export type QueueStateUpdate = {
+  revision: number
+  queue: QueueSnapshot
+}
+
+export type SharedSnapshot = {
+  buildInfo: BuildInfo
+  sessionRevision: number
+  session: SessionInfo
+  settingsRevision: number
+  settings: AppSettings
+  workspaceRevision: number
+  workspace: WorkspaceState
+  queueRevision: number
+  queue: QueueSnapshot
+}
+
+export type BackendCapabilities = {
+  nativeDialogs: boolean
+  openLocalPaths: boolean
+  remoteAccessHost: boolean
+}
+
 export type DebugResetScope =
   | 'cache'
   | 'state'

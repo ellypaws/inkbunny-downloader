@@ -1,17 +1,26 @@
 import type {
+  AppNotification,
+  AppSettings,
+  BackendCapabilities,
+  BackendDebugEvent,
+  BuildInfo,
   DebugResetResult,
   DebugResetScope,
-  AppSettings,
-  BuildInfo,
   DownloadOptions,
   DownloadSelection,
   QueueSnapshot,
+  QueueStateUpdate,
   ReleaseStatus,
+  RemoteAccessInfo,
   SearchParams,
   SearchResponse,
   SessionInfo,
+  SessionStateUpdate,
+  SharedSnapshot,
   UsernameSuggestion,
   WorkspaceState,
+  WorkspaceStateUpdate,
+  SettingsStateUpdate,
 } from './types'
 
 type BackendApi = {
@@ -33,6 +42,10 @@ type BackendApi = {
   GetWatching(): Promise<UsernameSuggestion[]>
   GetReleaseStatus(): Promise<ReleaseStatus>
   GetBuildInfo(): Promise<BuildInfo>
+  GetRemoteAccessInfo(): Promise<RemoteAccessInfo>
+  EnableRemoteAccess(): Promise<RemoteAccessInfo>
+  DisableRemoteAccess(): Promise<RemoteAccessInfo>
+  SelectRemoteAccessHost(host: string): Promise<RemoteAccessInfo>
   EnqueueDownloads(
     searchId: string,
     selection: DownloadSelection,
@@ -57,6 +70,18 @@ type BackendApi = {
   UpdateSettings(settings: AppSettings): Promise<AppSettings>
   DebugResetState(scope: DebugResetScope): Promise<DebugResetResult>
 }
+
+type BackendEventMap = {
+  'snapshot.initial': SharedSnapshot
+  'session.updated': SessionStateUpdate
+  'settings.updated': SettingsStateUpdate
+  'workspace.updated': WorkspaceStateUpdate
+  'queue.updated': QueueStateUpdate
+  notification: AppNotification
+  debug: BackendDebugEvent
+}
+
+type BackendEventName = keyof BackendEventMap
 
 type WindowGoNamespace = {
   App?: Partial<BackendApi>
@@ -94,6 +119,10 @@ const backendMethodNames = [
   'GetWatching',
   'GetReleaseStatus',
   'GetBuildInfo',
+  'GetRemoteAccessInfo',
+  'EnableRemoteAccess',
+  'DisableRemoteAccess',
+  'SelectRemoteAccessHost',
   'EnqueueDownloads',
   'GetQueueSnapshot',
   'GetWorkspaceState',
@@ -115,11 +144,27 @@ const backendMethodNames = [
   'DebugResetState',
 ] as const satisfies readonly (keyof BackendApi)[]
 
-let cachedBackend: BackendApi | null = null
+const desktopCapabilities: BackendCapabilities = {
+  nativeDialogs: true,
+  openLocalPaths: true,
+  remoteAccessHost: true,
+}
 
-function getBackend(): BackendApi {
-  if (cachedBackend) {
-    return cachedBackend
+const browserCapabilities: BackendCapabilities = {
+  nativeDialogs: false,
+  openLocalPaths: false,
+  remoteAccessHost: false,
+}
+
+let cachedDesktopBackend: BackendApi | null = null
+
+function isDesktopRuntimeAvailable(): boolean {
+  return Boolean(window.go && typeof window.go === 'object')
+}
+
+function getDesktopBackend(): BackendApi {
+  if (cachedDesktopBackend) {
+    return cachedDesktopBackend
   }
 
   const namespaces = window.go
@@ -171,11 +216,329 @@ function getBackend(): BackendApi {
     )
   }
 
-  cachedBackend = bestCandidate.app as BackendApi
-  return cachedBackend
+  cachedDesktopBackend = bestCandidate.app as BackendApi
+  return cachedDesktopBackend
+}
+
+function ensureSuccess(response: Response): Promise<Response> {
+  if (response.ok) {
+    return Promise.resolve(response)
+  }
+  return response
+    .json()
+    .catch(() => ({ error: `Request failed with status ${response.status}` }))
+    .then((body) => {
+      throw new Error(
+        typeof body?.error === 'string'
+          ? body.error
+          : `Request failed with status ${response.status}`,
+      )
+    })
+}
+
+async function requestJSON<T>(
+  method: string,
+  url: string,
+  body?: unknown,
+): Promise<T> {
+  const response = await fetch(url, {
+    method,
+    headers:
+      body === undefined
+        ? undefined
+        : {
+            'Content-Type': 'application/json',
+          },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  await ensureSuccess(response)
+  if (response.status === 204) {
+    return undefined as T
+  }
+  return response.json() as Promise<T>
+}
+
+type Listener<E extends BackendEventName> = (payload: BackendEventMap[E]) => void
+
+class BrowserEventBus {
+  private listeners = new Map<BackendEventName, Set<Listener<BackendEventName>>>()
+  private socket: WebSocket | null = null
+  private reconnectTimer = 0
+
+  subscribe<E extends BackendEventName>(
+    eventName: E,
+    listener: Listener<E>,
+  ): () => void {
+    const set = this.listeners.get(eventName) ?? new Set()
+    set.add(listener as Listener<BackendEventName>)
+    this.listeners.set(eventName, set)
+    this.ensureConnected()
+    return () => {
+      const current = this.listeners.get(eventName)
+      if (!current) {
+        return
+      }
+      current.delete(listener as Listener<BackendEventName>)
+      if (current.size === 0) {
+        this.listeners.delete(eventName)
+      }
+      this.maybeClose()
+    }
+  }
+
+  private emit<E extends BackendEventName>(
+    eventName: E,
+    payload: BackendEventMap[E],
+  ): void {
+    const listeners = this.listeners.get(eventName)
+    if (!listeners) {
+      return
+    }
+    for (const listener of listeners) {
+      listener(payload)
+    }
+  }
+
+  private ensureConnected(): void {
+    if (this.socket || this.listeners.size === 0) {
+      return
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    this.socket = new WebSocket(`${protocol}//${window.location.host}/ws`)
+    this.socket.onmessage = (event) => {
+      const message = JSON.parse(event.data) as {
+        type?: BackendEventName
+        payload?: unknown
+      }
+      if (!message.type) {
+        return
+      }
+      this.emit(
+        message.type,
+        message.payload as BackendEventMap[typeof message.type],
+      )
+    }
+    this.socket.onclose = () => {
+      this.socket = null
+      if (this.listeners.size > 0) {
+        this.reconnectTimer = window.setTimeout(() => {
+          this.reconnectTimer = 0
+          this.ensureConnected()
+        }, 1500)
+      }
+    }
+  }
+
+  private maybeClose(): void {
+    if (this.listeners.size > 0) {
+      return
+    }
+    if (this.reconnectTimer) {
+      window.clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = 0
+    }
+    if (this.socket) {
+      this.socket.close()
+      this.socket = null
+    }
+  }
+}
+
+const browserEvents = new BrowserEventBus()
+
+const browserBackend: BackendApi = {
+  async GetSession() {
+    return requestJSON<SessionInfo>('GET', '/api/session')
+  },
+  async Login(username: string, password: string) {
+    return requestJSON<SessionInfo>('POST', '/api/session/login', {
+      username,
+      password,
+    })
+  },
+  async EnsureGuestSession() {
+    return requestJSON<SessionInfo>('POST', '/api/session/guest')
+  },
+  async Logout() {
+    return requestJSON<SessionInfo>('POST', '/api/session/logout')
+  },
+  async UpdateRatings(mask: string) {
+    return requestJSON<SessionInfo>('POST', '/api/session/ratings', { mask })
+  },
+  async OpenDownloadDirectory() {
+    throw new Error('Opening the local download folder is only available on desktop.')
+  },
+  async OpenExternalURL(url: string) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  },
+  async ProxyAvatarImageURL(url: string) {
+    const response = await requestJSON<{ value: string }>(
+      'GET',
+      `/api/avatar/proxy?url=${encodeURIComponent(url)}`,
+    )
+    return response.value
+  },
+  async Search(params: SearchParams) {
+    return requestJSON<SearchResponse>('POST', '/api/search', params)
+  },
+  async CancelSearchRequests() {
+    await requestJSON<void>('POST', '/api/search/cancel')
+  },
+  async GetUnreadSubmissionCount() {
+    const response = await requestJSON<{ value: number }>(
+      'GET',
+      '/api/search/unread-count',
+    )
+    return response.value
+  },
+  async RefreshSearch(searchId: string) {
+    return requestJSON<SearchResponse>('POST', '/api/search/refresh', {
+      searchId,
+    })
+  },
+  async LoadMoreResults(searchId: string, page: number) {
+    return requestJSON<SearchResponse>('POST', '/api/search/load-more', {
+      searchId,
+      page,
+    })
+  },
+  async GetKeywordSuggestions(query: string) {
+    return requestJSON<string[]>(
+      'GET',
+      `/api/search/keywords?q=${encodeURIComponent(query)}`,
+    )
+  },
+  async GetUsernameSuggestions(query: string) {
+    return requestJSON<UsernameSuggestion[]>(
+      'GET',
+      `/api/search/usernames?q=${encodeURIComponent(query)}`,
+    )
+  },
+  async GetWatching() {
+    return requestJSON<UsernameSuggestion[]>('GET', '/api/search/watching')
+  },
+  async GetReleaseStatus() {
+    return requestJSON<ReleaseStatus>('GET', '/api/release-status')
+  },
+  async GetBuildInfo() {
+    return requestJSON<BuildInfo>('GET', '/api/build-info')
+  },
+  async GetRemoteAccessInfo() {
+    return requestJSON<RemoteAccessInfo>('GET', '/api/remote-access')
+  },
+  async EnableRemoteAccess() {
+    throw new Error('Remote access can only be enabled from the desktop app.')
+  },
+  async DisableRemoteAccess() {
+    throw new Error('Remote access can only be disabled from the desktop app.')
+  },
+  async SelectRemoteAccessHost() {
+    throw new Error('Remote access host selection is only available on desktop.')
+  },
+  async EnqueueDownloads(
+    searchId: string,
+    selection: DownloadSelection,
+    options: DownloadOptions,
+  ) {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/enqueue', {
+      searchId,
+      selection,
+      options,
+    })
+  },
+  async GetQueueSnapshot() {
+    return requestJSON<QueueSnapshot>('GET', '/api/queue')
+  },
+  async GetWorkspaceState() {
+    return requestJSON<WorkspaceState>('GET', '/api/workspace')
+  },
+  async SaveWorkspaceState(state: WorkspaceState) {
+    await requestJSON<void>('POST', '/api/workspace', state)
+  },
+  async CancelDownload(jobId: string) {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/cancel-download', {
+      jobId,
+    })
+  },
+  async CancelSubmission(submissionId: string) {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/cancel-submission', {
+      submissionId,
+    })
+  },
+  async RetryDownload(jobId: string) {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/retry-download', {
+      jobId,
+    })
+  },
+  async RetrySubmission(submissionId: string) {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/retry-submission', {
+      submissionId,
+    })
+  },
+  async RetryAllDownloads() {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/retry-all')
+  },
+  async PauseAllDownloads() {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/pause')
+  },
+  async ResumeAllDownloads() {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/resume')
+  },
+  async StopAllDownloads() {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/stop')
+  },
+  async ClearQueue() {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/clear')
+  },
+  async ClearCompletedDownloads() {
+    return requestJSON<QueueSnapshot>('POST', '/api/queue/clear-completed')
+  },
+  async ClearCompletedSubmissions(submissionIds: string[]) {
+    return requestJSON<QueueSnapshot>(
+      'POST',
+      '/api/queue/clear-completed-submissions',
+      { submissionIds },
+    )
+  },
+  async PickDownloadDirectory() {
+    throw new Error('Picking a local directory is only available on desktop.')
+  },
+  async SkipReleaseTag(tag: string) {
+    return requestJSON<AppSettings>('POST', '/api/settings/skip-release', {
+      tag,
+    })
+  },
+  async UpdateSettings(settings: AppSettings) {
+    return requestJSON<AppSettings>('POST', '/api/settings', settings)
+  },
+  async DebugResetState(scope: DebugResetScope) {
+    return requestJSON<DebugResetResult>('POST', '/api/debug/reset', {
+      scope,
+    })
+  },
+}
+
+function getBackend(): BackendApi {
+  return isDesktopRuntimeAvailable() ? getDesktopBackend() : browserBackend
+}
+
+function subscribeDesktopEvent<E extends BackendEventName>(
+  eventName: E,
+  callback: Listener<E>,
+): () => void {
+  if (!window.runtime?.EventsOn) {
+    return () => undefined
+  }
+  return window.runtime.EventsOn(eventName, (payload) =>
+    callback(payload as BackendEventMap[E]),
+  )
 }
 
 export const backend = {
+  capabilities: isDesktopRuntimeAvailable()
+    ? desktopCapabilities
+    : browserCapabilities,
+  isDesktopRuntime: isDesktopRuntimeAvailable(),
   async getSession(): Promise<SessionInfo> {
     return getBackend().GetSession()
   },
@@ -232,6 +595,18 @@ export const backend = {
   },
   async getBuildInfo(): Promise<BuildInfo> {
     return getBackend().GetBuildInfo()
+  },
+  async getRemoteAccessInfo(): Promise<RemoteAccessInfo> {
+    return getBackend().GetRemoteAccessInfo()
+  },
+  async enableRemoteAccess(): Promise<RemoteAccessInfo> {
+    return getBackend().EnableRemoteAccess()
+  },
+  async disableRemoteAccess(): Promise<RemoteAccessInfo> {
+    return getBackend().DisableRemoteAccess()
+  },
+  async selectRemoteAccessHost(host: string): Promise<RemoteAccessInfo> {
+    return getBackend().SelectRemoteAccessHost(host)
   },
   async enqueueDownloads(
     searchId: string,
@@ -296,14 +671,12 @@ export const backend = {
   },
 }
 
-export function onRuntimeEvent<T>(
-  eventName: string,
-  callback: (payload: T) => void,
+export function subscribeBackendEvent<E extends BackendEventName>(
+  eventName: E,
+  callback: Listener<E>,
 ): () => void {
-  if (window.runtime?.EventsOn) {
-    return window.runtime.EventsOn(eventName, (payload) =>
-      callback(payload as T),
-    )
+  if (isDesktopRuntimeAvailable()) {
+    return subscribeDesktopEvent(eventName, callback)
   }
-  return () => undefined
+  return browserEvents.subscribe(eventName, callback)
 }

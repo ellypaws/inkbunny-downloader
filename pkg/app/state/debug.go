@@ -3,24 +3,22 @@ package state
 import (
 	"time"
 
-	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
 )
 
 const backendDebugEventName = "app-debug-log"
 
 func (a *App) emitDebugLog(level, scope, message string, fields map[string]any) {
-	if a.ctx == nil {
-		return
-	}
-	wruntime.EventsEmit(a.ctx, backendDebugEventName, types.BackendDebugEvent{
+	event := types.BackendDebugEvent{
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Level:     normalizeDebugLevel(level),
 		Scope:     scope,
 		Message:   message,
 		Fields:    cloneDebugFields(fields),
-	})
+	}
+	a.emitRuntimeEvent(backendDebugEventName, event)
+	a.emitRuntimeEvent(debugEvent, event)
+	a.publishSharedEvent(debugEvent, event)
 }
 
 func normalizeDebugLevel(level string) string {

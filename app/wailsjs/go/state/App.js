@@ -26,12 +26,24 @@ export function ClearQueue() {
   return window['go']['state']['App']['ClearQueue']();
 }
 
+export function ConfigureRemoteStarter(arg1) {
+  return window['go']['state']['App']['ConfigureRemoteStarter'](arg1);
+}
+
 export function DebugResetState(arg1) {
   return window['go']['state']['App']['DebugResetState'](arg1);
 }
 
 export function DiagnosticState() {
   return window['go']['state']['App']['DiagnosticState']();
+}
+
+export function DisableRemoteAccess() {
+  return window['go']['state']['App']['DisableRemoteAccess']();
+}
+
+export function EnableRemoteAccess() {
+  return window['go']['state']['App']['EnableRemoteAccess']();
 }
 
 export function EnqueueDownloads(arg1, arg2, arg3) {
@@ -56,6 +68,10 @@ export function GetQueueSnapshot() {
 
 export function GetReleaseStatus() {
   return window['go']['state']['App']['GetReleaseStatus']();
+}
+
+export function GetRemoteAccessInfo() {
+  return window['go']['state']['App']['GetRemoteAccessInfo']();
 }
 
 export function GetSession() {
@@ -138,12 +154,24 @@ export function Search(arg1) {
   return window['go']['state']['App']['Search'](arg1);
 }
 
+export function SelectRemoteAccessHost(arg1) {
+  return window['go']['state']['App']['SelectRemoteAccessHost'](arg1);
+}
+
+export function SharedSnapshot() {
+  return window['go']['state']['App']['SharedSnapshot']();
+}
+
 export function SkipReleaseTag(arg1) {
   return window['go']['state']['App']['SkipReleaseTag'](arg1);
 }
 
 export function StopAllDownloads() {
   return window['go']['state']['App']['StopAllDownloads']();
+}
+
+export function SubscribeSharedEvents(arg1) {
+  return window['go']['state']['App']['SubscribeSharedEvents'](arg1);
 }
 
 export function UpdateRatings(arg1) {

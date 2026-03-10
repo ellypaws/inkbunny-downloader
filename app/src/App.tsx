@@ -32,18 +32,23 @@ import type {
   BackendDebugEvent,
   BuildInfo,
   DebugResetResult,
-  DownloadProgressEvent,
   QueueSnapshot,
+  QueueStateUpdate,
   ReleaseStatus,
+  RemoteAccessInfo,
   SavedSearchTab,
   SearchParams,
   SessionInfo,
+  SessionStateUpdate,
+  SettingsStateUpdate,
+  SharedSnapshot,
   SearchTabMode,
   SubmissionCard,
   UsernameSuggestion,
   WorkspaceState,
+  WorkspaceStateUpdate,
 } from "./lib/types";
-import { backend, onRuntimeEvent } from "./lib/wails";
+import { backend, subscribeBackendEvent } from "./lib/wails";
 import { GLOBAL_STYLES } from "./styles/globalStyles";
 
 const GUEST_DEFAULT_MAX_DOWNLOADS = 256;
@@ -88,6 +93,8 @@ export default function App() {
 
   const [session, setSession] = useState<SessionInfo>(EMPTY_SESSION);
   const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
+  const [remoteAccessInfo, setRemoteAccessInfo] = useState<RemoteAccessInfo | null>(null);
+  const [remoteAccessLoading, setRemoteAccessLoading] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SESSION.settings);
   const [loginOpen, setLoginOpen] = useState(true);
   const [loginUsername, setLoginUsername] = useState("");
@@ -144,6 +151,7 @@ export default function App() {
   const unreadTotalRef = useRef(unreadTotal);
   const workspaceLoadedRef = useRef(false);
   const workspacePersistTimeoutRef = useRef<number | null>(null);
+  const suppressNextWorkspacePersistRef = useRef(false);
   const autoQueueRunningRef = useRef(false);
   const tourAdvanceTimeoutRef = useRef<number | null>(null);
   const scheduledTourAdvanceRef = useRef("");
@@ -153,6 +161,10 @@ export default function App() {
   const searchRequestControllersRef = useRef(
     new Map<string, { runId: number; stopRequested: boolean }>(),
   );
+  const sessionRevisionRef = useRef(0);
+  const settingsRevisionRef = useRef(0);
+  const workspaceRevisionRef = useRef(0);
+  const queueRevisionRef = useRef(0);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
@@ -765,15 +777,17 @@ export default function App() {
   }
 
   async function fetchAppSnapshotFromBackend() {
-    const [nextBuildInfo, nextSession, workspace, snapshot] = await Promise.all([
+    const [nextBuildInfo, nextSession, workspace, snapshot, nextRemoteAccessInfo] = await Promise.all([
       backend.getBuildInfo(),
       backend.getSession(),
       backend.getWorkspaceState(),
       backend.getQueueSnapshot(),
+      backend.getRemoteAccessInfo(),
     ]);
 
     return {
       buildInfo: nextBuildInfo,
+      remoteAccessInfo: nextRemoteAccessInfo,
       session: nextSession,
       workspace,
       queue: normalizeQueueSnapshot(snapshot),
@@ -782,6 +796,7 @@ export default function App() {
 
   function applyBackendSnapshot(snapshot: Awaited<ReturnType<typeof fetchAppSnapshotFromBackend>>) {
     setBuildInfo(snapshot.buildInfo);
+    setRemoteAccessInfo(snapshot.remoteAccessInfo);
     applySession(snapshot.session);
     applyWorkspaceSnapshot(snapshot.workspace, snapshot.session, snapshot.session.settings);
     applyQueueSnapshot(snapshot.queue);
@@ -800,6 +815,95 @@ export default function App() {
         showReleaseUpdateToast(status, snapshot.session.settings);
       })
       .catch(() => undefined);
+  }
+
+  function applySharedSnapshot(snapshot: SharedSnapshot) {
+    sessionRevisionRef.current = snapshot.sessionRevision;
+    settingsRevisionRef.current = snapshot.settingsRevision;
+    workspaceRevisionRef.current = snapshot.workspaceRevision;
+    queueRevisionRef.current = snapshot.queueRevision;
+    setBuildInfo(snapshot.buildInfo);
+    applySession(snapshot.session, snapshot.settings);
+    if (
+      !areWorkspaceStatesEqual(
+        buildWorkspaceState(tabsRef.current, activeTabIdRef.current),
+        snapshot.workspace,
+      )
+    ) {
+      suppressNextWorkspacePersistRef.current = true;
+      applyWorkspaceSnapshot(snapshot.workspace, snapshot.session, snapshot.settings);
+    }
+    applyQueueSnapshot(snapshot.queue);
+    workspaceLoadedRef.current = true;
+  }
+
+  function handleSessionStateUpdate(update: SessionStateUpdate) {
+    if (update.revision <= sessionRevisionRef.current) {
+      return;
+    }
+    sessionRevisionRef.current = update.revision;
+    applySession(update.session);
+    if (!update.session.hasSession) {
+      setLoginOpen(true);
+      setUnreadTotal(0);
+      setTrackedUnreadBaseline(-1);
+    }
+  }
+
+  function handleSettingsStateUpdate(update: SettingsStateUpdate) {
+    if (update.revision <= settingsRevisionRef.current) {
+      return;
+    }
+    settingsRevisionRef.current = update.revision;
+    syncSettings(update.settings);
+  }
+
+  function handleWorkspaceStateUpdate(update: WorkspaceStateUpdate) {
+    if (update.revision <= workspaceRevisionRef.current) {
+      return;
+    }
+    workspaceRevisionRef.current = update.revision;
+    const currentWorkspace = buildWorkspaceState(tabsRef.current, activeTabIdRef.current);
+    if (areWorkspaceStatesEqual(currentWorkspace, update.workspace)) {
+      return;
+    }
+    suppressNextWorkspacePersistRef.current = true;
+    applyWorkspaceSnapshot(update.workspace);
+  }
+
+  function handleQueueStateUpdate(update: QueueStateUpdate) {
+    if (update.revision <= queueRevisionRef.current) {
+      return;
+    }
+    queueRevisionRef.current = update.revision;
+    applyQueueSnapshot(update.queue);
+  }
+
+  async function handleEnableRemoteAccess() {
+    setRemoteAccessLoading(true);
+    try {
+      setRemoteAccessInfo(await backend.enableRemoteAccess());
+    } finally {
+      setRemoteAccessLoading(false);
+    }
+  }
+
+  async function handleDisableRemoteAccess() {
+    setRemoteAccessLoading(true);
+    try {
+      setRemoteAccessInfo(await backend.disableRemoteAccess());
+    } finally {
+      setRemoteAccessLoading(false);
+    }
+  }
+
+  async function handleSelectRemoteAccessHost(host: string) {
+    setRemoteAccessLoading(true);
+    try {
+      setRemoteAccessInfo(await backend.selectRemoteAccessHost(host));
+    } finally {
+      setRemoteAccessLoading(false);
+    }
   }
 
   function reloadDebugPage() {
@@ -1163,19 +1267,33 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribeProgress = onRuntimeEvent<DownloadProgressEvent>("download-progress", (event) => {
-      if (event.queue) {
-        applyQueueSnapshot(event.queue);
-      }
+    const unsubscribeSnapshot = subscribeBackendEvent("snapshot.initial", (snapshot) => {
+      applySharedSnapshot(snapshot);
     });
-    const unsubscribeDebugLogs = onRuntimeEvent<BackendDebugEvent>("app-debug-log", (event) => {
+    const unsubscribeSession = subscribeBackendEvent("session.updated", (update) => {
+      handleSessionStateUpdate(update);
+    });
+    const unsubscribeSettings = subscribeBackendEvent("settings.updated", (update) => {
+      handleSettingsStateUpdate(update);
+    });
+    const unsubscribeWorkspace = subscribeBackendEvent("workspace.updated", (update) => {
+      handleWorkspaceStateUpdate(update);
+    });
+    const unsubscribeQueue = subscribeBackendEvent("queue.updated", (update) => {
+      handleQueueStateUpdate(update);
+    });
+    const unsubscribeDebugLogs = subscribeBackendEvent("debug", (event) => {
       writeBackendDebugEvent(event);
     });
-    const unsubscribeNotifications = onRuntimeEvent<AppNotification>("app-notification", (event) => {
+    const unsubscribeNotifications = subscribeBackendEvent("notification", (event) => {
       handleAppNotification(event);
     });
     return () => {
-      unsubscribeProgress();
+      unsubscribeSnapshot();
+      unsubscribeSession();
+      unsubscribeSettings();
+      unsubscribeWorkspace();
+      unsubscribeQueue();
       unsubscribeDebugLogs();
       unsubscribeNotifications();
     };
@@ -1207,6 +1325,10 @@ export default function App() {
 
   useEffect(() => {
     if (!workspaceLoadedRef.current) {
+      return;
+    }
+    if (suppressNextWorkspacePersistRef.current) {
+      suppressNextWorkspacePersistRef.current = false;
       return;
     }
     if (workspacePersistTimeoutRef.current !== null) {
@@ -2539,8 +2661,16 @@ export default function App() {
                 <AccountSidebar
                   session={session}
                   settings={settings}
+                  capabilities={backend.capabilities}
+                  remoteAccessInfo={remoteAccessInfo}
+                  remoteAccessLoading={remoteAccessLoading}
                   searchParams={activeSearchParams}
                   onLogout={() => void handleLogout()}
+                  onEnableRemoteAccess={() => void handleEnableRemoteAccess()}
+                  onDisableRemoteAccess={() => void handleDisableRemoteAccess()}
+                  onSelectRemoteAccessHost={(host) =>
+                    void handleSelectRemoteAccessHost(host)
+                  }
                   onPickDirectory={() =>
                     void backend
                       .pickDownloadDirectory()
@@ -2659,6 +2789,7 @@ export default function App() {
             canRetryAll={canRetryAllDownloads}
             allSelected={allResultsSelected}
             autoClearCompleted={settings.autoClearCompleted}
+            canOpenDownloadFolder={backend.capabilities.openLocalPaths}
             folderPreviewImages={folderPreviewImages}
             onOpenDownloadFolder={() => {
               backend.openDownloadDirectory().catch((error: unknown) => {
@@ -3429,6 +3560,13 @@ function buildWorkspaceState(
     activeTabId,
     tabs: tabs.map(toSavedSearchTab),
   };
+}
+
+function areWorkspaceStatesEqual(
+  left: WorkspaceState | null | undefined,
+  right: WorkspaceState | null | undefined,
+) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
 function toSavedSearchTab(tab: SearchTabState): SavedSearchTab {

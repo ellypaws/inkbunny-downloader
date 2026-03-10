@@ -22,5 +22,10 @@ func (a *App) SkipReleaseTag(tag string) (types.AppSettings, error) {
 	current := a.settings
 	a.mu.Unlock()
 
-	return current, a.persist()
+	if err := a.persist(); err != nil {
+		return types.AppSettings{}, err
+	}
+	a.broadcastSettingsState()
+	a.broadcastSessionState()
+	return current, nil
 }

@@ -243,6 +243,48 @@ type BuildInfo struct {
 	IsDev          bool   `json:"isDev"`
 }
 
+type RemoteAccessInfo struct {
+	Enabled        bool     `json:"enabled"`
+	ListenAddress  string   `json:"listenAddress,omitempty"`
+	PairingURL     string   `json:"pairingUrl,omitempty"`
+	PairingToken   string   `json:"pairingToken,omitempty"`
+	SelectedHost   string   `json:"selectedHost,omitempty"`
+	AvailableHosts []string `json:"availableHosts,omitempty"`
+	QRCodeDataURL  string   `json:"qrCodeDataUrl,omitempty"`
+}
+
+type SessionStateUpdate struct {
+	Revision int64       `json:"revision"`
+	Session  SessionInfo `json:"session"`
+}
+
+type SettingsStateUpdate struct {
+	Revision int64       `json:"revision"`
+	Settings AppSettings `json:"settings"`
+}
+
+type WorkspaceStateUpdate struct {
+	Revision  int64          `json:"revision"`
+	Workspace WorkspaceState `json:"workspace"`
+}
+
+type QueueStateUpdate struct {
+	Revision int64         `json:"revision"`
+	Queue    QueueSnapshot `json:"queue"`
+}
+
+type SharedSnapshot struct {
+	BuildInfo         BuildInfo      `json:"buildInfo"`
+	SessionRevision   int64          `json:"sessionRevision"`
+	Session           SessionInfo    `json:"session"`
+	SettingsRevision  int64          `json:"settingsRevision"`
+	Settings          AppSettings    `json:"settings"`
+	WorkspaceRevision int64          `json:"workspaceRevision"`
+	Workspace         WorkspaceState `json:"workspace"`
+	QueueRevision     int64          `json:"queueRevision"`
+	Queue             QueueSnapshot  `json:"queue"`
+}
+
 type DebugResetResult struct {
 	Scope         string         `json:"scope"`
 	CachesCleared bool           `json:"cachesCleared"`

@@ -76,6 +76,10 @@ func (a *App) DebugResetState(scope string) (types.DebugResetResult, error) {
 		Workspace:     workspace,
 		Queue:         queue,
 	}
+	a.broadcastSessionState()
+	a.broadcastSettingsState()
+	a.broadcastWorkspaceState()
+	a.broadcastQueueStateFromSnapshot(queue)
 	a.emitDebugLog("info", "debug.reset", "debug reset completed", map[string]any{
 		"scope":         result.Scope,
 		"cachesCleared": result.CachesCleared,
