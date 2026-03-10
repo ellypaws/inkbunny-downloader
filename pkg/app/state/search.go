@@ -600,7 +600,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 	return resp, nil
 }
 
-func (a *App) GetKeywordSuggestions(query string) (values []string, err error) {
+func (a *App) GetKeywordSuggestions(query string) (values []types.KeywordSuggestion, err error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
@@ -628,12 +628,15 @@ func (a *App) GetKeywordSuggestions(query string) (values []string, err error) {
 	if err != nil {
 		return nil, err
 	}
-	values = make([]string, 0, minInt(len(items), 10))
+	values = make([]types.KeywordSuggestion, 0, minInt(len(items), 10))
 	for i, item := range items {
 		if i >= 10 {
 			break
 		}
-		values = append(values, item.Value)
+		values = append(values, types.KeywordSuggestion{
+			Value:            item.Value,
+			SubmissionsCount: item.SubmissionsCount.Int(),
+		})
 	}
 	return values, nil
 }

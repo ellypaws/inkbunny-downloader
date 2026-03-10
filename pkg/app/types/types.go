@@ -18,6 +18,11 @@ type UsernameSuggestion struct {
 	AvatarURL string `json:"avatarUrl"`
 }
 
+type KeywordSuggestion struct {
+	Value            string `json:"value"`
+	SubmissionsCount int    `json:"submissionsCount"`
+}
+
 type AppSettings struct {
 	DownloadDirectory  string `json:"downloadDirectory"`
 	DownloadPattern    string `json:"downloadPattern"`

@@ -8,6 +8,7 @@ import type {
   DebugResetScope,
   DownloadOptions,
   DownloadSelection,
+  KeywordSuggestion,
   QueueSnapshot,
   QueueStateUpdate,
   ReleaseStatus,
@@ -37,7 +38,7 @@ type BackendApi = {
   GetUnreadSubmissionCount(): Promise<number>
   RefreshSearch(searchId: string): Promise<SearchResponse>
   LoadMoreResults(searchId: string, page: number): Promise<SearchResponse>
-  GetKeywordSuggestions(query: string): Promise<string[]>
+  GetKeywordSuggestions(query: string): Promise<KeywordSuggestion[]>
   GetUsernameSuggestions(query: string): Promise<UsernameSuggestion[]>
   GetWatching(): Promise<UsernameSuggestion[]>
   GetReleaseStatus(): Promise<ReleaseStatus>
@@ -411,7 +412,7 @@ const browserBackend: BackendApi = {
     })
   },
   async GetKeywordSuggestions(query: string) {
-    return requestJSON<string[]>(
+    return requestJSON<KeywordSuggestion[]>(
       'GET',
       `/api/search/keywords?q=${encodeURIComponent(query)}`,
     )
@@ -589,7 +590,7 @@ export const backend = {
   ): Promise<SearchResponse> {
     return getBackend().LoadMoreResults(searchId, page)
   },
-  async getKeywordSuggestions(query: string): Promise<string[]> {
+  async getKeywordSuggestions(query: string): Promise<KeywordSuggestion[]> {
     return getBackend().GetKeywordSuggestions(query)
   },
   async getUsernameSuggestions(query: string): Promise<UsernameSuggestion[]> {

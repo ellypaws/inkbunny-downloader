@@ -32,6 +32,7 @@ import type {
   BackendDebugEvent,
   BuildInfo,
   DebugResetResult,
+  KeywordSuggestion,
   QueueSnapshot,
   QueueStateUpdate,
   ReleaseStatus,
@@ -106,7 +107,7 @@ export default function App() {
   const [tabs, setTabs] = useState<SearchTabState[]>(() => [initialTabRef.current!]);
   const [activeTabId, setActiveTabId] = useState(() => initialTabRef.current!.id);
   const [ratingUpdating, setRatingUpdating] = useState(false);
-  const [keywordSuggestions, setKeywordSuggestions] = useState<string[]>([]);
+  const [keywordSuggestions, setKeywordSuggestions] = useState<KeywordSuggestion[]>([]);
   const [artistSuggestions, setArtistSuggestions] = useState<UsernameSuggestion[]>([]);
   const [favoriteSuggestions, setFavoriteSuggestions] = useState<UsernameSuggestion[]>([]);
   const [watchingUsers, setWatchingUsers] = useState<UsernameSuggestion[] | null>(null);

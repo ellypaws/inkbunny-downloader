@@ -29,6 +29,11 @@ export type UsernameSuggestion = {
   avatarUrl: string
 }
 
+export type KeywordSuggestion = {
+  value: string
+  submissionsCount: number
+}
+
 export type ArtistValidationState = 'pending' | 'valid' | 'invalid'
 
 export type SearchParams = {

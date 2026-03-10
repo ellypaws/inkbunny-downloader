@@ -19,6 +19,7 @@ import {
 } from "../lib/constants";
 import type {
   ArtistValidationState,
+  KeywordSuggestion,
   SearchParams,
   SessionInfo,
   UsernameSuggestion,
@@ -28,7 +29,7 @@ type SearchWorkspaceProps = {
   session: SessionInfo;
   searchParams: SearchParams;
   mode: "default" | "unread";
-  keywordSuggestions: string[];
+  keywordSuggestions: KeywordSuggestion[];
   artistDraft: string;
   artistAvatarUrls: Record<string, string>;
   artistValidation: Record<string, ArtistValidationState>;
@@ -69,7 +70,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
   const [focusedField, setFocusedField] = useState<SuggestionField>(null);
   const [pinnedField, setPinnedField] = useState<SuggestionField>(null);
   const [pinnedKeywordSuggestions, setPinnedKeywordSuggestions] = useState<
-    string[]
+    KeywordSuggestion[]
   >([]);
   const [pinnedArtistSuggestions, setPinnedArtistSuggestions] = useState<
     UsernameSuggestion[]
@@ -1067,7 +1068,7 @@ function SuggestionFieldBlock(props: SuggestionFieldBlockProps) {
 
 function KeywordSuggestionList(props: {
   open: boolean;
-  suggestions: string[];
+  suggestions: KeywordSuggestion[];
   onPick: (suggestion: string) => void;
   onMouseLeave?: () => void;
 }) {
@@ -1080,18 +1081,23 @@ function KeywordSuggestionList(props: {
       onMouseLeave={props.onMouseLeave}
       className="theme-panel-strong absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl"
     >
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-1.5 sm:grid-cols-2">
         {props.suggestions.slice(0, 8).map((suggestion) => (
           <button
-            key={suggestion}
+            key={suggestion.value}
             type="button"
             onMouseDown={(event) => {
               event.preventDefault();
-              props.onPick(suggestion);
+              props.onPick(suggestion.value);
             }}
-            className="theme-panel-soft theme-hover rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-colors"
+            className="theme-panel-soft theme-hover flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition-colors"
           >
-            <span className="block truncate">{suggestion}</span>
+            <span className="block min-w-0 truncate text-sm font-semibold leading-5">
+              {suggestion.value}
+            </span>
+            <span className="theme-subtle shrink-0 text-[11px] font-medium leading-none">
+              {suggestion.submissionsCount.toLocaleString()}
+            </span>
           </button>
         ))}
       </div>

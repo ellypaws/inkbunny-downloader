@@ -623,6 +623,20 @@ export namespace types {
 		    return a;
 		}
 	}
+	export class KeywordSuggestion {
+	    value: string;
+	    submissionsCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new KeywordSuggestion(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.value = source["value"];
+	        this.submissionsCount = source["submissionsCount"];
+	    }
+	}
 	
 	export class ReleaseStatus {
 	    currentVersion: string;

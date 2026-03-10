@@ -31,7 +31,7 @@ export function EnsureGuestSession():Promise<types.SessionInfo>;
 
 export function GetBuildInfo():Promise<types.BuildInfo>;
 
-export function GetKeywordSuggestions(arg1:string):Promise<Array<string>>;
+export function GetKeywordSuggestions(arg1:string):Promise<Array<types.KeywordSuggestion>>;
 
 export function GetQueueSnapshot():Promise<types.QueueSnapshot>;
 
