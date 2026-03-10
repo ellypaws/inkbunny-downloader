@@ -10,6 +10,7 @@ import type {
 export type InkbunnyDebugControls = {
   help: () => string;
   showUpdateToast: () => void;
+  startGuidedTour: () => void;
   showOnboarding: () => void;
   showMockNotification(): void;
   showMockNotification(preset: DebugNotificationPreset | string): void;
@@ -117,8 +118,13 @@ const DEBUG_COMMANDS: DebugCommandDefinition[] = [
     example: "debug.showUpdateToast()",
   },
   {
+    command: "debug.startGuidedTour()",
+    description: "Start the guided tour from the beginning.",
+    example: "debug.startGuidedTour()",
+  },
+  {
     command: "debug.showOnboarding()",
-    description: "Open the onboarding tour from the start.",
+    description: "Alias for starting the guided tour from the beginning.",
     example: "debug.showOnboarding()",
   },
   {
@@ -239,6 +245,10 @@ class InkbunnyDebug implements InkbunnyDebugControls {
 
   showUpdateToast() {
     this.options.showReleaseUpdateToast(SAMPLE_RELEASE_STATUS, this.options.getSettings());
+  }
+
+  startGuidedTour() {
+    this.options.showOnboarding();
   }
 
   showOnboarding() {
@@ -378,6 +388,7 @@ function showDebugCommandHelp() {
     "  debug.showMockErrorToast('rate-limit')",
     "  debug.showMockErrorToast({ preset: 'rate-limit', retryAfterMs: 8200 })",
     "  debug.showMockErrorToast('Incorrect username or password.')",
+    "  debug.startGuidedTour()",
     "  debug.openPanel('tabs')",
     "  debug.logBuildInfo()",
     "  debug.cancelSearch()",

@@ -687,6 +687,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
             <SubmissionModalImage
               submission={props.submission}
               sources={props.item.sources}
+              thumbnail={props.item.thumbnail}
               alt={props.item.alt}
             />
 
@@ -753,6 +754,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
 function SubmissionModalImage(props: {
   submission: SubmissionCard;
   sources: SubmissionModalPreviewSource[];
+  thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
 }) {
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -789,23 +791,47 @@ function SubmissionModalImage(props: {
   }
 
   return (
-    <img
-      ref={imageRef}
-      key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
-      src={source.src}
-      srcSet={source.srcSet}
-      alt={props.alt}
-      referrerPolicy="no-referrer"
-      onLoad={() => {
-        setLoaded(true);
-      }}
+    <div
+      className="relative flex h-[min(90vh,80rem)] w-full max-w-full items-center justify-center"
       onClick={(event) => event.stopPropagation()}
-      onError={() => {
-        setLoaded(false);
-        setSourceIndex((current) => current + 1);
-      }}
-      className={`max-h-[min(90vh,80rem)] max-w-full min-w-0 object-contain transition-opacity duration-[250ms] ${loaded ? "opacity-100" : "opacity-0"}`}
-    />
+    >
+      {props.thumbnail?.src ? (
+        <img
+          src={props.thumbnail.src}
+          srcSet={props.thumbnail.srcSet}
+          alt={props.alt}
+          aria-hidden={loaded}
+          referrerPolicy="no-referrer"
+          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
+            loaded ? "opacity-0" : "opacity-100"
+          }`}
+        />
+      ) : null}
+      {!loaded ? (
+        <div className="theme-panel-strong absolute z-10 flex items-center gap-3 rounded-full border px-4 py-2 text-sm font-semibold text-[var(--theme-title)] shadow-sm">
+          <LoaderCircle size={18} className="animate-spin" />
+          <span>Loading full image</span>
+        </div>
+      ) : null}
+      <img
+        ref={imageRef}
+        key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
+        src={source.src}
+        srcSet={source.srcSet}
+        alt={props.alt}
+        referrerPolicy="no-referrer"
+        onLoad={() => {
+          setLoaded(true);
+        }}
+        onError={() => {
+          setLoaded(false);
+          setSourceIndex((current) => current + 1);
+        }}
+        className={`relative z-[1] max-h-[min(90vh,80rem)] max-w-full min-w-0 object-contain transition-opacity duration-[250ms] ${
+          loaded ? "opacity-100" : "opacity-0"
+        }`}
+      />
+    </div>
   );
 }
 
