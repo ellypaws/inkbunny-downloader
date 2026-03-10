@@ -38,7 +38,7 @@ func main() {
 	app := desktopapp.NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     fmt.Sprintf("Inkbunny Downloader [%s]", buildinfo.Version),
+		Title:     fmt.Sprintf("Inkbunny Downloader [%s]", buildinfo.DisplayVersion()),
 		MinWidth:  1280,
 		MinHeight: 860,
 		Width:     1440,
