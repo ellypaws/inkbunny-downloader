@@ -10,6 +10,7 @@ export function StarBackground(props: StarBackgroundProps) {
   const bgRef = useRef<HTMLDivElement | null>(null);
   const requestRef = useRef<number | null>(null);
   const currentY = useRef(0);
+  const overscan = "10vh";
   const stars = useMemo(
     () =>
       Array.from({ length: 40 }, (_, index) => ({
@@ -43,7 +44,8 @@ export function StarBackground(props: StarBackgroundProps) {
     <>
       <div
         ref={bgRef}
-        className="fixed inset-0 z-0 pointer-events-none transition-transform duration-500"
+        className="fixed z-0 pointer-events-none transition-transform duration-500"
+        style={{ inset: `-${overscan}` }}
       >
         <div
           className={`absolute inset-0 transition-opacity duration-500 ${props.darkMode ? "opacity-0" : "opacity-100"}`}
@@ -67,7 +69,8 @@ export function StarBackground(props: StarBackgroundProps) {
         />
       </div>
       <div
-        className={`fixed inset-0 z-[1] pointer-events-none overflow-hidden transition-opacity duration-500 ${props.darkMode ? "opacity-80" : "opacity-22"}`}
+        className={`fixed z-[1] pointer-events-none overflow-hidden transition-opacity duration-500 ${props.darkMode ? "opacity-80" : "opacity-22"}`}
+        style={{ inset: `-${overscan}` }}
       >
         {stars.map((star) => (
           <div
