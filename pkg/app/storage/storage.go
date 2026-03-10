@@ -1,26 +1,27 @@
-package desktopapp
+package storage
 
 import (
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/ellypaws/inkbunny"
+
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/downloads"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
+	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
 )
 
-type stateStore struct {
+type StateStore struct {
 	root string
 	path string
 	mu   sync.Mutex
 }
 
-const maxConcurrentDownloads = 16
-
-func newStateStore() (*stateStore, error) {
+func NewStateStore() (*StateStore, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return nil, err
@@ -29,43 +30,43 @@ func newStateStore() (*stateStore, error) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
-	return &stateStore{
+	return &StateStore{
 		root: root,
 		path: filepath.Join(root, "state.json"),
 	}, nil
 }
 
-func (s *stateStore) Load() (storedState, error) {
+func (s *StateStore) Load() (types.StoredState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var state storedState
+	var state types.StoredState
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return defaultStoredState(), nil
+			return DefaultStoredState(), nil
 		}
 		return state, err
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
 		return state, err
 	}
-	state.Settings.MaxActive = normalizeMaxActive(state.Settings.MaxActive)
+	state.Settings.MaxActive = apputils.NormalizeMaxActive(state.Settings.MaxActive)
 	if state.Settings.DownloadDirectory == "" {
-		state.Settings.DownloadDirectory = defaultDownloadDirectory()
+		state.Settings.DownloadDirectory = DefaultDownloadDirectory()
 	}
-	state.Settings.DownloadPattern = normalizeDownloadPattern(state.Settings.DownloadPattern)
+	state.Settings.DownloadPattern = downloads.NormalizePattern(state.Settings.DownloadPattern)
 	if state.Session.EffectiveTheme == "" {
-		state.Session.EffectiveTheme = ternary(state.Settings.DarkMode, "dark", "light")
+		state.Session.EffectiveTheme = themeName(state.Settings.DarkMode)
 	}
 	if state.Session.AvatarURL == "" {
-		state.Session.AvatarURL = defaultAvatarURL
+		state.Session.AvatarURL = apputils.DefaultAvatarURL
 	}
 	state.Session.Settings = state.Settings
 	return state, nil
 }
 
-func (s *stateStore) Save(state storedState) error {
+func (s *StateStore) Save(state types.StoredState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -79,50 +80,29 @@ func (s *stateStore) Save(state storedState) error {
 	return os.WriteFile(s.path, data, 0o600)
 }
 
-func defaultStoredState() storedState {
-	settings := AppSettings{
-		DownloadDirectory:  defaultDownloadDirectory(),
-		DownloadPattern:    defaultDownloadPattern,
-		MaxActive:          defaultMaxActive(),
+func DefaultStoredState() types.StoredState {
+	settings := types.AppSettings{
+		DownloadDirectory:  DefaultDownloadDirectory(),
+		DownloadPattern:    downloads.DefaultPattern,
+		MaxActive:          apputils.DefaultMaxActive(),
 		DarkMode:           false,
 		MotionEnabled:      true,
 		AutoClearCompleted: false,
 		SkippedReleaseTag:  "",
 		HasLoggedInBefore:  false,
 	}
-	return storedState{
+	return types.StoredState{
 		Settings: settings,
-		Session: SessionInfo{
+		Session: types.SessionInfo{
 			Settings:       settings,
 			EffectiveTheme: "light",
-			AvatarURL:      defaultAvatarURL,
+			AvatarURL:      apputils.DefaultAvatarURL,
 		},
-		Workspace: WorkspaceState{},
+		Workspace: types.WorkspaceState{},
 	}
 }
 
-func defaultMaxActive() int {
-	value := runtime.NumCPU() / 6
-	if value < 1 {
-		value = 1
-	}
-	if value > 6 {
-		value = 6
-	}
-	return value
-}
-
-func normalizeMaxActive(value int) int {
-	if value <= 0 {
-		return defaultMaxActive()
-	}
-	if value > maxConcurrentDownloads {
-		return maxConcurrentDownloads
-	}
-	return value
-}
-
-func defaultDownloadDirectory() string {
+func DefaultDownloadDirectory() string {
 	base, err := resolveDownloadsDirectory()
 	if err != nil || strings.TrimSpace(base) == "" {
 		return "Downloads"
@@ -130,10 +110,10 @@ func defaultDownloadDirectory() string {
 	return filepath.Clean(base)
 }
 
-func resolveDownloadPickerDirectory(current string) string {
+func ResolveDownloadPickerDirectory(current string) string {
 	candidate := strings.TrimSpace(current)
 	if candidate == "" {
-		candidate = defaultDownloadDirectory()
+		candidate = DefaultDownloadDirectory()
 	}
 	candidate = filepath.Clean(candidate)
 
@@ -157,7 +137,7 @@ func resolveDownloadPickerDirectory(current string) string {
 	return ""
 }
 
-func restoreUser(stored sessionUser) *inkbunny.User {
+func RestoreUser(stored types.SessionUser) *inkbunny.User {
 	if stored.SID == "" {
 		return nil
 	}
@@ -171,13 +151,20 @@ func restoreUser(stored sessionUser) *inkbunny.User {
 	return user
 }
 
-func toStoredUser(user *inkbunny.User) sessionUser {
+func ToStoredUser(user *inkbunny.User) types.SessionUser {
 	if user == nil {
-		return sessionUser{}
+		return types.SessionUser{}
 	}
-	return sessionUser{
+	return types.SessionUser{
 		SID:      user.SID,
 		Username: user.Username,
 		Ratings:  user.Ratings.String(),
 	}
+}
+
+func themeName(darkMode bool) string {
+	if darkMode {
+		return "dark"
+	}
+	return "light"
 }

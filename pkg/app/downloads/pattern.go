@@ -1,4 +1,4 @@
-package desktopapp
+package downloads
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	"github.com/ellypaws/inkbunny"
 )
 
-const defaultDownloadPattern = "inkbunny/{artist}/{file_name_full}"
+const DefaultPattern = "inkbunny/{artist}/{file_name_full}"
 
 var downloadPatternTokenRE = regexp.MustCompile(`\{([a-z0-9_]+)\}`)
 
@@ -25,15 +25,15 @@ type downloadPathContext struct {
 	Number     int
 }
 
-func normalizeDownloadPattern(pattern string) string {
+func NormalizePattern(pattern string) string {
 	trimmed := strings.TrimSpace(pattern)
 	if trimmed == "" {
-		return defaultDownloadPattern
+		return DefaultPattern
 	}
 	return trimmed
 }
 
-func resolveDownloadDestinations(
+func ResolveDestinations(
 	root string,
 	pattern string,
 	submission inkbunny.SubmissionDetails,
@@ -44,7 +44,7 @@ func resolveDownloadDestinations(
 		return nil
 	}
 
-	pattern = normalizeDownloadPattern(pattern)
+	pattern = NormalizePattern(pattern)
 	baseContext := downloadPathContext{
 		Submission: submission,
 		File:       file,
@@ -66,8 +66,26 @@ func resolveDownloadDestinations(
 	return uniqueNonEmptyPaths(destinations)
 }
 
+func SubmissionFilesDownloaded(root, pattern string, submission inkbunny.SubmissionDetails) bool {
+	if len(submission.Files) == 0 {
+		return false
+	}
+
+	for _, file := range submission.Files {
+		matches, _, _, err := downloadTargetsMatch(
+			ResolveDestinations(root, pattern, submission, file),
+			file.FullFileMD5,
+		)
+		if err != nil || !matches {
+			return false
+		}
+	}
+
+	return true
+}
+
 func renderDownloadDestination(root, pattern string, ctx downloadPathContext) string {
-	normalizedPattern := strings.ReplaceAll(normalizeDownloadPattern(pattern), "\\", "/")
+	normalizedPattern := strings.ReplaceAll(NormalizePattern(pattern), "\\", "/")
 	rawParts := strings.Split(normalizedPattern, "/")
 	segments := make([]string, 0, len(rawParts)+1)
 	lastPartHasValue := false
@@ -131,7 +149,10 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 	case "rating":
 		return coarseSubmissionRating(ctx.Submission), true
 	case "public":
-		return ternary(ctx.Submission.Public.Bool(), "public", "private"), true
+		if ctx.Submission.Public.Bool() {
+			return "public", true
+		}
+		return "private", true
 	case "submission_type":
 		return normalizedSubmissionType(ctx.Submission.SubmissionTypeID.Int()), true
 	case "year":

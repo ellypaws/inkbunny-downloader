@@ -10,8 +10,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
-	desktopapp "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app"
-	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo"
+	desktopapp "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/state"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/modes"
 )

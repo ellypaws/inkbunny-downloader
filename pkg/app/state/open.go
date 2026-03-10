@@ -1,15 +1,15 @@
-package desktopapp
+package state
 
 import (
 	"errors"
 	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/pkg/browser"
+
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/storage"
+	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
 )
 
 func (a *App) OpenDownloadDirectory() error {
@@ -19,7 +19,7 @@ func (a *App) OpenDownloadDirectory() error {
 
 	target = strings.TrimSpace(target)
 	if target == "" {
-		target = defaultDownloadDirectory()
+		target = storage.DefaultDownloadDirectory()
 	}
 	if target == "" {
 		return errors.New("download folder not set")
@@ -27,7 +27,7 @@ func (a *App) OpenDownloadDirectory() error {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err
 	}
-	return openPathInFileManager(target)
+	return apputils.OpenPathInFileManager(target)
 }
 
 func (a *App) OpenExternalURL(target string) error {
@@ -39,17 +39,4 @@ func (a *App) OpenExternalURL(target string) error {
 		return errors.New("unsupported external url")
 	}
 	return browser.OpenURL(parsed.String())
-}
-
-func openPathInFileManager(target string) error {
-	clean := filepath.Clean(target)
-
-	switch runtime.GOOS {
-	case "windows":
-		return exec.Command("explorer.exe", clean).Start()
-	case "darwin":
-		return exec.Command("open", clean).Start()
-	default:
-		return exec.Command("xdg-open", clean).Start()
-	}
 }

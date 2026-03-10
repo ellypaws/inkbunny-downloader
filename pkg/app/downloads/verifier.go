@@ -1,4 +1,4 @@
-package desktopapp
+package downloads
 
 import (
 	"crypto/md5"

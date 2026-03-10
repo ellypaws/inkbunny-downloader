@@ -1,4 +1,4 @@
-package desktopapp
+package state
 
 import (
 	"encoding/json"
@@ -6,9 +6,10 @@ import (
 	"strings"
 
 	"github.com/ellypaws/inkbunny"
-)
 
-const defaultAvatarURL = "https://inkbunny.net/images80/usericons/large/noicon.png"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
+	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
+)
 
 type keywordCacheKey struct {
 	Query       string
@@ -93,7 +94,7 @@ func makeSearchCacheKey(user *inkbunny.User, ratingsMask string, req inkbunny.Su
 func avatarURLForIcon(icon string) string {
 	trimmed := strings.TrimSpace(icon)
 	if trimmed == "" {
-		return defaultAvatarURL
+		return apputils.DefaultAvatarURL
 	}
 	if strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://") {
 		return trimmed
@@ -105,14 +106,14 @@ func avatarURLForIcon(icon string) string {
 	return "https://inkbunny.net/usericons/large/" + trimmed
 }
 
-func mapUsernameSuggestions(items []inkbunny.Autocomplete) []UsernameSuggestion {
-	suggestions := make([]UsernameSuggestion, 0, len(items))
+func mapUsernameSuggestions(items []inkbunny.Autocomplete) []types.UsernameSuggestion {
+	suggestions := make([]types.UsernameSuggestion, 0, len(items))
 	for _, item := range items {
 		username := item.SingleWord
 		if username == "" {
 			username = strings.TrimSpace(item.Value)
 		}
-		suggestions = append(suggestions, UsernameSuggestion{
+		suggestions = append(suggestions, types.UsernameSuggestion{
 			UserID:    item.ID.String(),
 			Value:     item.Value,
 			Username:  username,
@@ -122,7 +123,7 @@ func mapUsernameSuggestions(items []inkbunny.Autocomplete) []UsernameSuggestion 
 	return suggestions
 }
 
-func prependCurrentUserSuggestion(items []UsernameSuggestion, user *inkbunny.User, avatarURL string, query string) []UsernameSuggestion {
+func prependCurrentUserSuggestion(items []types.UsernameSuggestion, user *inkbunny.User, avatarURL string, query string) []types.UsernameSuggestion {
 	if user == nil || user.SID == "" || strings.EqualFold(user.Username, "guest") {
 		return items
 	}
@@ -138,16 +139,16 @@ func prependCurrentUserSuggestion(items []UsernameSuggestion, user *inkbunny.Use
 	if strings.TrimSpace(avatarURL) == "" {
 		return items
 	}
-	suggestion := UsernameSuggestion{
+	suggestion := types.UsernameSuggestion{
 		UserID:    user.UserID.String(),
 		Value:     user.Username,
 		Username:  user.Username,
 		AvatarURL: avatarURL,
 	}
-	return append([]UsernameSuggestion{suggestion}, items...)
+	return append([]types.UsernameSuggestion{suggestion}, items...)
 }
 
-func matchUsernameSuggestion(item UsernameSuggestion, username string) bool {
+func matchUsernameSuggestion(item types.UsernameSuggestion, username string) bool {
 	needle := normalizeUsername(username)
 	return normalizeUsername(item.Username) == needle || normalizeUsername(item.Value) == needle
 }

@@ -1,6 +1,6 @@
 //go:build windows
 
-package desktopapp
+package storage
 
 import "golang.org/x/sys/windows"
 

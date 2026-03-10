@@ -1,4 +1,4 @@
-package desktopapp
+package utils
 
 import (
 	"context"
@@ -7,21 +7,23 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
 )
 
 const maxRateLimitAttempts = 4
 
-type apiRateLimiter struct {
+type RateLimiter struct {
 	mu            sync.Mutex
 	cooldownUntil time.Time
-	notify        func(AppNotification)
+	notify        func(types.AppNotification)
 }
 
-func newAPIRateLimiter(notify func(AppNotification)) *apiRateLimiter {
-	return &apiRateLimiter{notify: notify}
+func NewRateLimiter(notify func(types.AppNotification)) *RateLimiter {
+	return &RateLimiter{notify: notify}
 }
 
-func (l *apiRateLimiter) SetNotifier(notify func(AppNotification)) {
+func (l *RateLimiter) SetNotifier(notify func(types.AppNotification)) {
 	if l == nil {
 		return
 	}
@@ -30,7 +32,7 @@ func (l *apiRateLimiter) SetNotifier(notify func(AppNotification)) {
 	l.mu.Unlock()
 }
 
-func (l *apiRateLimiter) Wait(ctx context.Context) error {
+func (l *RateLimiter) Wait(ctx context.Context) error {
 	if l == nil {
 		return nil
 	}
@@ -58,7 +60,7 @@ func (l *apiRateLimiter) Wait(ctx context.Context) error {
 	}
 }
 
-func (l *apiRateLimiter) Register(scope string, attempt int) time.Duration {
+func (l *RateLimiter) Register(scope string, attempt int) time.Duration {
 	if l == nil {
 		return 0
 	}
@@ -76,7 +78,7 @@ func (l *apiRateLimiter) Register(scope string, attempt int) time.Duration {
 	l.mu.Unlock()
 
 	if notify != nil {
-		notify(AppNotification{
+		notify(types.AppNotification{
 			ID:           fmt.Sprintf("rate-limit-%s-%d", notificationKey(scope), now.UnixNano()),
 			Level:        "warning",
 			Message:      fmt.Sprintf("Inkbunny is rate limiting %s. Retrying in %s.", scope, humanizeRetryDelay(effective)),
@@ -89,14 +91,14 @@ func (l *apiRateLimiter) Register(scope string, attempt int) time.Duration {
 	return effective
 }
 
-func (l *apiRateLimiter) Exhausted(scope string, err error) error {
+func (l *RateLimiter) Exhausted(scope string, err error) error {
 	message := fmt.Sprintf("Inkbunny is still rate limiting %s. Please try again in a moment.", scope)
 	if l != nil {
 		l.mu.Lock()
 		notify := l.notify
 		l.mu.Unlock()
 		if notify != nil {
-			notify(AppNotification{
+			notify(types.AppNotification{
 				ID:        fmt.Sprintf("rate-limit-exhausted-%s-%d", notificationKey(scope), time.Now().UnixNano()),
 				Level:     "error",
 				Message:   message,
@@ -111,7 +113,7 @@ func (l *apiRateLimiter) Exhausted(scope string, err error) error {
 	return fmt.Errorf("%s: %w", message, err)
 }
 
-func executeWithRateLimitRetry[T any](ctx context.Context, limiter *apiRateLimiter, scope string, work func() (T, error)) (T, error) {
+func ExecuteWithRateLimitRetry[T any](ctx context.Context, limiter *RateLimiter, scope string, work func() (T, error)) (T, error) {
 	var zero T
 
 	for attempt := 1; attempt <= maxRateLimitAttempts; attempt++ {
@@ -125,7 +127,7 @@ func executeWithRateLimitRetry[T any](ctx context.Context, limiter *apiRateLimit
 		if err == nil {
 			return value, nil
 		}
-		if !isRateLimitError(err) {
+		if !IsRateLimitError(err) {
 			return zero, err
 		}
 		if attempt == maxRateLimitAttempts {
@@ -168,7 +170,7 @@ func humanizeRetryDelay(delay time.Duration) string {
 	return fmt.Sprintf("%.1fs", seconds)
 }
 
-func isRateLimitError(err error) bool {
+func IsRateLimitError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -176,6 +178,13 @@ func isRateLimitError(err error) bool {
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "429") &&
 		(strings.Contains(message, "too many requests") || strings.Contains(message, "status code"))
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func notificationKey(scope string) string {

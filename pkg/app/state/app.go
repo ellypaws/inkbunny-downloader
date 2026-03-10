@@ -1,4 +1,4 @@
-package desktopapp
+package state
 
 import (
 	"context"
@@ -12,19 +12,24 @@ import (
 	"github.com/ellypaws/inkbunny"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/downloads"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/info"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/storage"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
+	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 )
 
 type App struct {
 	ctx             context.Context
-	store           *stateStore
+	store           *storage.StateStore
 	mu              sync.RWMutex
 	cacheMu         sync.Mutex
 	searchIDMu      sync.Mutex
 	searchOpMu      sync.Mutex
 	user            *inkbunny.User
-	settings        AppSettings
-	workspace       WorkspaceState
+	settings        types.AppSettings
+	workspace       types.WorkspaceState
 	sessionAvatar   string
 	searches        map[string]*searchState
 	lastSearchID    string
@@ -32,27 +37,27 @@ type App struct {
 	searchOpID      uint64
 	searchOpCancel  context.CancelFunc
 	keywordCache    *flight.Cache[keywordCacheKey, []inkbunny.KeywordAutocomplete]
-	usernameCache   *flight.Cache[usernameCacheKey, []UsernameSuggestion]
+	usernameCache   *flight.Cache[usernameCacheKey, []types.UsernameSuggestion]
 	avatarCache     *flight.Cache[avatarCacheKey, string]
-	watchingCache   *flight.Cache[watchingCacheKey, []UsernameSuggestion]
+	watchingCache   *flight.Cache[watchingCacheKey, []types.UsernameSuggestion]
 	searchCache     *flight.Cache[searchCacheKey, cachedSearchResult]
 	loadMoreCache   *flight.Cache[loadMoreCacheKey, inkbunny.SubmissionSearchResponse]
 	detailsCache    *flight.Cache[submissionDetailsCacheKey, inkbunny.SubmissionDetails]
-	rateLimiter     *apiRateLimiter
-	downloadManager *DownloadManager
+	rateLimiter     *apputils.RateLimiter
+	downloadManager *downloads.Manager
 }
 
 const submissionDetailsBatchSize = 100
 
 func NewApp() *App {
-	store, _ := newStateStore()
-	defaultState := defaultStoredState()
+	store, _ := storage.NewStateStore()
+	defaultState := storage.DefaultStoredState()
 	return &App{
 		store:       store,
 		settings:    defaultState.Settings,
 		workspace:   defaultState.Workspace,
 		searches:    make(map[string]*searchState),
-		rateLimiter: newAPIRateLimiter(nil),
+		rateLimiter: apputils.NewRateLimiter(nil),
 	}
 }
 
@@ -66,14 +71,14 @@ func (a *App) Startup(ctx context.Context) {
 			a.workspace = state.Workspace
 			a.lastSearchID = state.Session.LastSearchID
 			a.sessionAvatar = state.Session.AvatarURL
-			a.user = restoreUser(state.User)
+			a.user = storage.RestoreUser(state.User)
 		}
 	}
 	if a.sessionAvatar == "" {
-		a.sessionAvatar = defaultAvatarURL
+		a.sessionAvatar = apputils.DefaultAvatarURL
 	}
 	a.resetCaches(a.user)
-	a.downloadManager = NewDownloadManager(ctx, a.settings.MaxActive, a.rateLimiter, func(event string, payload any) {
+	a.downloadManager = downloads.NewManager(ctx, a.settings.MaxActive, a.rateLimiter, func(event string, payload any) {
 		if a.ctx != nil {
 			wruntime.EventsEmit(a.ctx, event, payload)
 		}
@@ -127,7 +132,7 @@ func (a *App) CancelSearchRequests() {
 	}
 }
 
-func (a *App) emitNotification(notification AppNotification) {
+func (a *App) emitNotification(notification types.AppNotification) {
 	if a.ctx == nil {
 		return
 	}
@@ -142,11 +147,11 @@ func (a *App) emitNotification(notification AppNotification) {
 	wruntime.EventsEmit(a.ctx, "app-notification", notification)
 }
 
-func (a *App) GetSession() SessionInfo {
+func (a *App) GetSession() types.SessionInfo {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	info := SessionInfo{
+	info := types.SessionInfo{
 		Settings:       a.settings,
 		LastSearchID:   a.lastSearchID,
 		EffectiveTheme: ternary(a.settings.DarkMode, "dark", "light"),
@@ -154,7 +159,7 @@ func (a *App) GetSession() SessionInfo {
 	}
 	if a.user == nil || a.user.SID == "" {
 		if info.AvatarURL == "" {
-			info.AvatarURL = defaultAvatarURL
+			info.AvatarURL = apputils.DefaultAvatarURL
 		}
 		return info
 	}
@@ -163,33 +168,33 @@ func (a *App) GetSession() SessionInfo {
 	info.IsGuest = strings.EqualFold(a.user.Username, "guest")
 	info.RatingsMask = a.user.Ratings.String()
 	if info.AvatarURL == "" || info.IsGuest {
-		info.AvatarURL = defaultAvatarURL
+		info.AvatarURL = apputils.DefaultAvatarURL
 	}
 	return info
 }
 
-func (a *App) Login(username, password string) (SessionInfo, error) {
+func (a *App) Login(username, password string) (types.SessionInfo, error) {
 	user, err := inkbunny.Login(strings.TrimSpace(username), password)
 	if err != nil {
-		return SessionInfo{}, err
+		return types.SessionInfo{}, err
 	}
 	a.setSession(user)
 	return a.GetSession(), nil
 }
 
-func (a *App) EnsureGuestSession() (SessionInfo, error) {
+func (a *App) EnsureGuestSession() (types.SessionInfo, error) {
 	guest, err := inkbunny.Login("guest", "")
 	if err != nil {
-		return SessionInfo{}, err
+		return types.SessionInfo{}, err
 	}
 	if guest == nil {
-		return SessionInfo{}, errors.New("guest session unavailable")
+		return types.SessionInfo{}, errors.New("guest session unavailable")
 	}
 	a.setSession(guest)
 	return a.GetSession(), nil
 }
 
-func (a *App) Logout() (SessionInfo, error) {
+func (a *App) Logout() (types.SessionInfo, error) {
 	a.mu.Lock()
 	user := a.user
 	a.user = nil
@@ -202,21 +207,21 @@ func (a *App) Logout() (SessionInfo, error) {
 	return a.GetSession(), nil
 }
 
-func (a *App) UpdateRatings(mask string) (SessionInfo, error) {
+func (a *App) UpdateRatings(mask string) (types.SessionInfo, error) {
 	user, err := a.ensureSearchSession()
 	if err != nil {
-		return SessionInfo{}, err
+		return types.SessionInfo{}, err
 	}
 	ratings := inkbunny.ParseMask(strings.TrimSpace(mask))
 
-	_, err = executeWithRateLimitRetry(a.ctx, a.rateLimiter, "ratings", func() (struct{}, error) {
+	_, err = apputils.ExecuteWithRateLimitRetry(a.ctx, a.rateLimiter, "ratings", func() (struct{}, error) {
 		return struct{}{}, user.ChangeRatings(ratings)
 	})
 	if err != nil {
 		if a.handleSessionError(err) {
-			return SessionInfo{}, err
+			return types.SessionInfo{}, err
 		}
-		return SessionInfo{}, err
+		return types.SessionInfo{}, err
 	}
 
 	a.mu.Lock()
@@ -230,19 +235,19 @@ func (a *App) UpdateRatings(mask string) (SessionInfo, error) {
 	return a.GetSession(), a.persist()
 }
 
-func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
+func (a *App) UpdateSettings(settings types.AppSettings) (types.AppSettings, error) {
 	a.mu.Lock()
 	if settings.DownloadDirectory != "" {
 		a.settings.DownloadDirectory = settings.DownloadDirectory
 	}
-	a.settings.DownloadPattern = normalizeDownloadPattern(settings.DownloadPattern)
+	a.settings.DownloadPattern = downloads.NormalizePattern(settings.DownloadPattern)
 	if settings.MaxActive > 0 {
-		a.settings.MaxActive = normalizeMaxActive(settings.MaxActive)
+		a.settings.MaxActive = apputils.NormalizeMaxActive(settings.MaxActive)
 	}
 	a.settings.DarkMode = settings.DarkMode
 	a.settings.MotionEnabled = settings.MotionEnabled
 	a.settings.AutoClearCompleted = settings.AutoClearCompleted
-	a.settings.SkippedReleaseTag = normalizeReleaseTag(settings.SkippedReleaseTag)
+	a.settings.SkippedReleaseTag = info.NormalizeReleaseTag(settings.SkippedReleaseTag)
 	a.settings.HasLoggedInBefore = a.settings.HasLoggedInBefore || settings.HasLoggedInBefore
 	current := a.settings
 	a.mu.Unlock()
@@ -253,14 +258,14 @@ func (a *App) UpdateSettings(settings AppSettings) (AppSettings, error) {
 	return current, a.persist()
 }
 
-func (a *App) GetWorkspaceState() WorkspaceState {
+func (a *App) GetWorkspaceState() types.WorkspaceState {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
 	return a.workspace
 }
 
-func (a *App) SaveWorkspaceState(workspace WorkspaceState) error {
+func (a *App) SaveWorkspaceState(workspace types.WorkspaceState) error {
 	a.mu.Lock()
 	a.workspace = workspace
 	a.mu.Unlock()
@@ -272,7 +277,7 @@ func (a *App) PickDownloadDirectory() (string, error) {
 		return "", errors.New("application context not ready")
 	}
 	a.mu.RLock()
-	defaultDirectory := resolveDownloadPickerDirectory(a.settings.DownloadDirectory)
+	defaultDirectory := storage.ResolveDownloadPickerDirectory(a.settings.DownloadDirectory)
 	a.mu.RUnlock()
 	selected, err := wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{
 		Title:            "Choose a download folder",
@@ -281,7 +286,7 @@ func (a *App) PickDownloadDirectory() (string, error) {
 	if err != nil || selected == "" {
 		return "", err
 	}
-	_, updateErr := a.UpdateSettings(AppSettings{
+	_, updateErr := a.UpdateSettings(types.AppSettings{
 		DownloadDirectory:  selected,
 		DownloadPattern:    a.settings.DownloadPattern,
 		MaxActive:          a.settings.MaxActive,
@@ -294,94 +299,94 @@ func (a *App) PickDownloadDirectory() (string, error) {
 	return selected, updateErr
 }
 
-func (a *App) GetQueueSnapshot() QueueSnapshot {
+func (a *App) GetQueueSnapshot() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.Snapshot()
 }
 
-func (a *App) CancelDownload(jobID string) QueueSnapshot {
+func (a *App) CancelDownload(jobID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.Cancel(jobID)
 }
 
-func (a *App) CancelSubmission(submissionID string) QueueSnapshot {
+func (a *App) CancelSubmission(submissionID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.CancelSubmission(submissionID)
 }
 
-func (a *App) RetryDownload(jobID string) QueueSnapshot {
+func (a *App) RetryDownload(jobID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.Retry(jobID)
 }
 
-func (a *App) RetrySubmission(submissionID string) QueueSnapshot {
+func (a *App) RetrySubmission(submissionID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.RetrySubmission(submissionID)
 }
 
-func (a *App) RetryAllDownloads() QueueSnapshot {
+func (a *App) RetryAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.RetryAll()
 }
 
-func (a *App) PauseAllDownloads() QueueSnapshot {
+func (a *App) PauseAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.PauseAll()
 }
 
-func (a *App) ResumeAllDownloads() QueueSnapshot {
+func (a *App) ResumeAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.ResumeAll()
 }
 
-func (a *App) StopAllDownloads() QueueSnapshot {
+func (a *App) StopAllDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.CancelAll()
 }
 
-func (a *App) ClearQueue() QueueSnapshot {
+func (a *App) ClearQueue() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.Clear()
 }
 
-func (a *App) ClearCompletedDownloads() QueueSnapshot {
+func (a *App) ClearCompletedDownloads() types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.ClearCompleted()
 }
 
-func (a *App) ClearCompletedSubmissions(submissionIDs []string) QueueSnapshot {
+func (a *App) ClearCompletedSubmissions(submissionIDs []string) types.QueueSnapshot {
 	if a.downloadManager == nil {
-		return QueueSnapshot{}
+		return types.QueueSnapshot{}
 	}
 	return a.downloadManager.ClearCompletedSubmissions(submissionIDs)
 }
 
-func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, options DownloadOptions) (QueueSnapshot, error) {
+func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelection, options types.DownloadOptions) (types.QueueSnapshot, error) {
 	user, err := a.ensureSearchSession()
 	if err != nil {
-		return QueueSnapshot{}, err
+		return types.QueueSnapshot{}, err
 	}
 	if len(selection.Submissions) == 0 {
 		return a.GetQueueSnapshot(), nil
@@ -411,13 +416,13 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 		if a.handleSessionError(err) {
 			user, err = a.ensureSearchSession()
 			if err != nil {
-				return QueueSnapshot{}, err
+				return types.QueueSnapshot{}, err
 			}
 			details, err = a.cachedSubmissionDetailsBatched(user, submissionIDs)
 		}
 	}
 	if err != nil {
-		return QueueSnapshot{}, err
+		return types.QueueSnapshot{}, err
 	}
 
 	saveKeywords := options.SaveKeywords
@@ -429,15 +434,15 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 	if maxActive <= 0 {
 		maxActive = a.GetSession().Settings.MaxActive
 	}
-	downloadPattern := normalizeDownloadPattern(options.DownloadPattern)
+	downloadPattern := downloads.NormalizePattern(options.DownloadPattern)
 	if strings.TrimSpace(downloadPattern) == "" {
 		downloadPattern = a.GetSession().Settings.DownloadPattern
 	}
 	if err := os.MkdirAll(downloadRoot, 0o755); err != nil {
-		return QueueSnapshot{}, err
+		return types.QueueSnapshot{}, err
 	}
 
-	tasks := make([]downloadTask, 0)
+	tasks := make([]downloads.Task, 0)
 	for _, submission := range details.Submissions {
 		keywords := joinKeywords(submission.Keywords)
 		allowed := selectedFiles[submission.SubmissionID.String()]
@@ -447,7 +452,7 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 					continue
 				}
 			}
-			tasks = append(tasks, downloadTask{
+			tasks = append(tasks, downloads.Task{
 				SessionID:    user.SID,
 				SubmissionID: submission.SubmissionID.String(),
 				FileID:       file.FileID.String(),
@@ -461,12 +466,12 @@ func (a *App) EnqueueDownloads(searchID string, selection DownloadSelection, opt
 				PreviewURL:   submissionResourceURL(file.FileURLPreview.String(), user.SID, submission.Public.Bool()),
 				SaveKeywords: saveKeywords,
 				DownloadRoot: downloadRoot,
-				Destinations: resolveDownloadDestinations(downloadRoot, downloadPattern, submission, file),
+				Destinations: downloads.ResolveDestinations(downloadRoot, downloadPattern, submission, file),
 			})
 		}
 	}
 
-	_, _ = a.UpdateSettings(AppSettings{
+	_, _ = a.UpdateSettings(types.AppSettings{
 		DownloadDirectory:  downloadRoot,
 		DownloadPattern:    downloadPattern,
 		MaxActive:          maxActive,
@@ -502,7 +507,7 @@ func (a *App) ensureSearchSession() (*inkbunny.User, error) {
 func (a *App) setSession(user *inkbunny.User) {
 	a.mu.Lock()
 	a.user = user
-	a.sessionAvatar = defaultAvatarURL
+	a.sessionAvatar = apputils.DefaultAvatarURL
 	if user != nil && user.SID != "" {
 		a.settings.HasLoggedInBefore = true
 	}
@@ -518,7 +523,7 @@ func (a *App) setSession(user *inkbunny.User) {
 func (a *App) clearSession() {
 	a.mu.Lock()
 	a.user = nil
-	a.sessionAvatar = defaultAvatarURL
+	a.sessionAvatar = apputils.DefaultAvatarURL
 	a.mu.Unlock()
 	a.resetCaches(nil)
 	_ = a.persist()
@@ -530,8 +535,8 @@ func (a *App) persist() error {
 	if a.store == nil {
 		return nil
 	}
-	return a.store.Save(storedState{
-		Session: SessionInfo{
+	return a.store.Save(types.StoredState{
+		Session: types.SessionInfo{
 			HasSession:     a.user != nil && a.user.SID != "",
 			Username:       usernameOf(a.user),
 			IsGuest:        strings.EqualFold(usernameOf(a.user), "guest"),
@@ -541,7 +546,7 @@ func (a *App) persist() error {
 			LastSearchID:   a.lastSearchID,
 			EffectiveTheme: ternary(a.settings.DarkMode, "dark", "light"),
 		},
-		User:      toStoredUser(a.user),
+		User:      storage.ToStoredUser(a.user),
 		Settings:  a.settings,
 		Workspace: a.workspace,
 	})
@@ -572,7 +577,7 @@ func joinKeywords(keywords []inkbunny.Keyword) string {
 func (a *App) syncSessionAvatar(user *inkbunny.User) {
 	if user == nil || user.SID == "" || strings.EqualFold(user.Username, "guest") {
 		a.mu.Lock()
-		a.sessionAvatar = defaultAvatarURL
+		a.sessionAvatar = apputils.DefaultAvatarURL
 		a.mu.Unlock()
 		return
 	}
@@ -582,7 +587,7 @@ func (a *App) syncSessionAvatar(user *inkbunny.User) {
 		Username: normalizeUsername(user.Username),
 	})
 	if err != nil || avatar == "" {
-		avatar = defaultAvatarURL
+		avatar = apputils.DefaultAvatarURL
 	}
 	a.mu.Lock()
 	if a.user != nil && a.user.SID == user.SID {
@@ -710,7 +715,7 @@ func (a *App) fetchSubmissionDetailsBatch(
 		return inkbunny.SubmissionDetailsResponse{}, nil
 	}
 
-	return executeWithRateLimitRetry(ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
+	return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
 		current, err := a.ensureSearchSession()
 		if err != nil {
 			return inkbunny.SubmissionDetailsResponse{}, err

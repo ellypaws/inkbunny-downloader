@@ -1,4 +1,4 @@
-package desktopapp
+package utils
 
 import (
 	"context"
@@ -7,32 +7,48 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
-
-	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 )
 
-var proxiedUserIconCache = flight.NewCache(func(ctx context.Context, raw string) (string, error) {
-	return fetchUserIconDataURL(ctx, raw)
-})
+const DefaultAvatarURL = "https://inkbunny.net/images80/usericons/large/noicon.png"
 
-func (a *App) ProxyAvatarImageURL(raw string) (string, error) {
-	normalized := normalizeInkbunnyURL(raw)
-	if !looksLikeUserIconURL(normalized) {
-		return normalized, nil
+func NormalizeInkbunnyURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return raw
+	}
+	if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "data:") {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "//") {
+		return "https:" + trimmed
 	}
 
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
+	parsed, err := url.Parse(trimmed)
+	if err == nil && parsed.Scheme != "" {
+		return parsed.String()
 	}
-	return proxiedUserIconCache.GetWithContext(ctx, normalized)
+
+	if strings.HasPrefix(trimmed, "/") {
+		return "https://inkbunny.net" + trimmed
+	}
+
+	if err == nil && parsed.Host == "" {
+		return "https://inkbunny.net/" + strings.TrimPrefix(trimmed, "/")
+	}
+
+	return trimmed
 }
 
-func fetchUserIconDataURL(ctx context.Context, raw string) (string, error) {
-	normalized := normalizeInkbunnyURL(raw)
+func LooksLikeUserIconURL(raw string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(raw)), "/usericons/")
+}
+
+func FetchUserIconDataURL(ctx context.Context, raw string) (string, error) {
+	normalized := NormalizeInkbunnyURL(raw)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, normalized, nil)
 	if err != nil {
 		return "", err
@@ -70,8 +86,4 @@ func fetchUserIconDataURL(ctx context.Context, raw string) (string, error) {
 		return "", err
 	}
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(body), nil
-}
-
-func looksLikeUserIconURL(raw string) bool {
-	return strings.Contains(strings.ToLower(strings.TrimSpace(raw)), "/usericons/")
 }

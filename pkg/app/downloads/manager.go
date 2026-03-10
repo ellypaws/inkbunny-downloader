@@ -1,4 +1,4 @@
-package desktopapp
+package downloads
 
 import (
 	"context"
@@ -14,10 +14,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
+	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
+	baseutils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 )
 
-type downloadTask struct {
+type Task struct {
 	SessionID    string
 	SubmissionID string
 	FileID       string
@@ -35,19 +37,19 @@ type downloadTask struct {
 }
 
 type downloadJob struct {
-	snapshot       DownloadJobSnapshot
-	task           downloadTask
+	snapshot       types.DownloadJobSnapshot
+	task           Task
 	cancel         context.CancelFunc
 	resumeOnCancel bool
 	created        time.Time
 	order          uint64
 }
 
-type DownloadManager struct {
+type Manager struct {
 	ctx       context.Context
 	client    *http.Client
 	emit      func(string, any)
-	limiter   *apiRateLimiter
+	limiter   *apputils.RateLimiter
 	mu        sync.Mutex
 	nextID    atomic.Uint64
 	maxActive int
@@ -57,9 +59,9 @@ type DownloadManager struct {
 	pending   []string
 }
 
-func NewDownloadManager(ctx context.Context, maxActive int, limiter *apiRateLimiter, emit func(string, any)) *DownloadManager {
-	maxActive = normalizeMaxActive(maxActive)
-	return &DownloadManager{
+func NewManager(ctx context.Context, maxActive int, limiter *apputils.RateLimiter, emit func(string, any)) *Manager {
+	maxActive = apputils.NormalizeMaxActive(maxActive)
+	return &Manager{
 		ctx:       ctx,
 		client:    &http.Client{Timeout: 5 * time.Minute},
 		emit:      emit,
@@ -69,21 +71,21 @@ func NewDownloadManager(ctx context.Context, maxActive int, limiter *apiRateLimi
 	}
 }
 
-func (m *DownloadManager) SetMaxActive(maxActive int) {
+func (m *Manager) SetMaxActive(maxActive int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if maxActive > 0 {
-		m.maxActive = normalizeMaxActive(maxActive)
+		m.maxActive = apputils.NormalizeMaxActive(maxActive)
 	}
 	m.maybeStartLocked()
 }
 
-func (m *DownloadManager) Enqueue(tasks []downloadTask, maxActive int) QueueSnapshot {
+func (m *Manager) Enqueue(tasks []Task, maxActive int) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if maxActive > 0 {
-		m.maxActive = normalizeMaxActive(maxActive)
+		m.maxActive = apputils.NormalizeMaxActive(maxActive)
 	}
 	now := time.Now()
 	for _, task := range tasks {
@@ -93,7 +95,7 @@ func (m *DownloadManager) Enqueue(tasks []downloadTask, maxActive int) QueueSnap
 			created: now,
 			order:   order,
 			task:    task,
-			snapshot: DownloadJobSnapshot{
+			snapshot: types.DownloadJobSnapshot{
 				ID:           id,
 				SubmissionID: task.SubmissionID,
 				FileID:       task.FileID,
@@ -111,17 +113,17 @@ func (m *DownloadManager) Enqueue(tasks []downloadTask, maxActive int) QueueSnap
 
 	m.maybeStartLocked()
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) Snapshot() QueueSnapshot {
+func (m *Manager) Snapshot() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.snapshotLocked()
 }
 
-func (m *DownloadManager) Cancel(jobID string) QueueSnapshot {
+func (m *Manager) Cancel(jobID string) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -144,7 +146,7 @@ func (m *DownloadManager) Cancel(jobID string) QueueSnapshot {
 	return snapshot
 }
 
-func (m *DownloadManager) CancelSubmission(submissionID string) QueueSnapshot {
+func (m *Manager) CancelSubmission(submissionID string) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -174,12 +176,12 @@ func (m *DownloadManager) CancelSubmission(submissionID string) QueueSnapshot {
 
 	snapshot := m.snapshotLocked()
 	if changed {
-		m.emitLocked(snapshot, DownloadJobSnapshot{})
+		m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	}
 	return snapshot
 }
 
-func (m *DownloadManager) Retry(jobID string) QueueSnapshot {
+func (m *Manager) Retry(jobID string) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -195,7 +197,7 @@ func (m *DownloadManager) Retry(jobID string) QueueSnapshot {
 	return snapshot
 }
 
-func (m *DownloadManager) RetrySubmission(submissionID string) QueueSnapshot {
+func (m *Manager) RetrySubmission(submissionID string) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -223,11 +225,11 @@ func (m *DownloadManager) RetrySubmission(submissionID string) QueueSnapshot {
 	}
 	m.maybeStartLocked()
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) RetryAll() QueueSnapshot {
+func (m *Manager) RetryAll() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -245,11 +247,11 @@ func (m *DownloadManager) RetryAll() QueueSnapshot {
 
 	m.maybeStartLocked()
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) PauseAll() QueueSnapshot {
+func (m *Manager) PauseAll() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -269,11 +271,11 @@ func (m *DownloadManager) PauseAll() QueueSnapshot {
 	}
 
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) ResumeAll() QueueSnapshot {
+func (m *Manager) ResumeAll() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -284,11 +286,11 @@ func (m *DownloadManager) ResumeAll() QueueSnapshot {
 	m.paused = false
 	m.maybeStartLocked()
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) CancelAll() QueueSnapshot {
+func (m *Manager) CancelAll() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -314,12 +316,12 @@ func (m *DownloadManager) CancelAll() QueueSnapshot {
 
 	snapshot := m.snapshotLocked()
 	if changed {
-		m.emitLocked(snapshot, DownloadJobSnapshot{})
+		m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	}
 	return snapshot
 }
 
-func (m *DownloadManager) Clear() QueueSnapshot {
+func (m *Manager) Clear() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -334,11 +336,11 @@ func (m *DownloadManager) Clear() QueueSnapshot {
 	m.active = 0
 
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) ClearCompleted() QueueSnapshot {
+func (m *Manager) ClearCompleted() types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -350,11 +352,11 @@ func (m *DownloadManager) ClearCompleted() QueueSnapshot {
 	}
 
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) ClearCompletedSubmissions(submissionIDs []string) QueueSnapshot {
+func (m *Manager) ClearCompletedSubmissions(submissionIDs []string) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -397,11 +399,11 @@ func (m *DownloadManager) ClearCompletedSubmissions(submissionIDs []string) Queu
 	}
 
 	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, DownloadJobSnapshot{})
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
 }
 
-func (m *DownloadManager) maybeStartLocked() {
+func (m *Manager) maybeStartLocked() {
 	if m.paused {
 		return
 	}
@@ -421,7 +423,7 @@ func (m *DownloadManager) maybeStartLocked() {
 	}
 }
 
-func (m *DownloadManager) runJob(ctx context.Context, jobID string) {
+func (m *Manager) runJob(ctx context.Context, jobID string) {
 	err := m.download(ctx, jobID)
 
 	m.mu.Lock()
@@ -457,7 +459,7 @@ func (m *DownloadManager) runJob(ctx context.Context, jobID string) {
 	m.emitLocked(snapshot, job.snapshot)
 }
 
-func (m *DownloadManager) download(ctx context.Context, jobID string) error {
+func (m *Manager) download(ctx context.Context, jobID string) error {
 	m.mu.Lock()
 	job := m.jobs[jobID]
 	m.mu.Unlock()
@@ -503,8 +505,8 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 		return err
 	}
 
-	url := utils.ResourceURL(task.URL, task.SessionID, task.IsPublic)
-	sidURL := utils.AppendSID(task.URL, task.SessionID)
+	url := baseutils.ResourceURL(task.URL, task.SessionID, task.IsPublic)
+	sidURL := baseutils.AppendSID(task.URL, task.SessionID)
 
 	const maxAttempts = 5
 	var lastErr error
@@ -539,7 +541,7 @@ func (m *DownloadManager) download(ctx context.Context, jobID string) error {
 var errRetry = errors.New("retry")
 var errRetryWithSID = errors.New("retry with sid")
 
-func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, attempt int, task downloadTask, filename string, url string) error {
+func (m *Manager) downloadAttempt(ctx context.Context, jobID string, attempt int, task Task, filename string, url string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -560,7 +562,7 @@ func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, att
 		return errRetry
 	}
 	if resp.StatusCode != http.StatusOK {
-		if sidURL := utils.AppendSID(task.URL, task.SessionID); sidURL != "" && sidURL != url {
+		if sidURL := baseutils.AppendSID(task.URL, task.SessionID); sidURL != "" && sidURL != url {
 			return errRetryWithSID
 		}
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
@@ -618,7 +620,7 @@ func (m *DownloadManager) downloadAttempt(ctx context.Context, jobID string, att
 	return nil
 }
 
-func (m *DownloadManager) setAttempt(jobID string, attempt int) {
+func (m *Manager) setAttempt(jobID string, attempt int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	job := m.jobs[jobID]
@@ -631,7 +633,7 @@ func (m *DownloadManager) setAttempt(jobID string, attempt int) {
 	m.emitLocked(snapshot, job.snapshot)
 }
 
-func (m *DownloadManager) setProgress(jobID string, written, total int64) {
+func (m *Manager) setProgress(jobID string, written, total int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	job := m.jobs[jobID]
@@ -648,11 +650,11 @@ func (m *DownloadManager) setProgress(jobID string, written, total int64) {
 	m.emitLocked(snapshot, job.snapshot)
 }
 
-func (m *DownloadManager) snapshotLocked() QueueSnapshot {
+func (m *Manager) snapshotLocked() types.QueueSnapshot {
 	type orderedJob struct {
 		created  time.Time
 		order    uint64
-		snapshot DownloadJobSnapshot
+		snapshot types.DownloadJobSnapshot
 	}
 
 	jobs := make([]orderedJob, 0, len(m.jobs))
@@ -695,11 +697,11 @@ func (m *DownloadManager) snapshotLocked() QueueSnapshot {
 		return 1
 	})
 
-	snapshots := make([]DownloadJobSnapshot, 0, len(jobs))
+	snapshots := make([]types.DownloadJobSnapshot, 0, len(jobs))
 	for _, job := range jobs {
 		snapshots = append(snapshots, job.snapshot)
 	}
-	return QueueSnapshot{
+	return types.QueueSnapshot{
 		Jobs:           snapshots,
 		Paused:         m.paused,
 		QueuedCount:    queued,
@@ -710,17 +712,17 @@ func (m *DownloadManager) snapshotLocked() QueueSnapshot {
 	}
 }
 
-func (m *DownloadManager) emitLocked(snapshot QueueSnapshot, job DownloadJobSnapshot) {
+func (m *Manager) emitLocked(snapshot types.QueueSnapshot, job types.DownloadJobSnapshot) {
 	if m.emit == nil {
 		return
 	}
-	m.emit("download-progress", DownloadProgressEvent{
+	m.emit("download-progress", types.DownloadProgressEvent{
 		Job:   job,
 		Queue: snapshot,
 	})
 }
 
-func (m *DownloadManager) retryJobLocked(jobID string, job *downloadJob) {
+func (m *Manager) retryJobLocked(jobID string, job *downloadJob) {
 	if job == nil || job.snapshot.Status != "failed" {
 		return
 	}
@@ -728,7 +730,7 @@ func (m *DownloadManager) retryJobLocked(jobID string, job *downloadJob) {
 	m.requeueJobLocked(jobID, job)
 }
 
-func (m *DownloadManager) requeueJobLocked(jobID string, job *downloadJob) {
+func (m *Manager) requeueJobLocked(jobID string, job *downloadJob) {
 	if job == nil {
 		return
 	}

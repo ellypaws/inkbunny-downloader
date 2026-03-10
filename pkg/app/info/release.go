@@ -1,14 +1,14 @@
-package desktopapp
+package info
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
 )
 
 const defaultReleaseURL = "https://github.com/ellypaws/inkbunny-downloader/releases/latest"
@@ -24,13 +24,13 @@ type githubLatestRelease struct {
 	HTMLURL string `json:"html_url"`
 }
 
-func (a *App) GetReleaseStatus() ReleaseStatus {
+func GetReleaseStatus() types.ReleaseStatus {
 	currentVersion, ok := normalizeReleaseVersion(appVersion)
 	if !ok {
-		return ReleaseStatus{}
+		return types.ReleaseStatus{}
 	}
 
-	status := ReleaseStatus{
+	status := types.ReleaseStatus{
 		CurrentVersion: currentVersion,
 		CurrentTag:     releaseTagFromVersion(currentVersion),
 	}
@@ -68,21 +68,7 @@ func (a *App) GetReleaseStatus() ReleaseStatus {
 	return status
 }
 
-func (a *App) SkipReleaseTag(tag string) (AppSettings, error) {
-	normalized := normalizeReleaseTag(tag)
-	if normalized == "" {
-		return a.GetSession().Settings, errors.New("invalid release tag")
-	}
-
-	a.mu.Lock()
-	a.settings.SkippedReleaseTag = normalized
-	current := a.settings
-	a.mu.Unlock()
-
-	return current, a.persist()
-}
-
-func normalizeReleaseTag(tag string) string {
+func NormalizeReleaseTag(tag string) string {
 	version, ok := normalizeReleaseVersion(tag)
 	if !ok {
 		return ""

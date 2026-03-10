@@ -1,14 +1,14 @@
-package desktopapp
+package utils
 
 import (
 	"bytes"
-	"net/url"
 	"strings"
 
+	baseutils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 	"golang.org/x/net/html"
 )
 
-func normalizeSubmissionDescriptionHTML(markup string, sid string, isPublic bool) string {
+func NormalizeSubmissionDescriptionHTML(markup string, sid string, isPublic bool) string {
 	trimmed := strings.TrimSpace(markup)
 	if trimmed == "" {
 		return ""
@@ -61,12 +61,12 @@ func rewriteHTMLNodeResourceURLs(node *html.Node, sid string, isPublic bool) {
 }
 
 func resolveDescriptionAssetURL(raw string, sid string, isPublic bool) string {
-	absolute := normalizeInkbunnyURL(raw)
-	return submissionResourceURL(absolute, sid, isPublic)
+	absolute := NormalizeInkbunnyURL(raw)
+	return baseutils.ResourceURL(absolute, sid, isPublic)
 }
 
 func resolveDescriptionLinkURL(raw string) string {
-	return normalizeInkbunnyURL(raw)
+	return NormalizeInkbunnyURL(raw)
 }
 
 func resolveDescriptionSrcSet(raw string, sid string, isPublic bool) string {
@@ -90,32 +90,4 @@ func resolveDescriptionSrcSet(raw string, sid string, isPublic bool) string {
 		return raw
 	}
 	return strings.Join(rewritten, ", ")
-}
-
-func normalizeInkbunnyURL(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return raw
-	}
-	if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "data:") {
-		return trimmed
-	}
-	if strings.HasPrefix(trimmed, "//") {
-		return "https:" + trimmed
-	}
-
-	parsed, err := url.Parse(trimmed)
-	if err == nil && parsed.Scheme != "" {
-		return parsed.String()
-	}
-
-	if strings.HasPrefix(trimmed, "/") {
-		return "https://inkbunny.net" + trimmed
-	}
-
-	if err == nil && parsed.Host == "" {
-		return "https://inkbunny.net/" + strings.TrimPrefix(trimmed, "/")
-	}
-
-	return trimmed
 }

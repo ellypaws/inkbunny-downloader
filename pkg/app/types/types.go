@@ -1,4 +1,4 @@
-package desktopapp
+package types
 
 type SessionInfo struct {
 	HasSession     bool        `json:"hasSession"`
@@ -236,14 +236,14 @@ type BuildInfo struct {
 	IsDev          bool   `json:"isDev"`
 }
 
-type storedState struct {
+type StoredState struct {
 	Session   SessionInfo    `json:"session"`
-	User      sessionUser    `json:"user"`
+	User      SessionUser    `json:"user"`
 	Settings  AppSettings    `json:"settings"`
 	Workspace WorkspaceState `json:"workspace"`
 }
 
-type sessionUser struct {
+type SessionUser struct {
 	SID      string `json:"sid"`
 	Username string `json:"username"`
 	Ratings  string `json:"ratings"`

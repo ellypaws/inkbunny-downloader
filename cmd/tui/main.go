@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/buildinfo"
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/buildinfo"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/modes"
 )

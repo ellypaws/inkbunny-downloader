@@ -1,9 +1,11 @@
-package desktopapp
+package state
 
 import (
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
 )
 
 const backendDebugEventName = "app-debug-log"
@@ -12,7 +14,7 @@ func (a *App) emitDebugLog(level, scope, message string, fields map[string]any) 
 	if a.ctx == nil {
 		return
 	}
-	wruntime.EventsEmit(a.ctx, backendDebugEventName, BackendDebugEvent{
+	wruntime.EventsEmit(a.ctx, backendDebugEventName, types.BackendDebugEvent{
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Level:     normalizeDebugLevel(level),
 		Scope:     scope,
@@ -61,7 +63,7 @@ func withDebugError(fields map[string]any, err error) map[string]any {
 	return next
 }
 
-func debugSearchParamsFields(params SearchParams) map[string]any {
+func debugSearchParamsFields(params types.SearchParams) map[string]any {
 	return map[string]any{
 		"query":               params.Query,
 		"joinType":            params.JoinType,
