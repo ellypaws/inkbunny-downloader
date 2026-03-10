@@ -104,6 +104,8 @@ type ThumbnailSourceInput = {
   thumbMediumNonCustomX?: number;
   thumbLargeNonCustomX?: number;
   thumbHugeNonCustomX?: number;
+  previewUrl?: string;
+  screenUrl?: string;
   fullUrl?: string;
 };
 
@@ -1124,16 +1126,29 @@ function getSubmissionModalMediaItems(
 ) {
   const mediaFiles = submission.mediaFiles ?? [];
   if (mediaFiles.length > 0) {
-    return mediaFiles.map((file, index) => ({
-      key: file.fileId || `${submission.submissionId}-${index}`,
-      alt: `${submission.title} - page ${index + 1}`,
-      label: `Page ${index + 1}`,
-      fileName: file.fileName,
-      mimeType: file.mimeType,
-      sources: getMediaFilePreviewSources(file, preferCustomThumbnails),
-      thumbnail: getThumbnailPreviewSource(file, preferCustomThumbnails),
-    }));
+    return mediaFiles.map((file, index) => {
+      const thumbnailSources = dedupePreviewSources([
+        ...getThumbnailFallbackSources(file, preferCustomThumbnails),
+        toPreviewSource(file.fullUrl),
+      ]);
+
+      return {
+        key: file.fileId || `${submission.submissionId}-${index}`,
+        alt: `${submission.title} - page ${index + 1}`,
+        label: `Page ${index + 1}`,
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        sources: getMediaFilePreviewSources(file, preferCustomThumbnails),
+        thumbnailSources,
+        thumbnail: thumbnailSources[0] ?? null,
+      };
+    });
   }
+
+  const thumbnailSources = dedupePreviewSources([
+    ...getThumbnailFallbackSources(submission, preferCustomThumbnails),
+    toPreviewSource(submission.fullUrl),
+  ]);
 
   return [
     {
@@ -1146,7 +1161,8 @@ function getSubmissionModalMediaItems(
         submission,
         preferCustomThumbnails,
       ),
-      thumbnail: getThumbnailPreviewSource(submission, preferCustomThumbnails),
+      thumbnailSources,
+      thumbnail: thumbnailSources[0] ?? null,
     },
   ];
 }
@@ -1184,33 +1200,17 @@ function getPreviewSources(
   preferCustomThumbnails = true,
   preferredWidth = 0,
 ) {
-  const thumbnailSource = getThumbnailPreviewSource(
-    submission,
-    preferCustomThumbnails,
-    variant === "full",
-    preferredWidth,
-  );
-
-  const ordered =
-    variant === "full"
-      ? [
-          thumbnailSource,
-          toPreviewSource(submission.latestThumbnailUrl),
-          toPreviewSource(submission.previewUrl),
-          toPreviewSource(submission.latestPreviewUrl),
-          toPreviewSource(submission.screenUrl),
-          toPreviewSource(submission.fullUrl),
-        ]
-      : [
-          thumbnailSource,
-          toPreviewSource(submission.previewUrl),
-          toPreviewSource(submission.latestPreviewUrl),
-          toPreviewSource(submission.screenUrl),
-          toPreviewSource(submission.fullUrl),
-          toPreviewSource(submission.latestThumbnailUrl),
-        ];
-
-  return dedupePreviewSources(ordered);
+  return dedupePreviewSources([
+    ...getThumbnailFallbackSources(
+      submission,
+      preferCustomThumbnails,
+      variant === "full",
+      preferredWidth,
+    ),
+    toPreviewSource(submission.latestPreviewUrl),
+    toPreviewSource(submission.latestThumbnailUrl),
+    toPreviewSource(submission.fullUrl),
+  ]);
 }
 
 function getSubmissionPreviewKey(
@@ -1290,6 +1290,24 @@ function getThumbnailPreviewSource(
     src: primary.src,
     srcSet: srcSet || undefined,
   };
+}
+
+function getThumbnailFallbackSources(
+  item: ThumbnailSourceInput,
+  preferCustomThumbnails: boolean,
+  includeFullFileURL = false,
+  preferredWidth = 0,
+) {
+  return dedupePreviewSources([
+    getThumbnailPreviewSource(
+      item,
+      preferCustomThumbnails,
+      includeFullFileURL,
+      preferredWidth,
+    ),
+    toPreviewSource(item.screenUrl),
+    toPreviewSource(item.previewUrl),
+  ]);
 }
 
 function getPrimaryThumbnailVariant(

@@ -46,6 +46,7 @@ export type SubmissionModalMediaItem = {
   fileName?: string;
   mimeType?: string;
   sources: SubmissionModalPreviewSource[];
+  thumbnailSources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
 };
 
@@ -729,13 +730,10 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                           : "border-[var(--theme-border-soft)] opacity-75 hover:border-[var(--theme-border)] hover:opacity-100"
                       }`}
                     >
-                      {item.thumbnail?.src ? (
-                        <img
-                          src={item.thumbnail.src}
-                          srcSet={item.thumbnail.srcSet}
+                      {item.thumbnailSources.length > 0 ? (
+                        <ModalThumbnailImage
+                          sources={item.thumbnailSources}
                           alt={item.alt}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -838,6 +836,45 @@ function SubmissionModalImage(props: {
         />
       </div>
     </div>
+  );
+}
+
+function ModalThumbnailImage(props: {
+  sources: SubmissionModalPreviewSource[];
+  alt: string;
+  className: string;
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const sourcesKey = useMemo(
+    () =>
+      props.sources
+        .map((item) => `${item.src}|${item.srcSet ?? ""}`)
+        .join("||"),
+    [props.sources],
+  );
+  const source = props.sources[sourceIndex];
+
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [sourcesKey]);
+
+  if (!source?.src) {
+    return null;
+  }
+
+  return (
+    <img
+      key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
+      src={source.src}
+      srcSet={source.srcSet}
+      alt={props.alt}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => {
+        setSourceIndex((current) => current + 1);
+      }}
+      className={props.className}
+    />
   );
 }
 
