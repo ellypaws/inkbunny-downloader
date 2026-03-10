@@ -66,6 +66,45 @@ func ResolveDestinations(
 	return uniqueNonEmptyPaths(destinations)
 }
 
+func ResolveOpenDirectory(root, pattern string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(root))
+	if cleanRoot == "" {
+		return ""
+	}
+
+	normalizedPattern := strings.ReplaceAll(NormalizePattern(pattern), "\\", "/")
+	rawParts := strings.Split(normalizedPattern, "/")
+	segments := make([]string, 0, len(rawParts))
+	foundDynamicSegment := false
+
+	for _, rawPart := range rawParts {
+		part := strings.TrimSpace(rawPart)
+		if part == "" {
+			continue
+		}
+		if downloadPatternTokenRE.MatchString(part) {
+			foundDynamicSegment = true
+			break
+		}
+
+		rendered := sanitizePathComponent(part)
+		if rendered == "" {
+			continue
+		}
+		segments = append(segments, rendered)
+	}
+
+	if !foundDynamicSegment && len(segments) > 0 {
+		segments = segments[:len(segments)-1]
+	}
+
+	if len(segments) == 0 {
+		return cleanRoot
+	}
+
+	return filepath.Clean(filepath.Join(cleanRoot, filepath.Join(segments...)))
+}
+
 func SubmissionFilesDownloaded(root, pattern string, submission inkbunny.SubmissionDetails) bool {
 	if len(submission.Files) == 0 {
 		return false

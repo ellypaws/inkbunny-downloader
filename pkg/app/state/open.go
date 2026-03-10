@@ -8,6 +8,8 @@ import (
 
 	"github.com/pkg/browser"
 
+	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/downloads"
+
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/storage"
 	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
 )
@@ -15,12 +17,17 @@ import (
 func (a *App) OpenDownloadDirectory() error {
 	a.mu.RLock()
 	target := a.settings.DownloadDirectory
+	pattern := a.settings.DownloadPattern
 	a.mu.RUnlock()
 
 	target = strings.TrimSpace(target)
 	if target == "" {
 		target = storage.DefaultDownloadDirectory()
 	}
+	if target == "" {
+		return errors.New("download folder not set")
+	}
+	target = downloads.ResolveOpenDirectory(target, pattern)
 	if target == "" {
 		return errors.New("download folder not set")
 	}
