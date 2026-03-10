@@ -456,7 +456,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   return (
     <section className="relative mt-4">
-      <h1 className="pointer-events-none relative z-20 -mb-12 block w-full max-w-[945px] break-words text-left font-teko text-[68px] leading-[0.82] font-bold text-white drop-shadow-sm antialiased sm:-mb-16 sm:text-[92px] lg:-mb-[130px] lg:text-[144px] lg:leading-[118.8px] lg:-rotate-2 lg:tracking-[-0.02em] lg:origin-left">
+      <h1 className="pointer-events-none relative z-20 -mb-12 -translate-y-10 block w-full max-w-[945px] break-words text-left font-teko text-[68px] leading-[0.82] font-bold text-white drop-shadow-sm antialiased sm:-mb-16 sm:translate-y-0 sm:text-[92px] lg:-mb-[130px] lg:text-[144px] lg:leading-[118.8px] -rotate-2 lg:tracking-[-0.02em] lg:origin-left">
         Preview
       </h1>
 

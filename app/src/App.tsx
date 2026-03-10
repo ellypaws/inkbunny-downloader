@@ -2546,7 +2546,7 @@ export default function App() {
           onClose={() => setLoginOpen(false)}
           onSubmit={() => void handleLogin()}
         />
-        <main className="relative z-10 pt-18 md:pt-32 max-w-[1560px] mx-auto pb-20 px-4 md:px-8 space-y-8">
+        <main className="relative z-10 pt-8 md:pt-32 max-w-[1560px] mx-auto pb-20 px-4 md:px-8 space-y-8">
           <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
             <SearchWorkspace
               session={session}
