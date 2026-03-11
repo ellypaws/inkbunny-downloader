@@ -212,6 +212,13 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
     );
   }
 
+  function handleOpenFolderClick() {
+    if (shouldAnimateFolderOnly()) {
+      return;
+    }
+    props.onOpenDownloadFolder();
+  }
+
   return (
     <section
       className="theme-panel relative overflow-visible rounded-toy-sm border p-3.5 shadow-pop backdrop-blur-2xl sm:p-5 md:min-h-[95vh] md:p-6"
@@ -258,7 +265,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           <div className="flex flex-wrap gap-2.5 overflow-visible">
             <button
               type="button"
-              onClick={props.onOpenDownloadFolder}
+              onClick={handleOpenFolderClick}
               disabled={!props.canOpenDownloadFolder}
               className="relative z-30 flex h-12 w-14 items-center justify-center overflow-visible px-1 py-1 transition-transform motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:opacity-45"
               aria-label="Open download folder"
@@ -640,6 +647,13 @@ function QueueThumbnail(props: { src?: string; alt: string }) {
       }}
       className="h-10 w-10 shrink-0 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] object-cover sm:h-12 sm:w-12"
     />
+  );
+}
+
+function shouldAnimateFolderOnly() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(hover: none), (pointer: coarse)").matches
   );
 }
 

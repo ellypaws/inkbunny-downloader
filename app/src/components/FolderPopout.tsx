@@ -1,8 +1,9 @@
 "use client";
 
 import { Brush, Image, Video } from "lucide-react";
+import { gsap } from "gsap";
 import { motion } from "motion/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveMediaURL } from "../lib/wails";
 
@@ -14,6 +15,7 @@ type FolderPopoutProps = {
   hoverCardSize?: { width: number; height: number };
   hydratedHoverCardSize?: { width: number; height: number };
   hoverTranslateY?: number;
+  hydratedHoverTranslateY?: number;
   hoverSpread?: number;
   hoverRotation?: number;
 };
@@ -40,27 +42,106 @@ export default function FolderPopout({
   teaserCardSize = { width: 22, height: 16 },
   hoverCardSize = { width: 50, height: 36 },
   hydratedHoverCardSize = { width: 140, height: 108 },
-  hoverTranslateY = -110,
+  hoverTranslateY = -50,
+  hydratedHoverTranslateY = -110,
   hoverSpread = 20,
   hoverRotation = 14,
 }: FolderPopoutProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isTouchPreviewOpen, setIsTouchPreviewOpen] = useState(false);
+  const [activeCardIndex, setActiveCardIndex] = useState<number | null>(null);
   const cards = useMemo(() => buildFolderCards(images), [images]);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const cardInnerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const touchPreviewTimeoutRef = useRef<number | null>(null);
   const hasHydratedImages = cards.some((card) => card.kind === "image");
   const activeHoverCardSize = hasHydratedImages
     ? hydratedHoverCardSize
     : hoverCardSize;
+  const activeHoverTranslateY = hasHydratedImages
+    ? hydratedHoverTranslateY
+    : hoverTranslateY;
+  const isExpanded = isHovered || isTouchPreviewOpen;
   const tabWidth = folderSize.width * 0.38;
   const tabHeight = folderSize.height * 0.26;
+  const bridgeTop = Math.min(activeHoverTranslateY + activeHoverCardSize.height - 14, -16);
+  const bridgeHeight = Math.max(folderSize.height - bridgeTop - 8, folderSize.height + 12);
+  const bridgeWidth = Math.max(folderSize.width + 8, 30);
+
+  useEffect(() => {
+    return () => {
+      if (touchPreviewTimeoutRef.current !== null) {
+        window.clearTimeout(touchPreviewTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    cardInnerRefs.current.forEach((card, index) => {
+      if (!card) {
+        return;
+      }
+      const isActive = isExpanded && activeCardIndex === index;
+      gsap.to(card, {
+        y: 0,
+        scale: isActive ? 1.03 : 1,
+        rotate: 0,
+        boxShadow: isActive
+          ? "0 18px 36px rgba(15, 23, 42, 0.28)"
+          : "0 4px 10px rgba(15, 23, 42, 0.14)",
+        duration: isActive ? 0.24 : 0.2,
+        ease: "power3.out",
+        overwrite: "auto",
+      });
+    });
+  }, [activeCardIndex, isExpanded]);
+
+  function resetPreviewState() {
+    setIsHovered(false);
+    setIsTouchPreviewOpen(false);
+    setActiveCardIndex(null);
+    if (touchPreviewTimeoutRef.current !== null) {
+      window.clearTimeout(touchPreviewTimeoutRef.current);
+      touchPreviewTimeoutRef.current = null;
+    }
+  }
+
+  function triggerTouchPreview(index: number | null = null) {
+    setIsTouchPreviewOpen(true);
+    setActiveCardIndex(index);
+    if (touchPreviewTimeoutRef.current !== null) {
+      window.clearTimeout(touchPreviewTimeoutRef.current);
+    }
+    touchPreviewTimeoutRef.current = window.setTimeout(() => {
+      setIsTouchPreviewOpen(false);
+      setActiveCardIndex(null);
+      touchPreviewTimeoutRef.current = null;
+    }, 1200);
+  }
 
   return (
     <div
-      className={`inline-flex items-center justify-center perspective-[1000px] transform-3d ${className ?? ""}`}
+      className={`relative inline-flex items-center justify-center perspective-[1000px] transform-3d ${className ?? ""}`}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => resetPreviewState()}
+      onPointerDown={(event) => {
+        if (event.pointerType === "mouse") {
+          return;
+        }
+        triggerTouchPreview(activeCardIndex);
+      }}
     >
+      <div
+        aria-hidden="true"
+        className="absolute left-1/2 z-0 -translate-x-1/2"
+        style={{
+          top: bridgeTop,
+          width: bridgeWidth,
+          height: bridgeHeight,
+        }}
+      />
       <motion.div
-        className="relative"
+        className="relative z-10"
         style={{
           width: folderSize.width,
           height: folderSize.height,
@@ -86,7 +167,7 @@ export default function FolderPopout({
               : totalCards === 2
                 ? (index - 0.5) * hoverRotation
                 : (index - 1) * hoverRotation;
-          const hoverY = hoverTranslateY - (totalCards - 1 - index) * 3;
+          const hoverY = activeHoverTranslateY - (totalCards - 1 - index) * 3;
           const hoverX =
             totalCards === 1
               ? 0
@@ -108,15 +189,18 @@ export default function FolderPopout({
                   ? `${card.sources[0] ?? "image"}-${index}`
                   : `${card.placeholder}-${index}`
               }
+              ref={(node) => {
+                cardRefs.current[index] = node;
+              }}
               className="absolute left-1/2 top-0.5 origin-bottom overflow-hidden rounded-[4px] border border-black/10 bg-white shadow-sm shadow-black/10 ring-1 ring-black/8 dark:border-white/10 dark:bg-neutral-900 dark:shadow-white/8 dark:ring-white/8"
               animate={{
-                x: `calc(-50% + ${isHovered ? hoverX : 0}px)`,
-                y: isHovered ? hoverY : teaseY,
-                rotate: isHovered ? baseRotation : teaseRotation,
-                width: isHovered
+                x: `calc(-50% + ${isExpanded ? hoverX : 0}px)`,
+                y: isExpanded ? hoverY : teaseY,
+                rotate: isExpanded ? baseRotation : teaseRotation,
+                width: isExpanded
                   ? activeHoverCardSize.width
                   : teaserCardSize.width,
-                height: isHovered
+                height: isExpanded
                   ? activeHoverCardSize.height
                   : teaserCardSize.height,
               }}
@@ -127,10 +211,34 @@ export default function FolderPopout({
                 delay: index * 0.03,
               }}
               style={{
-                zIndex: 10 + index,
+                zIndex:
+                  activeCardIndex === index && isExpanded
+                    ? 40 + cards.length
+                    : 10 + index,
+              }}
+              onMouseEnter={() => {
+                setIsHovered(true);
+                setActiveCardIndex(index);
+              }}
+              onMouseLeave={() => {
+                setActiveCardIndex((current) => (current === index ? null : current));
+              }}
+              onPointerDown={(event) => {
+                if (event.pointerType === "mouse") {
+                  return;
+                }
+                triggerTouchPreview(index);
               }}
             >
-              <FolderCardFace card={card} />
+              <div
+                ref={(node) => {
+                  cardInnerRefs.current[index] = node;
+                }}
+                className="h-full w-full"
+                style={{ willChange: "transform" }}
+              >
+                <FolderCardFace card={card} />
+              </div>
             </motion.div>
           );
         })}
@@ -138,8 +246,8 @@ export default function FolderPopout({
         <motion.div
           className="absolute inset-x-0 bottom-0 h-[85%] origin-bottom rounded-[5px] bg-gradient-to-b from-amber-300 to-amber-400 shadow-sm dark:from-amber-400 dark:to-amber-500"
           animate={{
-            rotateX: isHovered ? -45 : -25,
-            scaleY: isHovered ? 0.8 : 1,
+            rotateX: isExpanded ? -45 : -25,
+            scaleY: isExpanded ? 0.8 : 1,
           }}
           transition={{
             type: "spring",

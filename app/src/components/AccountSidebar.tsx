@@ -91,6 +91,13 @@ export function AccountSidebar(props: AccountSidebarProps) {
     }, 180);
   }
 
+  function handleOpenFolderClick() {
+    if (shouldAnimateFolderOnly()) {
+      return;
+    }
+    props.onOpenDownloadFolder();
+  }
+
   return (
     <aside className="xl:sticky xl:top-28">
       <div className="relative rounded-toy-lg bg-gradient-to-b from-[#FF34A5]/75 to-[#00A372]/75 p-1 shadow-pop">
@@ -204,7 +211,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={props.onOpenDownloadFolder}
+                  onClick={handleOpenFolderClick}
                   disabled={!props.canOpenDownloadFolder}
                   className="flex h-12 w-14 shrink-0 items-center justify-center overflow-visible rounded-2xl transition-transform motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45"
                   aria-label="Open download folder"
@@ -312,6 +319,13 @@ export function AccountSidebar(props: AccountSidebarProps) {
         </div>
       </div>
     </aside>
+  );
+}
+
+function shouldAnimateFolderOnly() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(hover: none), (pointer: coarse)").matches
   );
 }
 
