@@ -64,8 +64,14 @@ export default function FolderPopout({
   const isExpanded = isHovered || isTouchPreviewOpen;
   const tabWidth = folderSize.width * 0.38;
   const tabHeight = folderSize.height * 0.26;
-  const bridgeTop = Math.min(activeHoverTranslateY + activeHoverCardSize.height - 14, -16);
-  const bridgeHeight = Math.max(folderSize.height - bridgeTop - 8, folderSize.height + 12);
+  const bridgeTop = Math.min(
+    activeHoverTranslateY + activeHoverCardSize.height - 14,
+    -16,
+  );
+  const bridgeHeight = Math.max(
+    folderSize.height - bridgeTop - 8,
+    folderSize.height + 12,
+  );
   const bridgeWidth = Math.max(folderSize.width + 8, 30);
 
   useEffect(() => {
@@ -221,7 +227,9 @@ export default function FolderPopout({
                 setActiveCardIndex(index);
               }}
               onMouseLeave={() => {
-                setActiveCardIndex((current) => (current === index ? null : current));
+                setActiveCardIndex((current) =>
+                  current === index ? null : current,
+                );
               }}
               onPointerDown={(event) => {
                 if (event.pointerType === "mouse") {

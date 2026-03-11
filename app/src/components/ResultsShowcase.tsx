@@ -45,6 +45,7 @@ type ResultsShowcaseProps = {
   activeSubmissionId: string;
   selectedSubmissionIds: string[];
   showCustomThumbnails: boolean;
+  showSubmissionDetails: boolean;
   showEngagementStats?: boolean;
   allSelected: boolean;
   loading: boolean;
@@ -62,6 +63,7 @@ type ResultsShowcaseProps = {
   onToggleSelectAll: () => void;
   onToggleSelection: (submissionId: string) => void;
   onShowCustomThumbnailsChange: (enabled: boolean) => void;
+  onShowSubmissionDetailsChange: (enabled: boolean) => void;
   onDownloadSubmission: (submissionId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
   onRetrySubmission: (submissionId: string) => void;
@@ -112,6 +114,7 @@ type ThumbnailSourceInput = {
 const PANEL_WINDOW_SIZE = 5;
 const RESULT_GRID_GAP = 12;
 const RESULT_CARD_CHROME_HEIGHT = 152;
+const RESULT_CARD_COMPACT_CHROME_HEIGHT = 116;
 const IDLE_DOWNLOAD_SUMMARY: SubmissionDownloadSummary = {
   state: "idle",
   progress: 0,
@@ -197,8 +200,14 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         resultsGridWidth,
         resultColumnCount,
         gridCardWidth,
+        props.showSubmissionDetails,
       ),
-    [gridCardWidth, resultColumnCount, resultsGridWidth],
+    [
+      gridCardWidth,
+      props.showSubmissionDetails,
+      resultColumnCount,
+      resultsGridWidth,
+    ],
   );
   const resultCardWidth = useMemo(
     () =>
@@ -802,6 +811,35 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     Custom Thumbnails
                   </span>
                 </label>
+                <label className="theme-panel-strong flex items-center gap-3 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md">
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-5 w-5 items-center justify-center rounded-[0.35rem] border ${
+                      props.showSubmissionDetails
+                        ? "border-[#76B900] bg-[#76B900] text-white"
+                        : "border-[var(--theme-subtle)] bg-transparent text-transparent"
+                    }`}
+                  >
+                    <Check size={12} />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={props.showSubmissionDetails}
+                    onChange={(event) =>
+                      props.onShowSubmissionDetailsChange(
+                        event.target.checked,
+                      )
+                    }
+                    className="sr-only"
+                  />
+                  <span className="inline-flex items-center gap-2">
+                    <FileText
+                      size={14}
+                      className="text-[var(--theme-info)]"
+                    />
+                    Submission Details
+                  </span>
+                </label>
               </div>
             </div>
           </div>
@@ -907,100 +945,40 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                 </div>
                               </div>
 
-                              <div className="space-y-2.5 p-3">
-                                <div className="min-w-0">
-                                  <ExternalActionButton
-                                    url={item.submissionUrl}
-                                    className="theme-title block truncate text-left text-[13px] font-black transition-colors hover:text-[var(--theme-info)]"
-                                  >
-                                    {item.title}
-                                  </ExternalActionButton>
-                                  <div className="mt-1 flex items-center justify-between gap-2">
-                                    <SubmissionAuthorButton
-                                      submission={item}
-                                      compact
-                                      className="theme-muted min-w-0 flex-1 text-[10px] font-bold"
-                                    />
-                                    <div className="theme-subtle shrink-0 text-[10px] font-semibold">
-                                      {item.ratingName || "Unrated"}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center justify-between gap-3">
-                                  {props.showEngagementStats ? (
-                                    <SubmissionEngagementStats
-                                      submission={item}
-                                      compact
-                                      className="theme-subtle text-[10px] font-semibold"
-                                    />
-                                  ) : (
-                                    <div className="h-5" />
-                                  )}
-                                  <div className="flex items-center gap-2">
-                                    <GridDownloadButton
-                                      title={item.title}
-                                      summary={downloadSummary}
-                                      cancellable={cancellable}
-                                      retryable={retryable}
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        if (cancellable) {
-                                          props.onCancelSubmission(
-                                            item.submissionId,
-                                          );
-                                          return;
-                                        }
-                                        if (retryable) {
-                                          props.onRetrySubmission(
-                                            item.submissionId,
-                                          );
-                                          return;
-                                        }
-                                        props.onDownloadSubmission(
-                                          item.submissionId,
-                                        );
-                                      }}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        props.onToggleSelection(
-                                          item.submissionId,
-                                        );
-                                      }}
-                                      disabled={downloaded}
-                                      aria-label={
-                                        selected
-                                          ? `Remove ${item.title} from selection`
-                                          : `Select ${item.title}`
-                                      }
-                                      className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${
-                                        downloaded
-                                          ? "pointer-events-none w-0 scale-75 opacity-0"
-                                          : selected
-                                            ? "bg-[#73D216] text-white"
-                                            : "bg-[#D9DDD3]/92 text-[#555753] hover:bg-[#CFE8AE] hover:text-[#4E9A06]"
-                                      }`}
-                                      data-tour-anchor={
-                                        item.submissionId ===
-                                        firstSelectableSubmissionId
-                                          ? "select-result"
-                                          : undefined
-                                      }
-                                    >
-                                      {downloaded ? (
-                                        <Check size={14} />
-                                      ) : selected ? (
-                                        <Check size={14} />
-                                      ) : (
-                                        <Plus size={14} />
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
+                              <SubmissionDetails
+                                submission={item}
+                                summary={downloadSummary}
+                                cancellable={cancellable}
+                                retryable={retryable}
+                                downloaded={downloaded}
+                                selected={selected}
+                                showEngagementStats={props.showEngagementStats}
+                                showDetails={props.showSubmissionDetails}
+                                isFirstSelectable={
+                                  item.submissionId ===
+                                  firstSelectableSubmissionId
+                                }
+                                onDownload={(event) => {
+                                  event.stopPropagation();
+                                  if (cancellable) {
+                                    props.onCancelSubmission(
+                                      item.submissionId,
+                                    );
+                                    return;
+                                  }
+                                  if (retryable) {
+                                    props.onRetrySubmission(
+                                      item.submissionId,
+                                    );
+                                    return;
+                                  }
+                                  props.onDownloadSubmission(item.submissionId);
+                                }}
+                                onToggleSelection={(event) => {
+                                  event.stopPropagation();
+                                  props.onToggleSelection(item.submissionId);
+                                }}
+                              />
                             </article>
                           );
                         })}
@@ -1089,6 +1067,98 @@ function SubmissionPreview(props: {
       }
       refreshToken={props.refreshToken}
     />
+  );
+}
+
+function SubmissionDetails(props: {
+  submission: SubmissionCard;
+  summary: SubmissionDownloadSummary;
+  cancellable: boolean;
+  retryable: boolean;
+  downloaded: boolean;
+  selected: boolean;
+  showEngagementStats?: boolean;
+  showDetails: boolean;
+  isFirstSelectable: boolean;
+  onDownload: MouseEventHandler<HTMLButtonElement>;
+  onToggleSelection: MouseEventHandler<HTMLButtonElement>;
+}) {
+  return (
+    <div className="p-3">
+      <div className="min-w-0">
+        <ExternalActionButton
+          url={props.submission.submissionUrl}
+          className="theme-title block truncate text-left text-[13px] font-black transition-colors hover:text-[var(--theme-info)]"
+        >
+          {props.submission.title}
+        </ExternalActionButton>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <SubmissionAuthorButton
+            submission={props.submission}
+            compact
+            className="theme-muted min-w-0 flex-1 text-[10px] font-bold"
+          />
+          <div className="theme-subtle shrink-0 text-[10px] font-semibold">
+            {props.submission.ratingName || "Unrated"}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`flex items-center gap-3 ${
+          props.showDetails ? "mt-2.5 justify-between" : "mt-2 justify-end"
+        }`}
+      >
+        {props.showDetails ? (
+          props.showEngagementStats ? (
+            <SubmissionEngagementStats
+              submission={props.submission}
+              compact
+              className="theme-subtle text-[10px] font-semibold"
+            />
+          ) : (
+            <div className="h-5" />
+          )
+        ) : null}
+        <div className="flex items-center gap-2">
+          <GridDownloadButton
+            title={props.submission.title}
+            summary={props.summary}
+            cancellable={props.cancellable}
+            retryable={props.retryable}
+            onClick={props.onDownload}
+          />
+          <button
+            type="button"
+            onClick={props.onToggleSelection}
+            disabled={props.downloaded}
+            aria-label={
+              props.selected
+                ? `Remove ${props.submission.title} from selection`
+                : `Select ${props.submission.title}`
+            }
+            className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${
+              props.downloaded
+                ? "pointer-events-none w-0 scale-75 opacity-0"
+                : props.selected
+                  ? "bg-[#73D216] text-white"
+                  : "bg-[#D9DDD3]/92 text-[#555753] hover:bg-[#CFE8AE] hover:text-[#4E9A06]"
+            }`}
+            data-tour-anchor={
+              props.isFirstSelectable ? "select-result" : undefined
+            }
+          >
+            {props.downloaded ? (
+              <Check size={14} />
+            ) : props.selected ? (
+              <Check size={14} />
+            ) : (
+              <Plus size={14} />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1462,12 +1532,22 @@ function SubmissionAuthorButton(props: {
   className?: string;
   compact?: boolean;
 }) {
-  const avatarSrc =
+  const preferredAvatarSrc =
     props.submission.userIconUrlMedium ||
     props.submission.userIconUrlSmall ||
     props.submission.userIconUrlLarge ||
     DEFAULT_AVATAR_URL;
-  const avatarSrcSet = buildAvatarSrcSet(props.submission);
+  const preferredAvatarSrcSet = buildAvatarSrcSet(props.submission);
+  const [avatarErrored, setAvatarErrored] = useState(false);
+
+  useEffect(() => {
+    setAvatarErrored(false);
+  }, [
+    props.submission.submissionId,
+    props.submission.userIconUrlLarge,
+    props.submission.userIconUrlMedium,
+    props.submission.userIconUrlSmall,
+  ]);
 
   return (
     <button
@@ -1481,16 +1561,21 @@ function SubmissionAuthorButton(props: {
       } ${props.className ?? ""}`}
     >
       <img
-        src={resolveMediaURL(avatarSrc) ?? avatarSrc}
-        srcSet={resolveMediaSrcSet(avatarSrcSet || undefined)}
+        src={
+          avatarErrored
+            ? DEFAULT_AVATAR_URL
+            : (resolveMediaURL(preferredAvatarSrc) ?? preferredAvatarSrc)
+        }
+        srcSet={
+          avatarErrored
+            ? undefined
+            : resolveMediaSrcSet(preferredAvatarSrcSet || undefined)
+        }
         sizes={props.compact ? "24px" : "32px"}
         alt={props.submission.username}
         loading="lazy"
         referrerPolicy="no-referrer"
-        onError={(event) => {
-          event.currentTarget.src = DEFAULT_AVATAR_URL;
-          event.currentTarget.srcset = "";
-        }}
+        onError={() => setAvatarErrored(true)}
         className={`shrink-0 rounded-full border border-white/70 bg-white object-cover ${
           props.compact ? "h-5 w-5" : "h-8 w-8"
         }`}
@@ -1625,6 +1710,7 @@ function estimateResultRowHeight(
   containerWidth: number,
   columnCount: number,
   targetCardWidth: number,
+  showSubmissionDetails: boolean,
 ) {
   const cardWidth = getVirtualGridCardWidth(
     containerWidth,
@@ -1632,7 +1718,12 @@ function estimateResultRowHeight(
     targetCardWidth,
   );
 
-  return cardWidth * 0.8 + RESULT_CARD_CHROME_HEIGHT;
+  return (
+    cardWidth * 0.8 +
+    (showSubmissionDetails
+      ? RESULT_CARD_CHROME_HEIGHT
+      : RESULT_CARD_COMPACT_CHROME_HEIGHT)
+  );
 }
 
 function getVirtualGridCardWidth(

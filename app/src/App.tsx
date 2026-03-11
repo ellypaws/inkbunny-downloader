@@ -2998,6 +2998,7 @@ export default function App() {
                 if (!activeTab) {
                   return;
                 }
+                markWorkspaceInputEdit(activeTab.id);
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   searchCollapsed: !currentTab.searchCollapsed,
@@ -3077,6 +3078,7 @@ export default function App() {
               activeSubmissionId={activeSubmissionId}
               selectedSubmissionIds={activeSelectedSubmissionIds}
               showCustomThumbnails={activeTab?.showCustomThumbnails ?? true}
+              showSubmissionDetails={activeTab?.showSubmissionDetails ?? true}
               showEngagementStats
               allSelected={allResultsSelected}
               loading={activeSearchBusy}
@@ -3115,9 +3117,20 @@ export default function App() {
                 if (!activeTab) {
                   return;
                 }
+                markWorkspaceInputEdit(activeTab.id);
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   showCustomThumbnails: enabled,
+                }));
+              }}
+              onShowSubmissionDetailsChange={(enabled) => {
+                if (!activeTab) {
+                  return;
+                }
+                markWorkspaceInputEdit(activeTab.id);
+                updateTab(activeTab.id, (currentTab) => ({
+                  ...currentTab,
+                  showSubmissionDetails: enabled,
                 }));
               }}
               onDownloadSubmission={(submissionId) => void handleDownloadSubmissions([submissionId])}
@@ -3769,6 +3782,7 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     activeSubmissionId: "",
     selectedSubmissionIds: [],
     showCustomThumbnails: true,
+    showSubmissionDetails: true,
     autoQueueEnabled: false,
     trackedDownloadSubmissionIds: [],
     autoQueueNextRunAt: 0,
@@ -4093,6 +4107,7 @@ function toSavedSearchTab(tab: SearchTabState): SavedSearchTab {
     selectedSubmissionIds: [...tab.selectedSubmissionIds],
     searchCollapsed: tab.searchCollapsed,
     showCustomThumbnails: tab.showCustomThumbnails,
+    showSubmissionDetails: tab.showSubmissionDetails,
     autoQueueEnabled: tab.autoQueueEnabled,
     trackedDownloadSubmissionIds: [...tab.trackedDownloadSubmissionIds],
     autoQueueNextRunAt: tab.autoQueueNextRunAt,
@@ -4142,6 +4157,9 @@ function mergeWorkspaceTabsWithTransientState(
         ? {
             searchParams: cloneSearchParams(currentTab.searchParams),
             artistDraft: currentTab.artistDraft,
+            searchCollapsed: currentTab.searchCollapsed,
+            showCustomThumbnails: currentTab.showCustomThumbnails,
+            showSubmissionDetails: currentTab.showSubmissionDetails,
           }
         : {}),
       searchLoading: currentTab.searchLoading,
@@ -4222,6 +4240,7 @@ function restoreSavedSearchTab(
     searchLoading: false,
     searchCollapsed: getBoolean(source.searchCollapsed, false),
     showCustomThumbnails: getBoolean(source.showCustomThumbnails, true),
+    showSubmissionDetails: getBoolean(source.showSubmissionDetails, true),
     searchError: "",
     resultsRefreshToken: 0,
     loadMoreState: createIdleLoadMoreState(),

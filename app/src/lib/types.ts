@@ -154,6 +154,7 @@ export type SavedSearchTab = {
   selectedSubmissionIds: string[]
   searchCollapsed: boolean
   showCustomThumbnails: boolean
+  showSubmissionDetails: boolean
   autoQueueEnabled: boolean
   trackedDownloadSubmissionIds: string[]
   autoQueueNextRunAt: number
