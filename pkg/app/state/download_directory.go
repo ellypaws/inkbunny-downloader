@@ -23,12 +23,9 @@ func normalizeDownloadDirectory(raw string) (string, error) {
 	return clean, nil
 }
 
-func (a *App) resolveDownloadDirectory(raw string) (string, error) {
-	candidate := strings.TrimSpace(raw)
-	if candidate == "" {
-		a.mu.RLock()
-		candidate = a.settings.DownloadDirectory
-		a.mu.RUnlock()
-	}
+func (a *App) resolveDownloadDirectory() (string, error) {
+	a.mu.RLock()
+	candidate := a.settings.DownloadDirectory
+	a.mu.RUnlock()
 	return normalizeDownloadDirectory(candidate)
 }
