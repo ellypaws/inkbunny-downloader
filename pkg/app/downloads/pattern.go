@@ -174,9 +174,7 @@ func renderDownloadComponent(component string, ctx downloadPathContext) string {
 }
 
 func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
-	fileBase := filepath.Base(ctx.File.FileName)
-	fileStem := strings.TrimSuffix(fileBase, filepath.Ext(fileBase))
-	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileBase)), ".")
+	parts := splitDownloadFileName(ctx.Submission.Username, ctx.File)
 
 	switch name {
 	case "artist":
@@ -205,11 +203,11 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 	case "minute":
 		return formatTimePart(ctx.Time, "04"), true
 	case "file_name_full":
-		return fileBase, true
+		return parts.full, true
 	case "file_name":
-		return fileStem, true
+		return parts.name, true
 	case "file_name_ext":
-		return fileStem, true
+		return parts.name, true
 	case "file_id":
 		return ctx.File.FileID.String(), true
 	case "submission_name":
@@ -222,9 +220,9 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 	case "number":
 		return fmt.Sprintf("%d", ctx.Number), true
 	case "ext":
-		return ext, true
+		return parts.ext, true
 	case "extension":
-		return ext, true
+		return parts.ext, true
 	case "submission_id":
 		return ctx.Submission.SubmissionID.String(), true
 	case "submission_id_auto_omit":
@@ -245,6 +243,47 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+type downloadFileNameParts struct {
+	full string
+	name string
+	ext  string
+}
+
+func splitDownloadFileName(username string, file inkbunny.File) downloadFileNameParts {
+	full := filepath.Base(file.FileName)
+	extWithDot := filepath.Ext(full)
+	stem := strings.TrimSuffix(full, extWithDot)
+	parts := downloadFileNameParts{
+		full: full,
+		name: stem,
+		ext:  strings.TrimPrefix(strings.ToLower(extWithDot), "."),
+	}
+
+	fileID := strings.TrimSpace(file.FileID.String())
+	if fileID == "" {
+		return parts
+	}
+
+	remainder, ok := strings.CutPrefix(stem, fileID+"_")
+	if !ok {
+		return parts
+	}
+
+	normalizedUser := strings.TrimSpace(username)
+	if normalizedUser != "" {
+		if suffix, matched := strings.CutPrefix(remainder, normalizedUser+"_"); matched {
+			parts.name = suffix
+			return parts
+		}
+		return parts
+	}
+
+	if _, suffix, matched := strings.Cut(remainder, "_"); matched && strings.TrimSpace(suffix) != "" {
+		parts.name = suffix
+	}
+	return parts
 }
 
 func downloadTargetsMatch(destinations []string, expectedMD5 string) (bool, int64, string, error) {
