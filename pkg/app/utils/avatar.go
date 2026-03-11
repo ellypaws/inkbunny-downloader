@@ -144,12 +144,32 @@ func checkApprovedRedirect(req *http.Request, via []*http.Request, parser func(s
 	return err
 }
 
+func NewApprovedGetRequest(ctx context.Context, target *url.URL) (*http.Request, error) {
+	if target == nil {
+		return nil, errApprovedURLInvalid
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://inkbunny.net/", nil)
+	if err != nil {
+		return nil, err
+	}
+	request.URL.Scheme = "https"
+	request.URL.Host = target.Host
+	request.Host = target.Host
+	request.URL.Path = target.Path
+	request.URL.RawPath = target.RawPath
+	request.URL.RawQuery = target.RawQuery
+	request.URL.Fragment = ""
+	request.URL.RawFragment = ""
+	return request, nil
+}
+
 func FetchUserIconBytes(ctx context.Context, raw string) ([]byte, string, error) {
 	target, err := ParseApprovedUserIconURL(raw)
 	if err != nil {
 		return nil, "", err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	request, err := NewApprovedGetRequest(ctx, target)
 	if err != nil {
 		return nil, "", err
 	}

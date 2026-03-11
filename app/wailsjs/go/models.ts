@@ -774,3 +774,71 @@ export namespace types {
 
 }
 
+export namespace url {
+	
+	export class Userinfo {
+	
+	
+	    static createFrom(source: any = {}) {
+	        return new Userinfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	
+	    }
+	}
+	export class URL {
+	    Scheme: string;
+	    Opaque: string;
+	    // Go type: Userinfo
+	    User?: any;
+	    Host: string;
+	    Path: string;
+	    Fragment: string;
+	    RawQuery: string;
+	    RawPath: string;
+	    RawFragment: string;
+	    ForceQuery: boolean;
+	    OmitHost: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new URL(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Scheme = source["Scheme"];
+	        this.Opaque = source["Opaque"];
+	        this.User = this.convertValues(source["User"], null);
+	        this.Host = source["Host"];
+	        this.Path = source["Path"];
+	        this.Fragment = source["Fragment"];
+	        this.RawQuery = source["RawQuery"];
+	        this.RawPath = source["RawPath"];
+	        this.RawFragment = source["RawFragment"];
+	        this.ForceQuery = source["ForceQuery"];
+	        this.OmitHost = source["OmitHost"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+

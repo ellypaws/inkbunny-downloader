@@ -14,18 +14,26 @@ var (
 	errRemoteURLUnsupported = errors.New("unsupported resource url")
 )
 
-func (a *App) ResolveRemoteURL(raw string) string {
+func (a *App) ResolveApprovedRemoteURL(raw string) (*url.URL, error) {
 	target, err := ParseApprovedRemoteURL(raw)
 	if err != nil || target == nil {
-		return ""
+		return nil, err
 	}
 
 	if !shouldAttachSessionID(target) {
-		return target.String()
+		return target, nil
 	}
 
 	sid := a.currentSessionSID()
-	return withRemoteSessionID(target, sid)
+	return withRemoteSessionID(target, sid), nil
+}
+
+func (a *App) ResolveRemoteURL(raw string) string {
+	target, err := a.ResolveApprovedRemoteURL(raw)
+	if err != nil || target == nil {
+		return ""
+	}
+	return target.String()
 }
 
 func (a *App) currentSessionSID() string {
@@ -68,9 +76,9 @@ func isApprovedRemoteHost(parsed *url.URL) bool {
 	return apputils.IsApprovedInkbunnyHost(parsed.Hostname())
 }
 
-func withRemoteSessionID(target *url.URL, sid string) string {
+func withRemoteSessionID(target *url.URL, sid string) *url.URL {
 	if target == nil {
-		return ""
+		return nil
 	}
 	clone := *target
 	query := clone.Query()
@@ -80,5 +88,5 @@ func withRemoteSessionID(target *url.URL, sid string) string {
 		query.Set("sid", sid)
 	}
 	clone.RawQuery = query.Encode()
-	return clone.String()
+	return &clone
 }

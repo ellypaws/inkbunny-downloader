@@ -756,7 +756,7 @@ func (s *Server) proxyRemoteResource(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "unsupported resource url")
 		return
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target.String(), nil)
+	req, err := apputils.NewApprovedGetRequest(r.Context(), target)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid resource url")
 		return
@@ -815,7 +815,7 @@ func (s *Server) approvedRemoteOpenLocation(raw string) (string, error) {
 }
 
 func (s *Server) approvedRemoteTarget(raw string) (*url.URL, error) {
-	target, err := state.ParseApprovedRemoteURL(s.app.ResolveRemoteURL(raw))
+	target, err := s.app.ResolveApprovedRemoteURL(raw)
 	if err != nil {
 		return nil, err
 	}

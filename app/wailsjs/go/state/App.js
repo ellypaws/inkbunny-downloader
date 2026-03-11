@@ -134,6 +134,10 @@ export function RefreshSearch(arg1, arg2) {
   return window['go']['state']['App']['RefreshSearch'](arg1, arg2);
 }
 
+export function ResolveApprovedRemoteURL(arg1) {
+  return window['go']['state']['App']['ResolveApprovedRemoteURL'](arg1);
+}
+
 export function ResolveRemoteURL(arg1) {
   return window['go']['state']['App']['ResolveRemoteURL'](arg1);
 }
