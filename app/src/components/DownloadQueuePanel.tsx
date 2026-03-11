@@ -45,6 +45,7 @@ type QueueFilterStatus = (typeof FILTERABLE_QUEUE_STATUSES)[number];
 const AUTO_SCROLL_IGNORE_MS = 400;
 const USER_SCROLL_INTENT_WINDOW_MS = 1200;
 const USER_SCROLL_DISABLE_THRESHOLD_PX = 4;
+const QUEUE_THUMBNAIL_STORAGE_KEY = "inkbunny.queue.show-thumbnails";
 const SCROLL_KEYS = new Set([
   "ArrowDown",
   "ArrowUp",
@@ -94,6 +95,9 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const [highlightedSubmissionId, setHighlightedSubmissionId] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<QueueFilterStatus[]>(
     [],
+  );
+  const [showThumbnails, setShowThumbnails] = useState(
+    loadSavedQueueThumbnailVisibility,
   );
   const selectedStatusSet = useMemo(
     () => new Set<QueueFilterStatus>(selectedStatuses),
@@ -169,6 +173,16 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   useEffect(() => {
     lastObservedScrollTopRef.current = parentRef.current?.scrollTop ?? 0;
   }, [followActiveDownload, visibleJobs.length]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(
+      QUEUE_THUMBNAIL_STORAGE_KEY,
+      showThumbnails ? "1" : "0",
+    );
+  }, [showThumbnails]);
 
   function markUserScrollIntent() {
     userScrollIntentUntilRef.current =
@@ -360,6 +374,10 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
               checked={props.autoClearCompleted}
               onChange={props.onToggleAutoClearCompleted}
             />
+            <QueueThumbnailToggle
+              checked={showThumbnails}
+              onChange={setShowThumbnails}
+            />
             <button
               type="button"
               aria-pressed={followActiveDownload}
@@ -384,7 +402,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
             </button>
           </div>
 
-          <div className="theme-panel-strong min-w-[13rem] flex-1 rounded-2xl border px-4 pt-3 shadow-sm md:max-w-[17rem]">
+          <div className="theme-panel-strong min-w-[10rem] flex-1 rounded-2xl border px-4 pt-3 shadow-sm md:max-w-[17rem]">
             <ElasticSlider
               value={props.maxActive}
               onChange={props.onMaxActiveChange}
@@ -461,6 +479,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                   >
                     <QueueRow
                       job={job}
+                      showThumbnail={showThumbnails}
                       submissionJobCount={
                         submissionJobCounts.get(job.submissionId) ?? 0
                       }
@@ -486,6 +505,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
 
 function QueueRow(props: {
   job: QueueSnapshot["jobs"][number];
+  showThumbnail: boolean;
   submissionJobCount: number;
   submissionHighlighted: boolean;
   onSubmissionHighlightChange: (submissionId: string) => void;
@@ -517,11 +537,17 @@ function QueueRow(props: {
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(114,159,207,0.12),transparent_35%,var(--theme-accent-soft))] opacity-0 transition-opacity motion-safe:duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
 
-      <div className="relative flex items-start gap-2.5 sm:gap-3">
-        <QueueThumbnail
-          src={job.previewUrl}
-          alt={job.fileName || job.title || job.submissionId}
-        />
+      <div
+        className={`relative flex items-start ${
+          props.showThumbnail ? "gap-2.5 sm:gap-3" : "gap-0"
+        }`}
+      >
+        {props.showThumbnail ? (
+          <QueueThumbnail
+            src={job.previewUrl}
+            alt={job.fileName || job.title || job.submissionId}
+          />
+        ) : null}
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start gap-3">
@@ -703,6 +729,35 @@ function AutoClearToggle(props: {
   );
 }
 
+function QueueThumbnailToggle(props: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="theme-panel-strong flex items-center gap-2.5 rounded-2xl border px-3 py-2 text-xs font-black shadow-sm sm:gap-3 sm:text-sm">
+      <FileImage size={14} className="text-[var(--theme-info)]" />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={props.checked}
+        onClick={() => props.onChange(!props.checked)}
+        title={props.checked ? "Hide queue thumbnails" : "Show queue thumbnails"}
+        className={`relative h-7 w-12 rounded-full border transition-all motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:scale-[1.03] ${
+          props.checked
+            ? "border-[var(--theme-accent)] bg-[var(--theme-accent)]"
+            : "border-[var(--theme-border)] bg-[var(--theme-surface-soft)]"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 h-[1.375rem] w-[1.375rem] rounded-full bg-white shadow-md transition-transform motion-safe:duration-300 motion-safe:ease-out ${
+            props.checked ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
 function StatChip(props: {
   tone: "active" | "queued" | "completed" | "failed";
   label: string;
@@ -774,4 +829,11 @@ function getProgressBarClass(status: string) {
     return "bg-[var(--theme-subtle)]";
   }
   return "bg-linear-to-r from-[#729FCF] to-[#76B900]";
+}
+
+function loadSavedQueueThumbnailVisibility() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  return window.localStorage.getItem(QUEUE_THUMBNAIL_STORAGE_KEY) !== "0";
 }
