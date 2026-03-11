@@ -494,6 +494,10 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 	if err != nil {
 		return types.QueueSnapshot{}, err
 	}
+	downloadRoot, err = normalizeDownloadDirectory(downloadRoot)
+	if err != nil {
+		return types.QueueSnapshot{}, err
+	}
 	maxActive := options.MaxActive
 	if maxActive <= 0 {
 		maxActive = a.GetSession().Settings.MaxActive

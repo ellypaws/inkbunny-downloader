@@ -47,12 +47,16 @@ func ParseApprovedRemoteURL(raw string) (*url.URL, error) {
 		return nil, errRemoteURLRequired
 	}
 
-	parsed, err := url.Parse(target)
-	if err != nil || parsed == nil {
-		return nil, errRemoteURLInvalid
-	}
-	if parsed.Scheme != "https" || !isApprovedRemoteHost(parsed) {
-		return nil, errRemoteURLUnsupported
+	parsed, err := apputils.ParseApprovedInkbunnyURL(target)
+	if err != nil {
+		switch {
+		case errors.Is(err, apputils.ErrApprovedURLRequired):
+			return nil, errRemoteURLRequired
+		case errors.Is(err, apputils.ErrApprovedURLInvalid):
+			return nil, errRemoteURLInvalid
+		default:
+			return nil, errRemoteURLUnsupported
+		}
 	}
 	return parsed, nil
 }
@@ -69,13 +73,5 @@ func isApprovedRemoteHost(parsed *url.URL) bool {
 	if parsed == nil {
 		return false
 	}
-	host := strings.ToLower(parsed.Hostname())
-	if host == "" {
-		return false
-	}
-	return host == "inkbunny.net" ||
-		strings.HasSuffix(host, ".inkbunny.net") ||
-		strings.HasSuffix(host, ".ib.metapix.net") ||
-		host == "ib.metapix.net" ||
-		strings.HasSuffix(host, ".metapix.net")
+	return apputils.IsApprovedInkbunnyHost(parsed.Hostname())
 }

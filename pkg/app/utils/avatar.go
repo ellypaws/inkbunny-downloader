@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -13,6 +14,18 @@ import (
 )
 
 const DefaultAvatarURL = "https://inkbunny.net/images80/usericons/large/noicon.png"
+
+var (
+	errApprovedURLRequired = errors.New("url is required")
+	errApprovedURLInvalid  = errors.New("invalid url")
+	errApprovedURLDenied   = errors.New("unsupported url")
+)
+
+var (
+	ErrApprovedURLRequired = errApprovedURLRequired
+	ErrApprovedURLInvalid  = errApprovedURLInvalid
+	ErrApprovedURLDenied   = errApprovedURLDenied
+)
 
 func hasSafeAbsolutePathPrefix(raw string) bool {
 	if !strings.HasPrefix(raw, "/") {
@@ -55,13 +68,73 @@ func NormalizeInkbunnyURL(raw string) string {
 	return trimmed
 }
 
+func IsApprovedInkbunnyHost(host string) bool {
+	value := strings.ToLower(strings.TrimSpace(host))
+	if value == "" {
+		return false
+	}
+	return value == "inkbunny.net" ||
+		strings.HasSuffix(value, ".inkbunny.net") ||
+		value == "ib.metapix.net" ||
+		strings.HasSuffix(value, ".ib.metapix.net")
+}
+
+func ParseApprovedInkbunnyURL(raw string) (*url.URL, error) {
+	target := strings.TrimSpace(NormalizeInkbunnyURL(raw))
+	if target == "" {
+		return nil, errApprovedURLRequired
+	}
+
+	parsed, err := url.Parse(target)
+	if err != nil || parsed == nil {
+		return nil, errApprovedURLInvalid
+	}
+	if parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil {
+		return nil, errApprovedURLDenied
+	}
+	if !IsApprovedInkbunnyHost(parsed.Hostname()) {
+		return nil, errApprovedURLDenied
+	}
+	if !hasSafeAbsolutePathPrefix(parsed.EscapedPath()) {
+		return nil, errApprovedURLDenied
+	}
+	return parsed, nil
+}
+
+func ParseApprovedUserIconURL(raw string) (*url.URL, error) {
+	parsed, err := ParseApprovedInkbunnyURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.Contains(strings.ToLower(parsed.EscapedPath()), "/usericons/") {
+		return nil, errApprovedURLDenied
+	}
+	return parsed, nil
+}
+
 func LooksLikeUserIconURL(raw string) bool {
-	return strings.Contains(strings.ToLower(strings.TrimSpace(raw)), "/usericons/")
+	_, err := ParseApprovedUserIconURL(raw)
+	return err == nil
+}
+
+func checkApprovedRedirect(req *http.Request, via []*http.Request, parser func(string) (*url.URL, error)) error {
+	if len(via) >= 10 {
+		return errors.New("too many redirects")
+	}
+	if req == nil || req.URL == nil {
+		return errApprovedURLInvalid
+	}
+	_, err := parser(req.URL.String())
+	return err
 }
 
 func FetchUserIconBytes(ctx context.Context, raw string) ([]byte, string, error) {
-	normalized := NormalizeInkbunnyURL(raw)
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, normalized, nil)
+	target, err := ParseApprovedUserIconURL(raw)
+	if err != nil {
+		return nil, "", err
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -71,7 +144,12 @@ func FetchUserIconBytes(ctx context.Context, raw string) ([]byte, string, error)
 	request.Header.Set("Referer", "https://inkbunny.net/")
 	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return checkApprovedRedirect(req, via, ParseApprovedUserIconURL)
+		},
+	}
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, "", err

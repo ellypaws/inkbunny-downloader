@@ -17,17 +17,8 @@ func normalizeDownloadDirectory(raw string) (string, error) {
 	}
 
 	clean := filepath.Clean(candidate)
-	if clean == "." || clean == "" {
+	if clean == "." || clean == "" || !filepath.IsAbs(clean) {
 		return "", errInvalidDownloadDirectory
-	}
-	if filepath.VolumeName(clean) != "" && !filepath.IsAbs(clean) {
-		return "", errInvalidDownloadDirectory
-	}
-	if !filepath.IsAbs(clean) {
-		parentPrefix := ".." + string(filepath.Separator)
-		if clean == ".." || strings.HasPrefix(clean, parentPrefix) {
-			return "", errInvalidDownloadDirectory
-		}
 	}
 	return clean, nil
 }

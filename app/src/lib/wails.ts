@@ -162,10 +162,98 @@ const browserCapabilities: BackendCapabilities = {
   remoteAccessHost: false,
 }
 
+const remoteAuthStorageKey = 'inkbunny.remoteAuth'
+const remoteAuthParam = 'remoteAuth'
+const remoteAuthHeader = 'X-Inkbunny-Remote-Auth'
+
 let cachedDesktopBackend: BackendApi | null = null
 function isDesktopRuntimeAvailable(): boolean {
   return Boolean(window.go && typeof window.go === 'object')
 }
+
+function readStoredRemoteAuthToken(): string {
+  try {
+    return window.sessionStorage.getItem(remoteAuthStorageKey)?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function writeStoredRemoteAuthToken(token: string): void {
+  if (!token) {
+    return
+  }
+  try {
+    window.sessionStorage.setItem(remoteAuthStorageKey, token)
+  } catch {
+    // Ignore storage failures and fall back to the current location token.
+  }
+}
+
+function captureRemoteAuthToken(): string {
+  const currentURL = new URL(window.location.href)
+  const hash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash
+  const hashParams = new URLSearchParams(hash)
+  const searchToken = currentURL.searchParams.get(remoteAuthParam)?.trim() ?? ''
+  const hashToken = hashParams.get(remoteAuthParam)?.trim() ?? ''
+  const token = searchToken || hashToken
+
+  let mutated = false
+  if (currentURL.searchParams.has(remoteAuthParam)) {
+    currentURL.searchParams.delete(remoteAuthParam)
+    mutated = true
+  }
+  if (hashParams.has(remoteAuthParam)) {
+    hashParams.delete(remoteAuthParam)
+    mutated = true
+  }
+
+  if (token) {
+    writeStoredRemoteAuthToken(token)
+  }
+
+  if (mutated) {
+    const nextHash = hashParams.toString()
+    window.history.replaceState(
+      null,
+      '',
+      `${currentURL.pathname}${currentURL.search}${nextHash ? `#${nextHash}` : ''}`,
+    )
+  }
+
+  return token || readStoredRemoteAuthToken()
+}
+
+function currentRemoteAuthToken(): string {
+  return captureRemoteAuthToken() || readStoredRemoteAuthToken()
+}
+
+function appendRemoteAuthQuery(target: string): string {
+  const token = currentRemoteAuthToken()
+  if (!token) {
+    return target
+  }
+
+  const url = new URL(target, window.location.origin)
+  url.searchParams.set(remoteAuthParam, token)
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+function buildBrowserHeaders(body: unknown): HeadersInit | undefined {
+  const token = currentRemoteAuthToken()
+  const headers: Record<string, string> = {}
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+  if (token) {
+    headers[remoteAuthHeader] = token
+  }
+  return Object.keys(headers).length > 0 ? headers : undefined
+}
+
+captureRemoteAuthToken()
 
 function normalizeSearchResponse(response: SearchResponse): SearchResponse {
   const results = Array.isArray(response?.results) ? response.results : []
@@ -258,12 +346,7 @@ async function requestJSON<T>(
   const response = await fetch(url, {
     method,
     credentials: 'same-origin',
-    headers:
-      body === undefined
-        ? undefined
-        : {
-            'Content-Type': 'application/json',
-          },
+    headers: buildBrowserHeaders(body),
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   await ensureSuccess(response)
@@ -319,7 +402,11 @@ class BrowserEventBus {
       return
     }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    this.socket = new WebSocket(`${protocol}//${window.location.host}/ws`)
+    const auth = currentRemoteAuthToken()
+    const query = auth
+      ? `?${new URLSearchParams({ [remoteAuthParam]: auth }).toString()}`
+      : ''
+    this.socket = new WebSocket(`${protocol}//${window.location.host}/ws${query}`)
     this.socket.onmessage = (event) => {
       const message = JSON.parse(event.data) as {
         type?: BackendEventName
@@ -362,15 +449,15 @@ class BrowserEventBus {
 const browserEvents = new BrowserEventBus()
 
 function buildRemoteResourceURL(url: string): string {
-  return `/api/resource?url=${encodeURIComponent(url)}`
+  return appendRemoteAuthQuery(`/api/resource?url=${encodeURIComponent(url)}`)
 }
 
 function buildAvatarImageURL(url: string): string {
-  return `/api/avatar/image?url=${encodeURIComponent(url)}`
+  return appendRemoteAuthQuery(`/api/avatar/image?url=${encodeURIComponent(url)}`)
 }
 
 function buildRemoteOpenURL(url: string): string {
-  return `/api/open?url=${encodeURIComponent(url)}`
+  return appendRemoteAuthQuery(`/api/open?url=${encodeURIComponent(url)}`)
 }
 
 const browserBackend: BackendApi = {

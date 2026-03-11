@@ -30,6 +30,8 @@ import (
 const (
 	defaultListenAddress = "0.0.0.0:34116"
 	authCookieName       = "inkbunny_remote"
+	authHeaderName       = "X-Inkbunny-Remote-Auth"
+	authQueryParam       = "remoteAuth"
 )
 
 type Config struct {
@@ -115,7 +117,7 @@ func NewServer(app *state.App, cfg Config) (*Server, error) {
 	mux.HandleFunc("GET /api/remote/qrcode.png", server.handleQRCode)
 	mux.Handle("GET /ws", server.requireAuth(http.HandlerFunc(server.handleWebSocket)))
 	mux.Handle("/api/", server.requireAuth(http.HandlerFunc(server.handleAPI)))
-	mux.Handle("/", server.requireAuth(http.HandlerFunc(server.handleFrontend)))
+	mux.Handle("/", http.HandlerFunc(server.handleFrontend))
 
 	server.httpServer = &http.Server{
 		Handler:           mux,
@@ -200,14 +202,32 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 }
 
 func (s *Server) isAuthorized(r *http.Request) bool {
-	secret, err := r.Cookie(authCookieName)
-	if err != nil || strings.TrimSpace(secret.Value) == "" {
+	sessionID := authTokenFromRequest(r)
+	if sessionID == "" {
 		return false
 	}
 	s.authMu.RLock()
 	defer s.authMu.RUnlock()
-	_, ok := s.sessions[secret.Value]
+	_, ok := s.sessions[sessionID]
 	return ok
+}
+
+func authTokenFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if secret, err := r.Cookie(authCookieName); err == nil {
+		if value := strings.TrimSpace(secret.Value); value != "" {
+			return value
+		}
+	}
+	if value := strings.TrimSpace(r.Header.Get(authHeaderName)); value != "" {
+		return value
+	}
+	if r.URL == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.URL.Query().Get(authQueryParam))
 }
 
 func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
@@ -226,20 +246,19 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   shouldMarkAuthCookieSecure(r),
+		Secure:   true,
 	})
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/#"+url.Values{authQueryParam: []string{sessionID}}.Encode(), http.StatusFound)
 }
 
 func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
-	raw := r.URL.Query().Get("url")
-	normalized := apputils.NormalizeInkbunnyURL(raw)
-	if !apputils.LooksLikeUserIconURL(normalized) {
+	target, err := apputils.ParseApprovedUserIconURL(r.URL.Query().Get("url"))
+	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid avatar url")
 		return
 	}
 
-	body, contentType, err := apputils.FetchUserIconBytes(r.Context(), normalized)
+	body, contentType, err := apputils.FetchUserIconBytes(r.Context(), target.String())
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, err.Error())
 		return
@@ -489,12 +508,12 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/resource":
 		s.proxyRemoteResource(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/open":
-		target, err := state.ParseApprovedRemoteURL(s.app.ResolveRemoteURL(r.URL.Query().Get("url")))
+		location, err := s.approvedRemoteRedirectLocation(r.URL.Query().Get("url"))
 		if err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		http.Redirect(w, r, target.String(), http.StatusTemporaryRedirect)
+		http.Redirect(w, r, location, http.StatusTemporaryRedirect)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/search":
 		var params types.SearchParams
 		if !decodeJSON(w, r, &params) {
@@ -731,20 +750,8 @@ func hostWithoutPort(value string) string {
 	return value
 }
 
-func shouldMarkAuthCookieSecure(r *http.Request) bool {
-	if r != nil && r.TLS != nil {
-		return true
-	}
-	switch strings.ToLower(hostWithoutPort(r.Host)) {
-	case "127.0.0.1", "::1", "localhost":
-		return true
-	default:
-		return false
-	}
-}
-
 func (s *Server) proxyRemoteResource(w http.ResponseWriter, r *http.Request) {
-	target, err := state.ParseApprovedRemoteURL(s.app.ResolveRemoteURL(r.URL.Query().Get("url")))
+	target, err := s.approvedRemoteTarget(r.URL.Query().Get("url"))
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -763,7 +770,7 @@ func (s *Server) proxyRemoteResource(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Referer", "https://inkbunny.net/")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
 
-	response, err := http.DefaultClient.Do(req)
+	response, err := approvedRemoteHTTPClient().Do(req)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, "resource fetch failed")
 		return
@@ -796,5 +803,55 @@ func copyRequestHeaderIfPresent(target http.Header, source http.Header, name str
 			continue
 		}
 		target.Add(name, value)
+	}
+}
+
+func (s *Server) approvedRemoteRedirectLocation(raw string) (string, error) {
+	target, err := s.approvedRemoteTarget(raw)
+	if err != nil {
+		return "", err
+	}
+	location := target.String()
+	switch {
+	case strings.HasPrefix(location, "https://inkbunny.net/"):
+		return location, nil
+	case strings.Contains(location, ".inkbunny.net/"):
+		return location, nil
+	case strings.HasPrefix(location, "https://ib.metapix.net/"):
+		return location, nil
+	case strings.Contains(location, ".ib.metapix.net/"):
+		return location, nil
+	default:
+		return "", errors.New("unsupported resource url")
+	}
+}
+
+func (s *Server) approvedRemoteTarget(raw string) (*url.URL, error) {
+	target, err := state.ParseApprovedRemoteURL(s.app.ResolveRemoteURL(raw))
+	if err != nil {
+		return nil, err
+	}
+	if target == nil || target.Scheme != "https" || !strings.HasPrefix(target.EscapedPath(), "/") {
+		return nil, errors.New("unsupported resource url")
+	}
+	if !apputils.IsApprovedInkbunnyHost(target.Hostname()) {
+		return nil, errors.New("unsupported resource url")
+	}
+	return target, nil
+}
+
+func approvedRemoteHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: 15 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return errors.New("too many redirects")
+			}
+			if req == nil || req.URL == nil {
+				return errors.New("invalid resource url")
+			}
+			_, err := state.ParseApprovedRemoteURL(req.URL.String())
+			return err
+		},
 	}
 }

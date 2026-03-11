@@ -7,12 +7,12 @@ import (
 )
 
 func (a *App) ProxyAvatarImageURL(raw string) (string, error) {
-	normalized := apputils.NormalizeInkbunnyURL(raw)
-	if !apputils.LooksLikeUserIconURL(normalized) {
-		return normalized, nil
+	target, err := apputils.ParseApprovedUserIconURL(raw)
+	if err != nil {
+		return apputils.NormalizeInkbunnyURL(raw), nil
 	}
 
-	body, contentType, err := apputils.FetchUserIconBytes(a.ctx, normalized)
+	body, contentType, err := apputils.FetchUserIconBytes(a.ctx, target.String())
 	if err != nil {
 		return "", err
 	}
