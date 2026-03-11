@@ -328,10 +328,7 @@ func (m *DownloadModel) isDone() bool {
 }
 
 func (m *DownloadModel) clampHScroll() {
-	maxH := m.contentWidth - m.Width
-	if maxH < 0 {
-		maxH = 0
-	}
+	maxH := max(m.contentWidth-m.Width, 0)
 	if m.HScrollOffset > maxH {
 		m.HScrollOffset = maxH
 	}
@@ -451,10 +448,7 @@ func (m *DownloadModel) View() tea.View {
 		return tea.NewView(m.ZoneManager.Scan(rendered))
 	}
 
-	progWidth := m.Width - 40
-	if progWidth < 10 {
-		progWidth = 10
-	}
+	progWidth := max(m.Width-40, 10)
 
 	var active []string
 	var queued []string
@@ -623,13 +617,6 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 
 		return DownloadCompleteMsg{Item: item}
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func fileExists(path string) bool {

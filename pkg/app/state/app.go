@@ -514,10 +514,7 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 	includePools := downloads.PatternUsesPoolTokens(downloadPattern)
 	tasks := make([]downloads.Task, 0, len(submissionIDs))
 	for start := 0; start < len(submissionIDs); start += submissionDetailsBatchSize {
-		end := start + submissionDetailsBatchSize
-		if end > len(submissionIDs) {
-			end = len(submissionIDs)
-		}
+		end := min(start+submissionDetailsBatchSize, len(submissionIDs))
 
 		batch, currentUser, err := a.fetchSubmissionDetailsBatchForDownload(
 			context.Background(),
@@ -896,10 +893,7 @@ func (a *App) cachedSubmissionDetailsBatchedWithContext(
 	}
 
 	for start := 0; start < len(missingIDs); start += submissionDetailsBatchSize {
-		end := start + submissionDetailsBatchSize
-		if end > len(missingIDs) {
-			end = len(missingIDs)
-		}
+		end := min(start+submissionDetailsBatchSize, len(missingIDs))
 		batchIDs := missingIDs[start:end]
 		batch, err := a.fetchSubmissionDetailsBatch(ctx, user, batchIDs)
 		if err != nil {

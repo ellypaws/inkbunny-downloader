@@ -1397,10 +1397,7 @@ func (a *App) collectVisibleSearchPage(
 	pendingResults := state.PendingResults
 
 	if len(pendingResults) > 0 {
-		remaining := target
-		if len(pendingResults) < remaining {
-			remaining = len(pendingResults)
-		}
+		remaining := min(len(pendingResults), target)
 		visible = append(visible, pendingResults[:remaining]...)
 		pendingResults = pendingResults[remaining:]
 	}

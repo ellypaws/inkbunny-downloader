@@ -302,10 +302,7 @@ func (m *Model) SubmissionType() []inkbunny.SubmissionType {
 }
 
 func (m *Model) clampScroll() {
-	maxScroll := m.contentLines - m.Height
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
+	maxScroll := max(m.contentLines-m.Height, 0)
 	if m.ScrollOffset > maxScroll {
 		m.ScrollOffset = maxScroll
 	}

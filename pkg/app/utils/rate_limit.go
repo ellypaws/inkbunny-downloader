@@ -157,10 +157,7 @@ func rateLimitDelay(attempt int) time.Duration {
 	if attempt < 1 {
 		attempt = 1
 	}
-	base := time.Second << minInt(attempt, 4)
-	if base > 15*time.Second {
-		base = 15 * time.Second
-	}
+	base := min(time.Second<<minInt(attempt, 4), 15*time.Second)
 	jitter := time.Duration(time.Now().UnixNano() % int64(500*time.Millisecond+1))
 	return base + jitter
 }

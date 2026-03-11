@@ -72,14 +72,8 @@ func (m *Model) View() tea.View {
 		height = len(lines)
 	}
 
-	start := m.ScrollOffset
-	if start > len(lines) {
-		start = len(lines)
-	}
-	end := start + height
-	if end > len(lines) {
-		end = len(lines)
-	}
+	start := min(m.ScrollOffset, len(lines))
+	end := min(start+height, len(lines))
 
 	visible := lines[start:end]
 
@@ -304,13 +298,6 @@ func (m *Model) renderFooterSection() string {
 		dlCaptionBlock, "",
 		searchBtn,
 	)
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func (m *Model) renderUserBar() string {

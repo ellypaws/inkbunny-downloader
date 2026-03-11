@@ -3,6 +3,7 @@ package state
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -41,9 +42,7 @@ func cloneDebugFields(fields map[string]any) map[string]any {
 		return nil
 	}
 	cloned := make(map[string]any, len(fields))
-	for key, value := range fields {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, fields)
 	return cloned
 }
 
@@ -76,9 +75,7 @@ func mergeDebugFields(parts ...map[string]any) map[string]any {
 		if merged == nil {
 			merged = make(map[string]any, len(part))
 		}
-		for key, value := range part {
-			merged[key] = value
-		}
+		maps.Copy(merged, part)
 	}
 	return merged
 }
