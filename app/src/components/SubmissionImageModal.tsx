@@ -27,7 +27,10 @@ import {
 } from "react";
 
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
-import type { SubmissionCard } from "../lib/types";
+import type {
+  SubmissionCard,
+  SubmissionDescription as SubmissionDescriptionPayload,
+} from "../lib/types";
 import {
   backend,
   resolveMediaSrcSet,
@@ -588,8 +591,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
 
             <SubmissionDescription
               className="sim-panel-item theme-muted mt-4 max-h-[26vh] overflow-y-auto pr-1 text-[13px] leading-6 sm:mt-5 sm:max-h-[30vh] sm:text-[15px] sm:leading-7 md:max-h-[calc(100vh-12rem)] [&_a]:text-[var(--theme-info-strong)] [&_a]:underline-offset-4 [&_a]:transition-colors [&_a:hover]:text-[var(--theme-title)] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--theme-border-soft)] [&_blockquote]:pl-4 [&_em]:italic [&_img]:h-auto [&_img]:max-w-full [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-3 [&_strong]:font-bold [&_ul]:my-3"
-              descriptionHtml={props.submission.descriptionHtml}
-              description={props.submission.description}
+              submissionId={props.submission.submissionId}
             />
             <div className="sim-panel-item mt-auto flex justify-end pt-4">
               <button
@@ -880,27 +882,66 @@ function ModalThumbnailImage(props: {
 
 const SubmissionDescription = memo(function SubmissionDescription(props: {
   className: string;
-  descriptionHtml?: string;
-  description?: string;
+  submissionId: string;
 }) {
-  const [resolvedDescriptionHtml, setResolvedDescriptionHtml] = useState(
-    props.descriptionHtml,
-  );
+  const [description, setDescription] =
+    useState<SubmissionDescriptionPayload | null>(null);
+  const [resolvedDescriptionHtml, setResolvedDescriptionHtml] =
+    useState<string>();
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!props.descriptionHtml) {
-      setResolvedDescriptionHtml(props.descriptionHtml);
+    setDescription(null);
+    setResolvedDescriptionHtml(undefined);
+    setLoading(true);
+    setLoadError("");
+
+    void backend
+      .getSubmissionDescription(props.submissionId)
+      .then((nextDescription) => {
+        if (cancelled) {
+          return;
+        }
+        setDescription(nextDescription);
+        setLoading(false);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        setDescription(null);
+        setResolvedDescriptionHtml(undefined);
+        setLoading(false);
+        setLoadError(
+          error instanceof Error && error.message.trim()
+            ? error.message.trim()
+            : "Could not load description.",
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.submissionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const descriptionHtml = description?.descriptionHtml;
+
+    if (!descriptionHtml) {
+      setResolvedDescriptionHtml(undefined);
       return;
     }
-    if (!props.descriptionHtml.includes("/usericons/")) {
-      setResolvedDescriptionHtml(props.descriptionHtml);
+    if (!descriptionHtml.includes("/usericons/")) {
+      setResolvedDescriptionHtml(descriptionHtml);
       return;
     }
 
     const documentFragment = new DOMParser().parseFromString(
-      props.descriptionHtml,
+      descriptionHtml,
       "text/html",
     );
     const mediaNodes = Array.from(
@@ -924,7 +965,7 @@ const SubmissionDescription = memo(function SubmissionDescription(props: {
       .filter((entry) => isUserIconURL(entry.src));
 
     if (userIconImages.length === 0) {
-      setResolvedDescriptionHtml(props.descriptionHtml);
+      setResolvedDescriptionHtml(descriptionHtml);
       return;
     }
 
@@ -945,7 +986,7 @@ const SubmissionDescription = memo(function SubmissionDescription(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.descriptionHtml]);
+  }, [description?.descriptionHtml]);
 
   return (
     <div
@@ -960,10 +1001,17 @@ const SubmissionDescription = memo(function SubmissionDescription(props: {
         void openExternal(anchor.getAttribute("href") || undefined);
       }}
     >
-      {resolvedDescriptionHtml ? (
+      {loading ? (
+        <div className="inline-flex items-center gap-2 text-[var(--theme-subtle)]">
+          <LoaderCircle size={14} className="animate-spin" />
+          <span>Loading description</span>
+        </div>
+      ) : resolvedDescriptionHtml ? (
         <div dangerouslySetInnerHTML={{ __html: resolvedDescriptionHtml }} />
-      ) : props.description ? (
-        <p className="whitespace-pre-wrap">{props.description}</p>
+      ) : description?.description ? (
+        <p className="whitespace-pre-wrap">{description.description}</p>
+      ) : loadError ? (
+        <p className="theme-subtle">{loadError}</p>
       ) : (
         <p className="theme-subtle">No description available.</p>
       )}

@@ -17,6 +17,7 @@ import type {
   SearchResultsHydratedUpdate,
   SearchResponse,
   SessionInfo,
+  SubmissionDescription,
   SessionStateUpdate,
   SharedSnapshot,
   UsernameSuggestion,
@@ -54,6 +55,7 @@ type BackendApi = {
     options: DownloadOptions,
   ): Promise<QueueSnapshot>
   GetQueueSnapshot(): Promise<QueueSnapshot>
+  GetSubmissionDescription(submissionId: string): Promise<SubmissionDescription>
   GetWorkspaceState(): Promise<WorkspaceState>
   SaveWorkspaceState(state: WorkspaceState): Promise<void>
   CancelDownload(jobId: string): Promise<QueueSnapshot>
@@ -128,6 +130,7 @@ const backendMethodNames = [
   'SelectRemoteAccessHost',
   'EnqueueDownloads',
   'GetQueueSnapshot',
+  'GetSubmissionDescription',
   'GetWorkspaceState',
   'SaveWorkspaceState',
   'CancelDownload',
@@ -473,6 +476,12 @@ const browserBackend: BackendApi = {
   async GetQueueSnapshot() {
     return requestJSON<QueueSnapshot>('GET', '/api/queue')
   },
+  async GetSubmissionDescription(submissionId: string) {
+    return requestJSON<SubmissionDescription>(
+      'GET',
+      `/api/submission-description?submissionId=${encodeURIComponent(submissionId)}`,
+    )
+  },
   async GetWorkspaceState() {
     return requestJSON<WorkspaceState>('GET', '/api/workspace')
   },
@@ -642,6 +651,9 @@ export const backend = {
   },
   async getQueueSnapshot(): Promise<QueueSnapshot> {
     return getBackend().GetQueueSnapshot()
+  },
+  async getSubmissionDescription(submissionId: string): Promise<SubmissionDescription> {
+    return getBackend().GetSubmissionDescription(submissionId)
   },
   async getWorkspaceState(): Promise<WorkspaceState> {
     return getBackend().GetWorkspaceState()

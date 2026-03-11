@@ -327,6 +327,13 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		writeNoContent(w)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/queue":
 		writeJSON(w, http.StatusOK, s.app.GetQueueSnapshot())
+	case r.Method == http.MethodGet && r.URL.Path == "/api/submission-description":
+		description, err := s.app.GetSubmissionDescription(r.URL.Query().Get("submissionId"))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, description)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/queue/enqueue":
 		var req enqueueRequest
 		if !decodeJSON(w, r, &req) {

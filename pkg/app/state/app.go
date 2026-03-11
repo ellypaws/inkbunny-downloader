@@ -484,22 +484,9 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 			selectedFiles[selected.SubmissionID] = fileSet
 		}
 	}
+	submissionIDs = normalizeSubmissionIDs(submissionIDs)
 	if len(submissionIDs) == 0 {
 		return a.GetQueueSnapshot(), nil
-	}
-
-	details, err := a.cachedSubmissionDetailsBatched(user, submissionIDs)
-	if err != nil {
-		if a.handleSessionError(err) {
-			user, err = a.ensureSearchSession()
-			if err != nil {
-				return types.QueueSnapshot{}, err
-			}
-			details, err = a.cachedSubmissionDetailsBatched(user, submissionIDs)
-		}
-	}
-	if err != nil {
-		return types.QueueSnapshot{}, err
 	}
 
 	saveKeywords := options.SaveKeywords
@@ -519,32 +506,53 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 		return types.QueueSnapshot{}, err
 	}
 
-	tasks := make([]downloads.Task, 0)
-	for _, submission := range details.Submissions {
-		keywords := joinKeywords(submission.Keywords)
-		allowed := selectedFiles[submission.SubmissionID.String()]
-		for _, file := range submission.Files {
-			if len(allowed) > 0 {
-				if _, ok := allowed[file.FileID.String()]; !ok {
-					continue
+	searchResultsByID := a.lookupSeenSearchResults(searchID, submissionIDs)
+	includePools := downloads.PatternUsesPoolTokens(downloadPattern)
+	tasks := make([]downloads.Task, 0, len(submissionIDs))
+	for start := 0; start < len(submissionIDs); start += submissionDetailsBatchSize {
+		end := start + submissionDetailsBatchSize
+		if end > len(submissionIDs) {
+			end = len(submissionIDs)
+		}
+
+		batch, currentUser, err := a.fetchSubmissionDetailsBatchForDownload(
+			context.Background(),
+			user,
+			submissionIDs[start:end],
+			includePools,
+		)
+		if err != nil {
+			return types.QueueSnapshot{}, err
+		}
+		user = currentUser
+
+		for _, submission := range batch.Submissions {
+			keywords := joinKeywords(submission.Keywords)
+			allowed := selectedFiles[submission.SubmissionID.String()]
+			searchResult, hasSearchResult := searchResultsByID[submission.SubmissionID.String()]
+			for _, file := range submission.Files {
+				if len(allowed) > 0 {
+					if _, ok := allowed[file.FileID.String()]; !ok {
+						continue
+					}
 				}
+				tasks = append(tasks, downloads.Task{
+					SessionID:    user.SID,
+					SubmissionID: submission.SubmissionID.String(),
+					FileID:       file.FileID.String(),
+					Title:        queueSubmissionTitle(searchResult, submission, hasSearchResult),
+					Username:     queueSubmissionUsername(searchResult, submission, hasSearchResult),
+					FileName:     filepath.Base(file.FileName),
+					FileMD5:      file.FullFileMD5,
+					URL:          file.FileURLFull.String(),
+					IsPublic:     submission.Public.Bool(),
+					Keywords:     keywords,
+					PreviewURL:   queuePreviewURL(searchResult, submission, file, user.SID, hasSearchResult),
+					SaveKeywords: saveKeywords,
+					DownloadRoot: downloadRoot,
+					Destinations: downloads.ResolveDestinations(downloadRoot, downloadPattern, submission, file),
+				})
 			}
-			tasks = append(tasks, downloads.Task{
-				SessionID:    user.SID,
-				SubmissionID: submission.SubmissionID.String(),
-				FileID:       file.FileID.String(),
-				Title:        submission.Title,
-				Username:     submission.Username,
-				FileName:     filepath.Base(file.FileName),
-				FileMD5:      file.FullFileMD5,
-				URL:          file.FileURLFull.String(),
-				IsPublic:     submission.Public.Bool(),
-				Keywords:     keywords,
-				PreviewURL:   submissionResourceURL(file.FileURLPreview.String(), user.SID, submission.Public.Bool()),
-				SaveKeywords: saveKeywords,
-				DownloadRoot: downloadRoot,
-				Destinations: downloads.ResolveDestinations(downloadRoot, downloadPattern, submission, file),
-			})
 		}
 	}
 
@@ -652,6 +660,138 @@ func joinKeywords(keywords []inkbunny.Keyword) string {
 		parts = append(parts, keyword.KeywordName)
 	}
 	return strings.Join(parts, ", ")
+}
+
+func (a *App) lookupSeenSearchResults(searchID string, submissionIDs []string) map[string]inkbunny.SubmissionSearch {
+	searchID = strings.TrimSpace(searchID)
+	if searchID == "" || len(submissionIDs) == 0 {
+		return nil
+	}
+
+	a.mu.RLock()
+	state := a.searches[searchID]
+	a.mu.RUnlock()
+	if state == nil {
+		return nil
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	if len(state.SeenResults) == 0 {
+		return nil
+	}
+
+	results := make(map[string]inkbunny.SubmissionSearch, len(submissionIDs))
+	for _, submissionID := range submissionIDs {
+		result, ok := state.SeenResults[submissionID]
+		if !ok {
+			continue
+		}
+		results[submissionID] = result
+	}
+	return results
+}
+
+func (a *App) fetchSubmissionDetailsBatchForDownload(
+	ctx context.Context,
+	user *inkbunny.User,
+	submissionIDs []string,
+	includePools bool,
+) (inkbunny.SubmissionDetailsResponse, *inkbunny.User, error) {
+	response, err := a.fetchSubmissionDetailsBatchWithoutCache(ctx, submissionIDs, includePools)
+	if err != nil && a.handleSessionError(err) {
+		current, sessionErr := a.ensureSearchSession()
+		if sessionErr != nil {
+			return inkbunny.SubmissionDetailsResponse{}, nil, sessionErr
+		}
+		response, err = a.fetchSubmissionDetailsBatchWithoutCache(ctx, submissionIDs, includePools)
+		user = current
+	}
+	if err != nil {
+		return inkbunny.SubmissionDetailsResponse{}, nil, err
+	}
+	return response, user, nil
+}
+
+func (a *App) fetchSubmissionDetailsBatchWithoutCache(
+	ctx context.Context,
+	submissionIDs []string,
+	includePools bool,
+) (inkbunny.SubmissionDetailsResponse, error) {
+	if len(submissionIDs) == 0 {
+		return inkbunny.SubmissionDetailsResponse{}, nil
+	}
+
+	return apputils.ExecuteWithRateLimitRetry(ctx, a.rateLimiter, "download submission details", func() (inkbunny.SubmissionDetailsResponse, error) {
+		current, err := a.ensureSearchSession()
+		if err != nil {
+			return inkbunny.SubmissionDetailsResponse{}, err
+		}
+		request := inkbunny.SubmissionDetailsRequest{
+			SID:               current.SID,
+			SubmissionIDSlice: submissionIDs,
+		}
+		if includePools {
+			request.ShowPools = inkbunny.Yes
+		}
+		return current.SubmissionDetails(request)
+	})
+}
+
+func queueSubmissionTitle(
+	searchResult inkbunny.SubmissionSearch,
+	submission inkbunny.SubmissionDetails,
+	hasSearchResult bool,
+) string {
+	if hasSearchResult && strings.TrimSpace(searchResult.Title) != "" {
+		return searchResult.Title
+	}
+	return submission.Title
+}
+
+func queueSubmissionUsername(
+	searchResult inkbunny.SubmissionSearch,
+	submission inkbunny.SubmissionDetails,
+	hasSearchResult bool,
+) string {
+	if hasSearchResult && strings.TrimSpace(searchResult.Username) != "" {
+		return searchResult.Username
+	}
+	return submission.Username
+}
+
+func queuePreviewURL(
+	searchResult inkbunny.SubmissionSearch,
+	submission inkbunny.SubmissionDetails,
+	file inkbunny.File,
+	sid string,
+	hasSearchResult bool,
+) string {
+	if hasSearchResult {
+		if previewURL := queueSubmissionPreviewURL(searchResult.SubmissionBasic, sid); previewURL != "" {
+			return previewURL
+		}
+	}
+	if previewURL := submissionResourceURL(file.FileURLPreview.String(), sid, submission.Public.Bool()); previewURL != "" {
+		return previewURL
+	}
+	return queueSubmissionPreviewURL(submission.SubmissionBasic, sid)
+}
+
+func queueSubmissionPreviewURL(submission inkbunny.SubmissionBasic, sid string) string {
+	if previewURL := submissionResourceURL(submission.FileURLPreview.String(), sid, submission.Public.Bool()); previewURL != "" {
+		return previewURL
+	}
+	thumbnail := firstNonEmpty(
+		submission.ThumbnailURLHuge,
+		submission.ThumbnailURLLarge,
+		submission.ThumbnailURLMedium,
+		submission.ThumbnailURLHugeNonCustom,
+		submission.ThumbnailURLLargeNonCustom,
+		submission.ThumbnailURLMediumNonCustom,
+	)
+	return submissionResourceURL(thumbnail, sid, submission.Public.Bool())
 }
 
 func (a *App) syncSessionAvatar(user *inkbunny.User) {

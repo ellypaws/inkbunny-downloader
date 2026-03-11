@@ -182,8 +182,6 @@ export namespace types {
 	    submissionId: string;
 	    submissionUrl?: string;
 	    title: string;
-	    description?: string;
-	    descriptionHtml?: string;
 	    username: string;
 	    userUrl?: string;
 	    typeName: string;
@@ -234,8 +232,6 @@ export namespace types {
 	        this.submissionId = source["submissionId"];
 	        this.submissionUrl = source["submissionUrl"];
 	        this.title = source["title"];
-	        this.description = source["description"];
-	        this.descriptionHtml = source["descriptionHtml"];
 	        this.username = source["username"];
 	        this.userUrl = source["userUrl"];
 	        this.typeName = source["typeName"];
@@ -738,6 +734,22 @@ export namespace types {
 		}
 	}
 	
+	export class SubmissionDescription {
+	    submissionId: string;
+	    description?: string;
+	    descriptionHtml?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubmissionDescription(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.submissionId = source["submissionId"];
+	        this.description = source["description"];
+	        this.descriptionHtml = source["descriptionHtml"];
+	    }
+	}
 	
 	export class UsernameSuggestion {
 	    userId: string;

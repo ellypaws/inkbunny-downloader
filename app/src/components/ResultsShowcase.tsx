@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  ChevronsDown,
   Check,
   Download,
   Eye,
@@ -18,7 +19,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEventHandler,
+  type PointerEvent as ReactPointerEvent,
+  type TouchEvent as ReactTouchEvent,
+  type UIEvent as ReactUIEvent,
+  type WheelEvent as ReactWheelEvent,
 } from "react";
 
 import ElasticSlider from "./ElasticSlider";
@@ -115,6 +121,18 @@ const PANEL_WINDOW_SIZE = 5;
 const RESULT_GRID_GAP = 12;
 const RESULT_CARD_CHROME_HEIGHT = 152;
 const RESULT_CARD_COMPACT_CHROME_HEIGHT = 116;
+const AUTO_SCROLL_IGNORE_MS = 400;
+const USER_SCROLL_INTENT_WINDOW_MS = 1200;
+const USER_SCROLL_DISABLE_THRESHOLD_PX = 4;
+const SCROLL_KEYS = new Set([
+  "ArrowDown",
+  "ArrowUp",
+  "PageDown",
+  "PageUp",
+  "Home",
+  "End",
+  " ",
+]);
 const IDLE_DOWNLOAD_SUMMARY: SubmissionDownloadSummary = {
   state: "idle",
   progress: 0,
@@ -124,6 +142,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const panelAnimationRef = useRef<number | null>(null);
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
   const resultsGridMeasureRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollIgnoreUntilRef = useRef(0);
+  const userScrollIntentUntilRef = useRef(0);
+  const lastObservedScrollTopRef = useRef(0);
   const selectedCount = props.selectedSubmissionIds.length;
   const activeSubmission =
     props.results.find(
@@ -140,6 +161,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const [gridCardWidth, setGridCardWidth] = useState(220);
   const [resultsGridWidth, setResultsGridWidth] = useState(0);
   const [activeModal, setActiveModal] = useState<ActiveModalState | null>(null);
+  const [followLatestResults, setFollowLatestResults] = useState(false);
 
   const panelItems = useMemo(
     () => getPanelItems(props.results, panelStart),
@@ -224,6 +246,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     estimateSize: () => estimatedResultRowHeight,
     overscan: 4,
   });
+  const hasResults = props.results.length > 0;
+  const loadingMoreResults = props.loadMoreState.mode !== "idle";
   const activeModalSubmission = useMemo(
     () =>
       activeModal
@@ -342,17 +366,27 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   ]);
 
   useEffect(() => {
-    if (activeIndex < 0 || props.results.length === 0) {
+    lastObservedScrollTopRef.current = resultsScrollRef.current?.scrollTop ?? 0;
+  }, [followLatestResults, props.results.length, resultColumnCount]);
+
+  useEffect(() => {
+    if (!followLatestResults || !hasResults || !loadingMoreResults) {
       return;
     }
-    resultRowVirtualizer.scrollToIndex(
-      Math.floor(activeIndex / resultColumnCount),
-      { align: "auto" },
-    );
+    if (resultRowCount <= 0) {
+      return;
+    }
+    autoScrollIgnoreUntilRef.current = performance.now() + AUTO_SCROLL_IGNORE_MS;
+    resultRowVirtualizer.scrollToIndex(resultRowCount - 1, {
+      align: "end",
+      behavior: "smooth",
+    });
   }, [
-    activeIndex,
-    resultColumnCount,
-    props.resultsRefreshToken,
+    followLatestResults,
+    hasResults,
+    loadingMoreResults,
+    resultRowCount,
+    props.results.length,
     resultRowVirtualizer,
   ]);
 
@@ -471,6 +505,51 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     }
     props.onDownloadSubmission(activeModalSubmission.submissionId);
   };
+
+  function markUserScrollIntent() {
+    userScrollIntentUntilRef.current =
+      performance.now() + USER_SCROLL_INTENT_WINDOW_MS;
+  }
+
+  function handleResultsPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    const currentTarget = event.currentTarget;
+    const verticalScrollbarWidth =
+      currentTarget.offsetWidth - currentTarget.clientWidth;
+    if (verticalScrollbarWidth <= 0) {
+      return;
+    }
+    const bounds = currentTarget.getBoundingClientRect();
+    if (event.clientX >= bounds.right - verticalScrollbarWidth - 2) {
+      markUserScrollIntent();
+    }
+  }
+
+  function handleResultsKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!SCROLL_KEYS.has(event.key)) {
+      return;
+    }
+    markUserScrollIntent();
+  }
+
+  function handleResultsScroll(event: ReactUIEvent<HTMLDivElement>) {
+    const nextScrollTop = event.currentTarget.scrollTop;
+    const scrollDelta = Math.abs(nextScrollTop - lastObservedScrollTopRef.current);
+    lastObservedScrollTopRef.current = nextScrollTop;
+
+    if (!followLatestResults) {
+      return;
+    }
+    if (performance.now() <= autoScrollIgnoreUntilRef.current) {
+      return;
+    }
+    if (scrollDelta < USER_SCROLL_DISABLE_THRESHOLD_PX) {
+      return;
+    }
+    if (performance.now() > userScrollIntentUntilRef.current) {
+      return;
+    }
+    setFollowLatestResults(false);
+  }
 
   return (
     <section className="relative mt-4">
@@ -840,11 +919,42 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     Submission Details
                   </span>
                 </label>
+                <button
+                  type="button"
+                  aria-pressed={followLatestResults}
+                  disabled={!hasResults}
+                  onClick={() =>
+                    setFollowLatestResults((current) =>
+                      hasResults ? !current : false,
+                    )
+                  }
+                  className={`flex h-10 w-10 items-center justify-center rounded-2xl border shadow-sm transition-all motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 ${
+                    followLatestResults
+                      ? "border-[var(--theme-accent)] bg-[var(--theme-accent)] text-white"
+                      : "theme-button-secondary"
+                  } disabled:cursor-not-allowed disabled:opacity-40`}
+                  title={
+                    followLatestResults
+                      ? "Following the latest results"
+                      : "Follow the latest results"
+                  }
+                >
+                  <ChevronsDown size={18} strokeWidth={2.6} />
+                </button>
               </div>
             </div>
           </div>
           <div
             ref={resultsScrollRef}
+            onScroll={handleResultsScroll}
+            onWheelCapture={(_event: ReactWheelEvent<HTMLDivElement>) =>
+              markUserScrollIntent()
+            }
+            onTouchMoveCapture={(_event: ReactTouchEvent<HTMLDivElement>) =>
+              markUserScrollIntent()
+            }
+            onPointerDownCapture={handleResultsPointerDown}
+            onKeyDownCapture={handleResultsKeyDown}
             className="h-[68vh] overflow-x-hidden overflow-y-auto sm:h-[75vh]"
           >
             <div ref={resultsGridMeasureRef} className="p-2 sm:p-4">

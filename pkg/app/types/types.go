@@ -95,8 +95,6 @@ type SubmissionCard struct {
 	SubmissionID                string                `json:"submissionId"`
 	SubmissionURL               string                `json:"submissionUrl,omitempty"`
 	Title                       string                `json:"title"`
-	Description                 string                `json:"description,omitempty"`
-	DescriptionHTML             string                `json:"descriptionHtml,omitempty"`
 	Username                    string                `json:"username"`
 	UserURL                     string                `json:"userUrl,omitempty"`
 	TypeName                    string                `json:"typeName"`
@@ -137,6 +135,12 @@ type SubmissionCard struct {
 	MediaFiles                  []SubmissionMediaFile `json:"mediaFiles,omitempty"`
 	FileIDs                     []string              `json:"fileIds,omitempty"`
 	Downloaded                  bool                  `json:"downloaded"`
+}
+
+type SubmissionDescription struct {
+	SubmissionID    string `json:"submissionId"`
+	Description     string `json:"description,omitempty"`
+	DescriptionHTML string `json:"descriptionHtml,omitempty"`
 }
 
 type SubmissionMediaFile struct {

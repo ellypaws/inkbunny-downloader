@@ -65,8 +65,6 @@ export type SubmissionCard = {
   submissionId: string
   submissionUrl?: string
   title: string
-  description?: string
-  descriptionHtml?: string
   username: string
   userUrl?: string
   typeName: string
@@ -107,6 +105,12 @@ export type SubmissionCard = {
   mediaFiles?: SubmissionMediaFile[]
   fileIds?: string[]
   downloaded: boolean
+}
+
+export type SubmissionDescription = {
+  submissionId: string
+  description?: string
+  descriptionHtml?: string
 }
 
 export type SubmissionMediaFile = {

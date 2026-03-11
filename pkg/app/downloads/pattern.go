@@ -431,6 +431,10 @@ func patternUsesPoolTokens(pattern string) bool {
 	return strings.Contains(pattern, "{pool_id}") || strings.Contains(pattern, "{pool_name}")
 }
 
+func PatternUsesPoolTokens(pattern string) bool {
+	return patternUsesPoolTokens(pattern)
+}
+
 func resolveDownloadTimestamp(submission inkbunny.SubmissionDetails, file inkbunny.File) time.Time {
 	for _, candidate := range []string{
 		submission.CreateDateUser,

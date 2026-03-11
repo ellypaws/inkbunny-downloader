@@ -41,6 +41,8 @@ export function GetRemoteAccessInfo():Promise<types.RemoteAccessInfo>;
 
 export function GetSession():Promise<types.SessionInfo>;
 
+export function GetSubmissionDescription(arg1:string):Promise<types.SubmissionDescription>;
+
 export function GetUnreadSubmissionCount():Promise<number>;
 
 export function GetUsernameSuggestions(arg1:string):Promise<Array<types.UsernameSuggestion>>;

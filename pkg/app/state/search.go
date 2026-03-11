@@ -34,6 +34,7 @@ type searchState struct {
 	MaxDownloads    int
 	PerPage         int
 	PendingResults  []inkbunny.SubmissionSearch
+	SeenResults     map[string]inkbunny.SubmissionSearch
 	RawResultsCount int
 	ArtistFilters   []string
 	ArtistFilterSet map[string]struct{}
@@ -164,6 +165,7 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 	if err != nil {
 		return types.SearchResponse{}, err
 	}
+	rememberSearchResults(state, visible)
 	state.DeliveredCount = len(visible)
 	state.NextServerPage = nextServerPage
 
@@ -254,6 +256,7 @@ func (a *App) searchMultipleArtists(
 	if err != nil {
 		return types.SearchResponse{}, err
 	}
+	rememberSearchResults(state, visible)
 	state.DeliveredCount = len(visible)
 
 	cards, missingSubmissionIDs := a.buildSubmissionCards(user, visible)
@@ -320,6 +323,8 @@ func (a *App) RefreshSearch(searchID string, operationID string) (resp types.Sea
 		if err != nil {
 			return types.SearchResponse{}, err
 		}
+		state.SeenResults = nil
+		rememberSearchResults(state, visible)
 
 		a.mu.Lock()
 		state.ClientPage = 1
@@ -390,6 +395,8 @@ func (a *App) RefreshSearch(searchID string, operationID string) (resp types.Sea
 	if err != nil {
 		return types.SearchResponse{}, err
 	}
+	state.SeenResults = nil
+	rememberSearchResults(state, visible)
 
 	a.mu.Lock()
 	state.ClientPage = 1
@@ -504,6 +511,7 @@ func (a *App) LoadMoreResults(searchID string, page int, operationID string) (re
 		if err != nil {
 			return types.SearchResponse{}, err
 		}
+		rememberSearchResults(state, visible)
 
 		a.mu.Lock()
 		state.ClientPage = page
@@ -568,6 +576,7 @@ func (a *App) LoadMoreResults(searchID string, page int, operationID string) (re
 	if err != nil {
 		return types.SearchResponse{}, err
 	}
+	rememberSearchResults(state, visible)
 
 	a.mu.Lock()
 	state.ClientPage = page
@@ -714,6 +723,45 @@ func (a *App) getWatching(ctx context.Context) ([]types.UsernameSuggestion, erro
 		}
 	}
 	return items, nil
+}
+
+func (a *App) GetSubmissionDescription(submissionID string) (types.SubmissionDescription, error) {
+	id := strings.TrimSpace(submissionID)
+	if id == "" {
+		return types.SubmissionDescription{}, errors.New("submission id is required")
+	}
+
+	user, err := a.ensureSearchSession()
+	if err != nil {
+		return types.SubmissionDescription{}, err
+	}
+
+	details, err := a.cachedSubmissionDetails(user, []string{id})
+	if err != nil {
+		if a.handleSessionError(err) {
+			user, err = a.ensureSearchSession()
+			if err != nil {
+				return types.SubmissionDescription{}, err
+			}
+			details, err = a.cachedSubmissionDetails(user, []string{id})
+		}
+		if err != nil {
+			return types.SubmissionDescription{}, err
+		}
+	}
+
+	for _, detail := range details.Submissions {
+		if detail.SubmissionID.String() == id {
+			return mapSubmissionDescription(
+				id,
+				detail,
+				user.SID,
+				detail.Public.Bool(),
+			), nil
+		}
+	}
+
+	return types.SubmissionDescription{}, fmt.Errorf("submission %s not found", id)
 }
 
 func (a *App) buildSearchRequest(
@@ -1161,26 +1209,9 @@ func mapSubmissionCards(
 
 		detail := detailsByID[submissionID]
 		cards = append(cards, types.SubmissionCard{
-			SubmissionID:  submissionID,
-			SubmissionURL: submissionPageURL(submissionID),
-			Title:         submission.Title,
-			Description: firstNonEmpty(
-				strings.TrimSpace(detail.Description),
-				strings.TrimSpace(detail.Writing),
-				strings.TrimSpace(detail.SalesDescription),
-			),
-			DescriptionHTML: firstNonEmpty(
-				apputils.NormalizeSubmissionDescriptionHTML(
-					strings.TrimSpace(detail.DescriptionBBCodeParsed),
-					sid,
-					submission.Public.Bool(),
-				),
-				apputils.NormalizeSubmissionDescriptionHTML(
-					strings.TrimSpace(detail.WritingBBCodeParsed),
-					sid,
-					submission.Public.Bool(),
-				),
-			),
+			SubmissionID:     submissionID,
+			SubmissionURL:    submissionPageURL(submissionID),
+			Title:            submission.Title,
 			Username:         submission.Username,
 			UserURL:          userPageURL(submission.Username),
 			TypeName:         submission.TypeName,
@@ -1293,6 +1324,34 @@ func userPageURL(username string) string {
 		return ""
 	}
 	return "https://inkbunny.net/" + url.PathEscape(name)
+}
+
+func mapSubmissionDescription(
+	submissionID string,
+	detail inkbunny.SubmissionDetails,
+	sid string,
+	isPublic bool,
+) types.SubmissionDescription {
+	return types.SubmissionDescription{
+		SubmissionID: submissionID,
+		Description: firstNonEmpty(
+			strings.TrimSpace(detail.Description),
+			strings.TrimSpace(detail.Writing),
+			strings.TrimSpace(detail.SalesDescription),
+		),
+		DescriptionHTML: firstNonEmpty(
+			apputils.NormalizeSubmissionDescriptionHTML(
+				strings.TrimSpace(detail.DescriptionBBCodeParsed),
+				sid,
+				isPublic,
+			),
+			apputils.NormalizeSubmissionDescriptionHTML(
+				strings.TrimSpace(detail.WritingBBCodeParsed),
+				sid,
+				isPublic,
+			),
+		),
+	}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -1436,6 +1495,22 @@ func (a *App) collectVisibleMultiArtistPage(
 		hasMore = false
 	}
 	return visible, 0, hasMore, nil
+}
+
+func rememberSearchResults(state *searchState, results []inkbunny.SubmissionSearch) {
+	if state == nil || len(results) == 0 {
+		return
+	}
+	if state.SeenResults == nil {
+		state.SeenResults = make(map[string]inkbunny.SubmissionSearch, len(results))
+	}
+	for _, result := range results {
+		submissionID := result.SubmissionID.String()
+		if submissionID == "" {
+			continue
+		}
+		state.SeenResults[submissionID] = result
+	}
 }
 
 func (a *App) GetUnreadSubmissionCount() (int, error) {

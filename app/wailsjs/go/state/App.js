@@ -78,6 +78,10 @@ export function GetSession() {
   return window['go']['state']['App']['GetSession']();
 }
 
+export function GetSubmissionDescription(arg1) {
+  return window['go']['state']['App']['GetSubmissionDescription'](arg1);
+}
+
 export function GetUnreadSubmissionCount() {
   return window['go']['state']['App']['GetUnreadSubmissionCount']();
 }
