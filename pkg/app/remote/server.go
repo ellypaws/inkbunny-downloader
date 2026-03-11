@@ -756,14 +756,11 @@ func (s *Server) proxyRemoteResource(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "unsupported resource url")
 		return
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://inkbunny.net/", nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target.String(), nil)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid resource url")
 		return
 	}
-	req.URL.Path = target.Path
-	req.URL.RawPath = target.EscapedPath()
-	req.URL.RawQuery = target.RawQuery
 	copyRequestHeaderIfPresent(req.Header, r.Header, "Accept")
 	copyRequestHeaderIfPresent(req.Header, r.Header, "If-Modified-Since")
 	copyRequestHeaderIfPresent(req.Header, r.Header, "If-None-Match")

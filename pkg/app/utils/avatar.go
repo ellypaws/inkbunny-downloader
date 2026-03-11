@@ -104,6 +104,9 @@ func ParseApprovedInkbunnyURL(raw string) (*url.URL, error) {
 	if parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil {
 		return nil, errApprovedURLDenied
 	}
+	if parsed.Port() != "" {
+		return nil, errApprovedURLDenied
+	}
 	if !IsApprovedInkbunnyHost(parsed.Hostname()) {
 		return nil, errApprovedURLDenied
 	}
@@ -111,7 +114,6 @@ func ParseApprovedInkbunnyURL(raw string) (*url.URL, error) {
 		return nil, errApprovedURLDenied
 	}
 	parsed.Scheme = "https"
-	parsed.Host = "inkbunny.net"
 	return parsed, nil
 }
 
@@ -147,18 +149,10 @@ func FetchUserIconBytes(ctx context.Context, raw string) ([]byte, string, error)
 	if err != nil {
 		return nil, "", err
 	}
-	resolved := target.String()
-	if !strings.HasPrefix(resolved, "https://inkbunny.net/") {
-		return nil, "", errApprovedURLDenied
-	}
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://inkbunny.net/", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {
 		return nil, "", err
 	}
-	request.URL.Path = target.Path
-	request.URL.RawPath = target.EscapedPath()
-	request.URL.RawQuery = target.RawQuery
 
 	request.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
 	request.Header.Set("Origin", "https://inkbunny.net")
