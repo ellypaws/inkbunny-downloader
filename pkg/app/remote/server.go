@@ -508,7 +508,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/resource":
 		s.proxyRemoteResource(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/open":
-		location, err := s.approvedRemoteRedirectLocation(r.URL.Query().Get("url"))
+		location, err := s.approvedRemoteOpenLocation(r.URL.Query().Get("url"))
 		if err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
@@ -753,14 +753,17 @@ func hostWithoutPort(value string) string {
 func (s *Server) proxyRemoteResource(w http.ResponseWriter, r *http.Request) {
 	target, err := s.approvedRemoteTarget(r.URL.Query().Get("url"))
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, http.StatusBadRequest, "unsupported resource url")
 		return
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target.String(), nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://inkbunny.net/", nil)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid resource url")
 		return
 	}
+	req.URL.Path = target.Path
+	req.URL.RawPath = target.EscapedPath()
+	req.URL.RawQuery = target.RawQuery
 	copyRequestHeaderIfPresent(req.Header, r.Header, "Accept")
 	copyRequestHeaderIfPresent(req.Header, r.Header, "If-Modified-Since")
 	copyRequestHeaderIfPresent(req.Header, r.Header, "If-None-Match")
@@ -806,24 +809,12 @@ func copyRequestHeaderIfPresent(target http.Header, source http.Header, name str
 	}
 }
 
-func (s *Server) approvedRemoteRedirectLocation(raw string) (string, error) {
+func (s *Server) approvedRemoteOpenLocation(raw string) (string, error) {
 	target, err := s.approvedRemoteTarget(raw)
 	if err != nil {
 		return "", err
 	}
-	location := target.String()
-	switch {
-	case strings.HasPrefix(location, "https://inkbunny.net/"):
-		return location, nil
-	case strings.Contains(location, ".inkbunny.net/"):
-		return location, nil
-	case strings.HasPrefix(location, "https://ib.metapix.net/"):
-		return location, nil
-	case strings.Contains(location, ".ib.metapix.net/"):
-		return location, nil
-	default:
-		return "", errors.New("unsupported resource url")
-	}
+	return "/api/resource?" + url.Values{"url": []string{target.String()}}.Encode(), nil
 }
 
 func (s *Server) approvedRemoteTarget(raw string) (*url.URL, error) {

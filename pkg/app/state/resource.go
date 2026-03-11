@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
-	baseutils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 )
 
 var (
@@ -16,20 +15,17 @@ var (
 )
 
 func (a *App) ResolveRemoteURL(raw string) string {
-	trimmed := apputils.NormalizeInkbunnyURL(raw)
-	if trimmed == "" {
+	target, err := ParseApprovedRemoteURL(raw)
+	if err != nil || target == nil {
 		return ""
 	}
 
-	if !shouldAttachSessionID(trimmed) {
-		return trimmed
+	if !shouldAttachSessionID(target) {
+		return target.String()
 	}
 
 	sid := a.currentSessionSID()
-	if sid == "" {
-		return baseutils.StripSID(trimmed)
-	}
-	return baseutils.SetSID(trimmed, sid)
+	return withRemoteSessionID(target, sid)
 }
 
 func (a *App) currentSessionSID() string {
@@ -61,12 +57,8 @@ func ParseApprovedRemoteURL(raw string) (*url.URL, error) {
 	return parsed, nil
 }
 
-func shouldAttachSessionID(raw string) bool {
-	parsed, err := url.Parse(apputils.NormalizeInkbunnyURL(raw))
-	if err != nil {
-		return false
-	}
-	return isApprovedRemoteHost(parsed)
+func shouldAttachSessionID(target *url.URL) bool {
+	return isApprovedRemoteHost(target)
 }
 
 func isApprovedRemoteHost(parsed *url.URL) bool {
@@ -74,4 +66,19 @@ func isApprovedRemoteHost(parsed *url.URL) bool {
 		return false
 	}
 	return apputils.IsApprovedInkbunnyHost(parsed.Hostname())
+}
+
+func withRemoteSessionID(target *url.URL, sid string) string {
+	if target == nil {
+		return ""
+	}
+	clone := *target
+	query := clone.Query()
+	if strings.TrimSpace(sid) == "" {
+		query.Del("sid")
+	} else {
+		query.Set("sid", sid)
+	}
+	clone.RawQuery = query.Encode()
+	return clone.String()
 }

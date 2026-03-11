@@ -490,7 +490,7 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 	}
 
 	saveKeywords := options.SaveKeywords
-	downloadRoot, err := a.resolveDownloadDirectory(options.DownloadDirectory)
+	downloadRoot, err := a.resolveDownloadDirectory("")
 	if err != nil {
 		return types.QueueSnapshot{}, err
 	}
