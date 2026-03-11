@@ -35,8 +35,8 @@ type App struct {
 	searches          map[string]*searchState
 	lastSearchID      string
 	searchCounter     int
-	searchOpID        uint64
-	searchOpCancel    context.CancelFunc
+	searchOpSeq       uint64
+	searchOps         map[string]searchOperation
 	keywordCache      *flight.Cache[keywordCacheKey, []inkbunny.KeywordAutocomplete]
 	usernameCache     *flight.Cache[usernameCacheKey, []types.UsernameSuggestion]
 	avatarCache       *flight.Cache[avatarCacheKey, string]
@@ -59,6 +59,11 @@ type App struct {
 
 const submissionDetailsBatchSize = 100
 
+type searchOperation struct {
+	seq    uint64
+	cancel context.CancelFunc
+}
+
 func NewApp() *App {
 	store, _ := storage.NewStateStore()
 	defaultState := storage.DefaultStoredState()
@@ -67,6 +72,7 @@ func NewApp() *App {
 		settings:    defaultState.Settings,
 		workspace:   defaultState.Workspace,
 		searches:    make(map[string]*searchState),
+		searchOps:   make(map[string]searchOperation),
 		rateLimiter: apputils.NewRateLimiter(nil),
 	}
 }
@@ -118,7 +124,7 @@ func (a *App) Shutdown(context.Context) {
 	}
 }
 
-func (a *App) beginSearchOperation() (context.Context, func()) {
+func (a *App) beginSearchOperation(operationID string) (context.Context, func()) {
 	base := a.ctx
 	if base == nil {
 		base = context.Background()
@@ -127,15 +133,27 @@ func (a *App) beginSearchOperation() (context.Context, func()) {
 	ctx, cancel := context.WithCancel(base)
 
 	a.searchOpMu.Lock()
-	a.searchOpID++
-	opID := a.searchOpID
-	a.searchOpCancel = cancel
+	a.searchOpSeq++
+	seq := a.searchOpSeq
+	key := strings.TrimSpace(operationID)
+	if key == "" {
+		key = fmt.Sprintf("anonymous-%d", seq)
+	}
+	previous, hadPrevious := a.searchOps[key]
+	a.searchOps[key] = searchOperation{
+		seq:    seq,
+		cancel: cancel,
+	}
 	a.searchOpMu.Unlock()
+	if hadPrevious && previous.cancel != nil {
+		previous.cancel()
+	}
 
 	finish := func() {
 		a.searchOpMu.Lock()
-		if a.searchOpID == opID {
-			a.searchOpCancel = nil
+		current, ok := a.searchOps[key]
+		if ok && current.seq == seq {
+			delete(a.searchOps, key)
 		}
 		a.searchOpMu.Unlock()
 		cancel()
@@ -144,15 +162,32 @@ func (a *App) beginSearchOperation() (context.Context, func()) {
 	return ctx, finish
 }
 
-func (a *App) CancelSearchRequests() {
+func (a *App) CancelSearchRequests(operationID string) {
 	a.searchOpMu.Lock()
-	cancel := a.searchOpCancel
-	a.searchOpCancel = nil
+	key := strings.TrimSpace(operationID)
+	cancels := make([]context.CancelFunc, 0, 1)
+	if key == "" {
+		cancels = make([]context.CancelFunc, 0, len(a.searchOps))
+		for _, operation := range a.searchOps {
+			if operation.cancel != nil {
+				cancels = append(cancels, operation.cancel)
+			}
+		}
+		a.searchOps = make(map[string]searchOperation)
+	} else {
+		if operation, ok := a.searchOps[key]; ok {
+			delete(a.searchOps, key)
+			if operation.cancel != nil {
+				cancels = append(cancels, operation.cancel)
+			}
+		}
+	}
 	a.searchOpMu.Unlock()
 	a.emitDebugLog("debug", "search.cancel", "cancel search requests invoked", map[string]any{
-		"hadActiveRequest": cancel != nil,
+		"operationId":       key,
+		"cancelledRequests": len(cancels),
 	})
-	if cancel != nil {
+	for _, cancel := range cancels {
 		cancel()
 	}
 }

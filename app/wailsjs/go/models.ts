@@ -358,6 +358,7 @@ export namespace types {
 	    maxDownloads: number;
 	    maxActive: number;
 	    saveKeywords: boolean;
+	    clientOperationId?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchParams(source);
@@ -386,6 +387,7 @@ export namespace types {
 	        this.maxDownloads = source["maxDownloads"];
 	        this.maxActive = source["maxActive"];
 	        this.saveKeywords = source["saveKeywords"];
+	        this.clientOperationId = source["clientOperationId"];
 	    }
 	}
 	export class SavedSearchTab {

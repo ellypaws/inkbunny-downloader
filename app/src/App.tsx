@@ -576,8 +576,11 @@ export default function App() {
       searchLoading: false,
       autoQueuePhase: "idle",
     }));
+    if (!targetTabId) {
+      return;
+    }
     try {
-      await backend.cancelSearchRequests();
+      await backend.cancelSearchRequests(targetTabId);
     } catch {
       // Ignore stop failures and let the local stop guard prevent stale updates.
     }
@@ -721,10 +724,11 @@ export default function App() {
       activeTabIdRef.current,
       protectedTabIds,
     );
+    const hydratedTabs = flushPendingHydratedResultsIntoTabs(mergedTabs);
     pendingWorkspaceEchoesRef.current = [];
-    tabsRef.current = mergedTabs;
+    tabsRef.current = hydratedTabs;
     activeTabIdRef.current = nextActiveTabId;
-    setTabs(mergedTabs);
+    setTabs(hydratedTabs);
     setActiveTabId(nextActiveTabId);
   }
 
@@ -789,7 +793,7 @@ export default function App() {
       })),
     );
 
-    await backend.cancelSearchRequests().catch(() => undefined);
+    await backend.cancelSearchRequests("").catch(() => undefined);
 
     return `Cleared deferred state (${toastCount} toasts, ${autoClearTimerCount} timers, ${pendingDownloadCount} pending downloads).`;
   }
@@ -1321,12 +1325,6 @@ export default function App() {
   }
 
   useEffect(() => void (tabsRef.current = tabs), [tabs]);
-  useEffect(() => {
-    if (pendingHydratedResultsRef.current.size === 0) {
-      return;
-    }
-    setTabs((previous) => flushPendingHydratedResultsIntoTabs(previous));
-  }, [tabs]);
   useEffect(() => void (activeTabIdRef.current = activeTabId), [activeTabId]);
   useEffect(() => void (queueRef.current = queue), [queue]);
   useEffect(
@@ -2191,8 +2189,9 @@ export default function App() {
               ...normalizedParams,
               page,
               maxActive: settingsRef.current.maxActive,
+              clientOperationId: targetTabId,
             })
-          : await backend.loadMoreResults(tab.searchResponse!.searchId, page);
+          : await backend.loadMoreResults(tab.searchResponse!.searchId, page, targetTabId);
       if (isSearchRequestStopRequested(targetTabId, runId)) {
         writeFrontendSearchLog("search response ignored", {
           tabId: targetTabId,
@@ -2324,7 +2323,7 @@ export default function App() {
     const runId = startSearchRequestRun(resolvedTabId);
     let clearSearchLoadingInFinally = true;
     try {
-      const response = await backend.refreshSearch(tab.searchResponse.searchId);
+      const response = await backend.refreshSearch(tab.searchResponse.searchId, resolvedTabId);
       if (isSearchRequestStopRequested(resolvedTabId, runId)) {
         return;
       }

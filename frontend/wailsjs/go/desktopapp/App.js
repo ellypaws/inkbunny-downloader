@@ -6,8 +6,8 @@ export function CancelDownload(arg1) {
   return window['go']['desktopapp']['App']['CancelDownload'](arg1);
 }
 
-export function CancelSearchRequests() {
-  return window['go']['desktopapp']['App']['CancelSearchRequests']();
+export function CancelSearchRequests(arg1) {
+  return window['go']['desktopapp']['App']['CancelSearchRequests'](arg1);
 }
 
 export function DiagnosticState() {
@@ -42,8 +42,8 @@ export function GetUsernameSuggestions(arg1) {
   return window['go']['desktopapp']['App']['GetUsernameSuggestions'](arg1);
 }
 
-export function LoadMoreResults(arg1, arg2) {
-  return window['go']['desktopapp']['App']['LoadMoreResults'](arg1, arg2);
+export function LoadMoreResults(arg1, arg2, arg3) {
+  return window['go']['desktopapp']['App']['LoadMoreResults'](arg1, arg2, arg3);
 }
 
 export function Login(arg1, arg2) {

@@ -5,7 +5,7 @@ import {state} from '../models';
 
 export function CancelDownload(arg1:string):Promise<types.QueueSnapshot>;
 
-export function CancelSearchRequests():Promise<void>;
+export function CancelSearchRequests(arg1:string):Promise<void>;
 
 export function CancelSubmission(arg1:string):Promise<types.QueueSnapshot>;
 
@@ -49,7 +49,7 @@ export function GetWatching():Promise<Array<types.UsernameSuggestion>>;
 
 export function GetWorkspaceState():Promise<types.WorkspaceState>;
 
-export function LoadMoreResults(arg1:string,arg2:number):Promise<types.SearchResponse>;
+export function LoadMoreResults(arg1:string,arg2:number,arg3:string):Promise<types.SearchResponse>;
 
 export function Login(arg1:string,arg2:string):Promise<types.SessionInfo>;
 
@@ -65,7 +65,7 @@ export function PickDownloadDirectory():Promise<string>;
 
 export function ProxyAvatarImageURL(arg1:string):Promise<string>;
 
-export function RefreshSearch(arg1:string):Promise<types.SearchResponse>;
+export function RefreshSearch(arg1:string,arg2:string):Promise<types.SearchResponse>;
 
 export function ResolveRemoteURL(arg1:string):Promise<string>;
 

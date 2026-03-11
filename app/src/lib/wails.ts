@@ -35,10 +35,10 @@ type BackendApi = {
   OpenExternalURL(url: string): Promise<void>
   ProxyAvatarImageURL(url: string): Promise<string>
   Search(params: SearchParams): Promise<SearchResponse>
-  CancelSearchRequests(): Promise<void>
+  CancelSearchRequests(operationId: string): Promise<void>
   GetUnreadSubmissionCount(): Promise<number>
-  RefreshSearch(searchId: string): Promise<SearchResponse>
-  LoadMoreResults(searchId: string, page: number): Promise<SearchResponse>
+  RefreshSearch(searchId: string, operationId: string): Promise<SearchResponse>
+  LoadMoreResults(searchId: string, page: number, operationId: string): Promise<SearchResponse>
   GetKeywordSuggestions(query: string): Promise<KeywordSuggestion[]>
   GetUsernameSuggestions(query: string): Promise<UsernameSuggestion[]>
   GetWatching(): Promise<UsernameSuggestion[]>
@@ -401,8 +401,10 @@ const browserBackend: BackendApi = {
   async Search(params: SearchParams) {
     return requestJSON<SearchResponse>('POST', '/api/search', params)
   },
-  async CancelSearchRequests() {
-    await requestJSON<void>('POST', '/api/search/cancel')
+  async CancelSearchRequests(operationId: string) {
+    await requestJSON<void>('POST', '/api/search/cancel', {
+      operationId,
+    })
   },
   async GetUnreadSubmissionCount() {
     const response = await requestJSON<{ value: number }>(
@@ -411,15 +413,17 @@ const browserBackend: BackendApi = {
     )
     return response.value
   },
-  async RefreshSearch(searchId: string) {
+  async RefreshSearch(searchId: string, operationId: string) {
     return requestJSON<SearchResponse>('POST', '/api/search/refresh', {
       searchId,
+      operationId,
     })
   },
-  async LoadMoreResults(searchId: string, page: number) {
+  async LoadMoreResults(searchId: string, page: number, operationId: string) {
     return requestJSON<SearchResponse>('POST', '/api/search/load-more', {
       searchId,
       page,
+      operationId,
     })
   },
   async GetKeywordSuggestions(query: string) {
@@ -586,20 +590,21 @@ export const backend = {
   async search(params: SearchParams): Promise<SearchResponse> {
     return normalizeSearchResponse(await getBackend().Search(params))
   },
-  async cancelSearchRequests(): Promise<void> {
-    return getBackend().CancelSearchRequests()
+  async cancelSearchRequests(operationId = ""): Promise<void> {
+    return getBackend().CancelSearchRequests(operationId)
   },
   async getUnreadSubmissionCount(): Promise<number> {
     return getBackend().GetUnreadSubmissionCount()
   },
-  async refreshSearch(searchId: string): Promise<SearchResponse> {
-    return normalizeSearchResponse(await getBackend().RefreshSearch(searchId))
+  async refreshSearch(searchId: string, operationId = ""): Promise<SearchResponse> {
+    return normalizeSearchResponse(await getBackend().RefreshSearch(searchId, operationId))
   },
   async loadMoreResults(
     searchId: string,
     page: number,
+    operationId = "",
   ): Promise<SearchResponse> {
-    return normalizeSearchResponse(await getBackend().LoadMoreResults(searchId, page))
+    return normalizeSearchResponse(await getBackend().LoadMoreResults(searchId, page, operationId))
   },
   async getKeywordSuggestions(query: string): Promise<KeywordSuggestion[]> {
     return getBackend().GetKeywordSuggestions(query)

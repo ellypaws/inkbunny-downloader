@@ -4,7 +4,7 @@ import {desktopapp} from '../models';
 
 export function CancelDownload(arg1:string):Promise<desktopapp.QueueSnapshot>;
 
-export function CancelSearchRequests():Promise<void>;
+export function CancelSearchRequests(arg1:string):Promise<void>;
 
 export function DiagnosticState():Promise<string>;
 
@@ -24,7 +24,7 @@ export function GetUnreadSubmissionCount():Promise<number>;
 
 export function GetUsernameSuggestions(arg1:string):Promise<Array<desktopapp.UsernameSuggestion>>;
 
-export function LoadMoreResults(arg1:string,arg2:number):Promise<desktopapp.SearchResponse>;
+export function LoadMoreResults(arg1:string,arg2:number,arg3:string):Promise<desktopapp.SearchResponse>;
 
 export function Login(arg1:string,arg2:string):Promise<desktopapp.SessionInfo>;
 

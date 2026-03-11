@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ellypaws/inkbunny"
@@ -21,6 +22,7 @@ import (
 )
 
 type searchState struct {
+	mu              sync.Mutex
 	ID              string
 	RID             string
 	SID             string
@@ -73,7 +75,7 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 		a.emitDebugLog("info", "search.run", "search completed", fields)
 	}()
 
-	ctx, finish := a.beginSearchOperation()
+	ctx, finish := a.beginSearchOperation(params.ClientOperationID)
 	defer finish()
 
 	user, err := a.ensureSearchSession()
@@ -272,7 +274,7 @@ func (a *App) searchMultipleArtists(
 	}, nil
 }
 
-func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err error) {
+func (a *App) RefreshSearch(searchID string, operationID string) (resp types.SearchResponse, err error) {
 	startedAt := time.Now()
 	a.emitDebugLog("debug", "search.refresh", "refresh requested", map[string]any{
 		"searchId": searchID,
@@ -292,7 +294,7 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 		a.emitDebugLog("info", "search.refresh", "refresh completed", fields)
 	}()
 
-	ctx, finish := a.beginSearchOperation()
+	ctx, finish := a.beginSearchOperation(operationID)
 	defer finish()
 
 	a.mu.RLock()
@@ -301,6 +303,8 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 	if state == nil {
 		return types.SearchResponse{}, fmt.Errorf("unknown search ID: %s", searchID)
 	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
 	a.emitDebugLog("debug", "search.refresh", "refresh state snapshot", debugSearchStateFields(state))
 
 	user, err := a.ensureSearchSession()
@@ -407,7 +411,7 @@ func (a *App) RefreshSearch(searchID string) (resp types.SearchResponse, err err
 	return resp, nil
 }
 
-func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchResponse, err error) {
+func (a *App) LoadMoreResults(searchID string, page int, operationID string) (resp types.SearchResponse, err error) {
 	requestedPage := page
 	startedAt := time.Now()
 	a.emitDebugLog("debug", "search.loadMore", "load more requested", map[string]any{
@@ -430,7 +434,7 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 		a.emitDebugLog("info", "search.loadMore", "load more completed", fields)
 	}()
 
-	ctx, finish := a.beginSearchOperation()
+	ctx, finish := a.beginSearchOperation(operationID)
 	defer finish()
 
 	a.mu.RLock()
@@ -439,6 +443,8 @@ func (a *App) LoadMoreResults(searchID string, page int) (resp types.SearchRespo
 	if state == nil {
 		return types.SearchResponse{}, fmt.Errorf("unknown search ID: %s", searchID)
 	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
 	a.emitDebugLog("debug", "search.loadMore", "load more state snapshot", mergeDebugFields(
 		map[string]any{
 			"requestedPage": requestedPage,

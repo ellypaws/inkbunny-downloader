@@ -56,6 +56,7 @@ type SearchParams struct {
 	MaxDownloads        int      `json:"maxDownloads"`
 	MaxActive           int      `json:"maxActive"`
 	SaveKeywords        bool     `json:"saveKeywords"`
+	ClientOperationID   string   `json:"clientOperationId,omitempty"`
 }
 
 type SearchResponse struct {

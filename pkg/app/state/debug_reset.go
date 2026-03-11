@@ -25,7 +25,7 @@ func (a *App) DebugResetState(scope string) (types.DebugResetResult, error) {
 		return types.DebugResetResult{}, err
 	}
 
-	a.CancelSearchRequests()
+	a.CancelSearchRequests("")
 
 	queue := types.EmptyQueueSnapshot()
 	if plan.resetQueue && a.downloadManager != nil {

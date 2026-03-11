@@ -58,6 +58,7 @@ export type SearchParams = {
   maxDownloads: number
   maxActive: number
   saveKeywords: boolean
+  clientOperationId?: string
 }
 
 export type SubmissionCard = {

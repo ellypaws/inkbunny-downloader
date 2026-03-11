@@ -440,7 +440,11 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, response)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/search/cancel":
-		s.app.CancelSearchRequests()
+		var req searchOperationRequest
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+		s.app.CancelSearchRequests(req.OperationID)
 		writeNoContent(w)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/search/unread-count":
 		total, err := s.app.GetUnreadSubmissionCount()
@@ -454,7 +458,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSON(w, r, &req) {
 			return
 		}
-		response, err := s.app.RefreshSearch(req.SearchID)
+		response, err := s.app.RefreshSearch(req.SearchID, req.OperationID)
 		if err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
@@ -465,7 +469,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSON(w, r, &req) {
 			return
 		}
-		response, err := s.app.LoadMoreResults(req.SearchID, req.Page)
+		response, err := s.app.LoadMoreResults(req.SearchID, req.Page, req.OperationID)
 		if err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
@@ -590,12 +594,18 @@ type scopeRequest struct {
 }
 
 type searchIDRequest struct {
-	SearchID string `json:"searchId"`
+	SearchID    string `json:"searchId"`
+	OperationID string `json:"operationId"`
 }
 
 type loadMoreRequest struct {
-	SearchID string `json:"searchId"`
-	Page     int    `json:"page"`
+	SearchID    string `json:"searchId"`
+	Page        int    `json:"page"`
+	OperationID string `json:"operationId"`
+}
+
+type searchOperationRequest struct {
+	OperationID string `json:"operationId"`
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {

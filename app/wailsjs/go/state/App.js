@@ -6,8 +6,8 @@ export function CancelDownload(arg1) {
   return window['go']['state']['App']['CancelDownload'](arg1);
 }
 
-export function CancelSearchRequests() {
-  return window['go']['state']['App']['CancelSearchRequests']();
+export function CancelSearchRequests(arg1) {
+  return window['go']['state']['App']['CancelSearchRequests'](arg1);
 }
 
 export function CancelSubmission(arg1) {
@@ -94,8 +94,8 @@ export function GetWorkspaceState() {
   return window['go']['state']['App']['GetWorkspaceState']();
 }
 
-export function LoadMoreResults(arg1, arg2) {
-  return window['go']['state']['App']['LoadMoreResults'](arg1, arg2);
+export function LoadMoreResults(arg1, arg2, arg3) {
+  return window['go']['state']['App']['LoadMoreResults'](arg1, arg2, arg3);
 }
 
 export function Login(arg1, arg2) {
@@ -126,8 +126,8 @@ export function ProxyAvatarImageURL(arg1) {
   return window['go']['state']['App']['ProxyAvatarImageURL'](arg1);
 }
 
-export function RefreshSearch(arg1) {
-  return window['go']['state']['App']['RefreshSearch'](arg1);
+export function RefreshSearch(arg1, arg2) {
+  return window['go']['state']['App']['RefreshSearch'](arg1, arg2);
 }
 
 export function ResolveRemoteURL(arg1) {
