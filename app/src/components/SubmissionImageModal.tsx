@@ -91,28 +91,11 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
   );
   const [avatarIndex, setAvatarIndex] = useState(0);
   const avatarSrc = avatarCandidates[avatarIndex] ?? DEFAULT_AVATAR_URL;
-  const [resolvedAvatarSrc, setResolvedAvatarSrc] = useState(avatarSrc);
   const isSidebarRendered = sidebarMode !== "closed";
 
   useEffect(() => {
     setAvatarIndex(0);
   }, [props.submission.submissionId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setResolvedAvatarSrc(avatarSrc);
-
-    void resolveAvatarImageURL(avatarSrc).then((resolved) => {
-      if (cancelled) {
-        return;
-      }
-      setResolvedAvatarSrc(resolved || avatarSrc);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [avatarSrc]);
 
   useEffect(() => {
     const navigationPill = document.querySelector<HTMLElement>(
@@ -523,15 +506,13 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
           >
             <div className="sim-panel-item flex items-start gap-3">
               <img
-                src={resolveMediaURL(resolvedAvatarSrc) ?? resolvedAvatarSrc}
-                srcSet={
-                  avatarIndex === 0 && !isUserIconURL(avatarSrc)
-                    ? resolveMediaSrcSet(avatarSrcSet || undefined)
-                    : undefined
-                }
+                src={resolveMediaURL(avatarSrc) ?? avatarSrc}
+                srcSet={resolveMediaSrcSet(avatarSrcSet || undefined)}
                 sizes="48px"
                 alt={props.submission.username}
                 referrerPolicy="no-referrer"
+                decoding="sync"
+                fetchPriority="high"
                 onError={(event) => {
                   setAvatarIndex((current) => {
                     if (current < avatarCandidates.length - 1) {
@@ -935,10 +916,6 @@ const SubmissionDescription = memo(function SubmissionDescription(props: {
       setResolvedDescriptionHtml(undefined);
       return;
     }
-    if (!descriptionHtml.includes("/usericons/")) {
-      setResolvedDescriptionHtml(descriptionHtml);
-      return;
-    }
 
     const documentFragment = new DOMParser().parseFromString(
       descriptionHtml,
@@ -957,6 +934,7 @@ const SubmissionDescription = memo(function SubmissionDescription(props: {
         node.setAttribute("srcset", resolveMediaSrcSet(srcSet) ?? srcSet);
       }
     }
+
     const userIconImages = Array.from(documentFragment.querySelectorAll("img"))
       .map((image) => ({
         image,
@@ -965,7 +943,7 @@ const SubmissionDescription = memo(function SubmissionDescription(props: {
       .filter((entry) => isUserIconURL(entry.src));
 
     if (userIconImages.length === 0) {
-      setResolvedDescriptionHtml(descriptionHtml);
+      setResolvedDescriptionHtml(documentFragment.body.innerHTML);
       return;
     }
 
@@ -1114,8 +1092,8 @@ function getAvatarCandidates(submission: SubmissionCard) {
   const seen = new Set<string>();
   return [
     submission.userIconUrlMedium,
-    submission.userIconUrlLarge,
     submission.userIconUrlSmall,
+    submission.userIconUrlLarge,
   ].filter((src): src is string => {
     if (!src || seen.has(src)) {
       return false;
@@ -1174,7 +1152,7 @@ function resolveAvatarImageURL(src?: string) {
     return Promise.resolve("");
   }
   if (!isUserIconURL(src)) {
-    return Promise.resolve(src);
+    return Promise.resolve(resolveMediaURL(src) ?? src);
   }
 
   const cached = proxiedAvatarImageRequests.get(src);
@@ -1184,7 +1162,8 @@ function resolveAvatarImageURL(src?: string) {
 
   const request = backend
     .proxyAvatarImageURL(src)
-    .catch(() => src);
+    .then((resolved) => resolveMediaURL(resolved) ?? resolved)
+    .catch(() => resolveMediaURL(src) ?? src);
   proxiedAvatarImageRequests.set(src, request);
   return request;
 }

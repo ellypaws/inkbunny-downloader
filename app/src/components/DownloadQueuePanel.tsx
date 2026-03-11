@@ -685,6 +685,7 @@ function QueueThumbnail(props: { src?: string; alt: string }) {
       src={resolveMediaURL(props.src) ?? props.src}
       alt={props.alt}
       loading="lazy"
+      decoding="async"
       referrerPolicy="no-referrer"
       onError={() => {
         setFailed(true);

@@ -910,6 +910,7 @@ function ArtistSuggestionFieldBlock(props: ArtistSuggestionFieldBlockProps) {
                         DEFAULT_AVATAR_URL
                       }
                       alt={artist}
+                      decoding="async"
                       onError={(event) => {
                         event.currentTarget.src = DEFAULT_AVATAR_URL;
                       }}
@@ -1167,6 +1168,7 @@ function UsernameSuggestionList(props: {
             <img
               src={suggestion.avatarUrl || DEFAULT_AVATAR_URL}
               alt={suggestion.username}
+              decoding="async"
               onError={(event) => {
                 event.currentTarget.src = DEFAULT_AVATAR_URL;
               }}

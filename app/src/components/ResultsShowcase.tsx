@@ -625,7 +625,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         </div>
       </div>
 
-      <div className="theme-panel flex h-[44rem] w-full flex-col overflow-hidden rounded-toy-sm border-2 shadow-pop sm:h-[52rem] md:h-[600px] md:flex-row">
+      <div className="theme-panel flex h-[44rem] w-full flex-col overflow-hidden rounded-toy-sm border-2 shadow-pop sm:h-[52rem] md:h-[600px] md:flex-row" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 600px" }}>
         {props.results.length === 0 ? (
           <div className="theme-panel-soft flex h-full w-full flex-col items-center justify-center px-6 text-center">
             {emptyState.busy ? (
@@ -816,7 +816,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       </div>
 
       {props.results.length > 0 ? (
-        <div className="theme-panel-soft mt-6 overflow-hidden rounded-toy-sm border-2 shadow-pop backdrop-blur-2xl">
+        <div className="theme-panel-soft mt-6 overflow-hidden rounded-toy-sm border-2 shadow-pop backdrop-blur-2xl" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 80vh" }}>
           <div className="border-b border-[var(--theme-border-soft)] bg-[color:var(--theme-surface)]/92 px-4 py-3 backdrop-blur-2xl">
             <div className="flex flex-wrap items-center justify-end gap-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -1410,6 +1410,7 @@ function SubmissionPreviewImage(props: {
       sizes={props.sizes}
       alt={props.alt}
       loading="lazy"
+      decoding="async"
       referrerPolicy="no-referrer"
       onError={() => {
         setSourceIndex((current) => current + 1);
@@ -1794,6 +1795,7 @@ function SubmissionAuthorButton(props: {
         sizes={props.compact ? "24px" : "32px"}
         alt={props.submission.username}
         loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setAvatarErrored(true)}
         className={`shrink-0 rounded-full border border-white/70 bg-white object-cover ${
