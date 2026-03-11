@@ -365,6 +365,10 @@ function buildRemoteResourceURL(url: string): string {
   return `/api/resource?url=${encodeURIComponent(url)}`
 }
 
+function buildAvatarImageURL(url: string): string {
+  return `/api/avatar/image?url=${encodeURIComponent(url)}`
+}
+
 function buildRemoteOpenURL(url: string): string {
   return `/api/open?url=${encodeURIComponent(url)}`
 }
@@ -395,11 +399,7 @@ const browserBackend: BackendApi = {
     window.open(buildRemoteOpenURL(url), '_blank', 'noopener,noreferrer')
   },
   async ProxyAvatarImageURL(url: string) {
-    const response = await requestJSON<{ value: string }>(
-      'GET',
-      `/api/avatar/proxy?url=${encodeURIComponent(url)}`,
-    )
-    return response.value
+    return buildAvatarImageURL(url)
   },
   async Search(params: SearchParams) {
     return requestJSON<SearchResponse>('POST', '/api/search', params)

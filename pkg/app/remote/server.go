@@ -24,6 +24,7 @@ import (
 
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/state"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
+	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
 )
 
 const (
@@ -110,6 +111,8 @@ func NewServer(app *state.App, cfg Config) (*Server, error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /pair", server.handlePair)
+	mux.HandleFunc("GET /api/avatar/image", server.handleAvatarImage)
+	mux.HandleFunc("GET /api/remote/qrcode.png", server.handleQRCode)
 	mux.Handle("GET /ws", server.requireAuth(http.HandlerFunc(server.handleWebSocket)))
 	mux.Handle("/api/", server.requireAuth(http.HandlerFunc(server.handleAPI)))
 	mux.Handle("/", server.requireAuth(http.HandlerFunc(server.handleFrontend)))
@@ -157,18 +160,16 @@ func (s *Server) buildInfo(host string) (types.RemoteAccessInfo, error) {
 		host = "127.0.0.1"
 	}
 	pairingURL := s.buildPairingURL(host)
-	code, err := qr.Encode(pairingURL, qr.M)
-	if err != nil {
+	if _, err := qr.Encode(pairingURL, qr.M); err != nil {
 		return types.RemoteAccessInfo{}, err
 	}
-	code.Scale = 6
 	return types.RemoteAccessInfo{
 		Enabled:       true,
 		ListenAddress: s.listener.Addr().String(),
 		PairingToken:  s.pairToken,
 		PairingURL:    pairingURL,
 		SelectedHost:  host,
-		QRCodeDataURL: "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG()),
+		QRCodeDataURL: s.buildQRCodeImageURL(),
 	}, nil
 }
 
@@ -178,6 +179,14 @@ func (s *Server) buildPairingURL(host string) string {
 		port = fmt.Sprintf("%d", tcpAddr.Port)
 	}
 	return fmt.Sprintf("http://%s:%s/pair?token=%s", host, port, url.QueryEscape(s.pairToken))
+}
+
+func (s *Server) buildQRCodeImageURL() string {
+	port := "34116"
+	if tcpAddr, ok := s.listener.Addr().(*net.TCPAddr); ok && tcpAddr.Port > 0 {
+		port = fmt.Sprintf("%d", tcpAddr.Port)
+	}
+	return fmt.Sprintf("http://127.0.0.1:%s/api/remote/qrcode.png?token=%s", port, url.QueryEscape(s.pairToken))
 }
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
@@ -220,6 +229,56 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		Secure:   shouldMarkAuthCookieSecure(r),
 	})
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("url")
+	normalized := apputils.NormalizeInkbunnyURL(raw)
+	if !apputils.LooksLikeUserIconURL(normalized) {
+		writeJSONError(w, http.StatusBadRequest, "invalid avatar url")
+		return
+	}
+
+	body, contentType, err := apputils.FetchUserIconBytes(r.Context(), normalized)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
+}
+
+func (s *Server) handleQRCode(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("token") != s.pairToken {
+		http.NotFound(w, r)
+		return
+	}
+
+	s.mu.RLock()
+	pairingURL := s.info.PairingURL
+	s.mu.RUnlock()
+	if strings.TrimSpace(pairingURL) == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	code, err := qr.Encode(pairingURL, qr.M)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "qr generation failed")
+		return
+	}
+	code.Scale = 6
+	png := code.PNG()
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(png)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(png)
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {

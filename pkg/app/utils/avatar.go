@@ -2,7 +2,6 @@ package utils
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -60,11 +59,11 @@ func LooksLikeUserIconURL(raw string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(raw)), "/usericons/")
 }
 
-func FetchUserIconDataURL(ctx context.Context, raw string) (string, error) {
+func FetchUserIconBytes(ctx context.Context, raw string) ([]byte, string, error) {
 	normalized := NormalizeInkbunnyURL(raw)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, normalized, nil)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	request.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
@@ -75,12 +74,12 @@ func FetchUserIconDataURL(ctx context.Context, raw string) (string, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	response, err := client.Do(request)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("avatar proxy status: %s", response.Status)
+		return nil, "", fmt.Errorf("avatar proxy status: %s", response.Status)
 	}
 
 	contentType := strings.TrimSpace(response.Header.Get("Content-Type"))
@@ -96,7 +95,7 @@ func FetchUserIconDataURL(ctx context.Context, raw string) (string, error) {
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(body), nil
+	return body, contentType, nil
 }
