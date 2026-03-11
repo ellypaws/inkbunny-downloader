@@ -102,6 +102,17 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const showAllJobs =
     selectedStatuses.length === 0 ||
     selectedStatuses.length === FILTERABLE_QUEUE_STATUSES.length;
+  const hiddenCompletedJobs = Math.max(
+    0,
+    props.queue.completedCount -
+      props.queue.jobs.filter((job) => job.status === "completed").length,
+  );
+  const hiddenCancelledJobs = Math.max(
+    0,
+    props.queue.cancelledCount -
+      props.queue.jobs.filter((job) => job.status === "cancelled").length,
+  );
+  const hiddenJobCount = hiddenCompletedJobs + hiddenCancelledJobs;
   const visibleJobs = useMemo(() => {
     if (showAllJobs) {
       return props.queue.jobs;
@@ -397,6 +408,13 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
       {props.message ? (
         <div className="theme-panel-soft relative z-10 mt-3 rounded-2xl border px-3 py-3 text-sm font-bold shadow-sm motion-safe:animate-[fade-in_220ms_ease-out] sm:px-4">
           {props.message}
+        </div>
+      ) : null}
+
+      {hiddenJobCount > 0 ? (
+        <div className="theme-panel-soft relative z-10 mt-3 rounded-2xl border px-3 py-3 text-xs font-semibold shadow-sm sm:px-4 sm:text-sm">
+          Showing active, failed, and recent history only.
+          Hidden: {hiddenCompletedJobs} completed, {hiddenCancelledJobs} cancelled.
         </div>
       ) : null}
 

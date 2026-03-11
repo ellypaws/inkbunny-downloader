@@ -25,6 +25,12 @@ import {
   type DebugPanelName,
   type DebugResetTarget,
 } from "./lib/debugControls";
+import {
+  denormalizeSubmissionCard,
+  denormalizeSubmissionCards,
+  getSubmissionArtistStoreStats,
+  normalizeSubmissionCards,
+} from "./lib/submissionMemory";
 import type {
   AppNotification,
   AppSettings,
@@ -57,13 +63,17 @@ const GUEST_DEFAULT_MAX_DOWNLOADS = 256;
 const RELEASE_UPDATE_TOAST_ID = "release-update-toast";
 const TOUR_STEP_DELAY_MS = 420;
 const UNREAD_POLL_INTERVAL_MS = 60_000;
-const LOAD_ALL_DELAY_MS = 500;
 const AUTO_QUEUE_INTERVAL_MS = 60_000;
 const AUTO_QUEUE_TICK_MS = 1_000;
 const LOCAL_WORKSPACE_INPUT_PROTECTION_MS = 2_500;
+const MAX_RETAINED_COMPLETED_QUEUE_JOBS = 200;
+const MAX_RETAINED_CANCELLED_QUEUE_JOBS = 50;
+const MAX_RETAINED_COMPLETED_QUEUE_PREVIEWS = 12;
 
 type SearchTabLoadMoreMode = "idle" | "more" | "all";
 type AutoQueuePhase = "idle" | "searching" | "queueing";
+type SearchTabSearchPhase = "idle" | "searching" | "processing";
+type SearchTabSearchActivity = "idle" | "search" | "refresh";
 
 type SearchTabLoadMoreState = {
   mode: SearchTabLoadMoreMode;
@@ -72,6 +82,8 @@ type SearchTabLoadMoreState = {
 
 type SearchTabState = SavedSearchTab & {
   searchLoading: boolean;
+  searchPhase: SearchTabSearchPhase;
+  searchActivity: SearchTabSearchActivity;
   searchError: string;
   resultsRefreshToken: number;
   loadMoreState: SearchTabLoadMoreState;
@@ -203,6 +215,8 @@ export default function App() {
   const activeSubmissionId = activeTab?.activeSubmissionId ?? "";
   const activeSelectedSubmissionIds = activeTab?.selectedSubmissionIds ?? [];
   const activeSearchLoading = activeTab?.searchLoading ?? false;
+  const activeSearchPhase = activeTab?.searchPhase ?? "idle";
+  const activeSearchActivity = activeTab?.searchActivity ?? "idle";
   const activeSearchCollapsed = activeTab?.searchCollapsed ?? false;
   const activeSearchError = activeTab?.searchError ?? "";
   const activeResultsRefreshToken = activeTab?.resultsRefreshToken ?? 0;
@@ -247,21 +261,15 @@ export default function App() {
   const activeSearchButtonDisabled = activeSearchButtonMode === "downloading";
   const activeDownloadButtonMode = activeTabDownloading
     ? "stop"
-    : activeSearchBusy || activeTabQueueing
-      ? "searching"
-      : "default";
+    : "default";
   const activeDownloadButtonLabel =
     activeDownloadButtonMode === "stop"
       ? "Stop Downloads"
-      : activeDownloadButtonMode === "searching"
-        ? "Searching"
-        : "Download";
+      : "Download";
   const activeDownloadButtonDisabled =
-    activeDownloadButtonMode === "searching"
-      ? true
-      : activeDownloadButtonMode === "stop"
-        ? false
-        : !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
+    activeDownloadButtonMode === "stop"
+      ? false
+      : !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
   const unreadModeActive = activeTab?.mode === "unread";
   const folderPreviewImages = useMemo(
     () =>
@@ -577,6 +585,8 @@ export default function App() {
     updateTab(targetTabId, (currentTab) => ({
       ...currentTab,
       searchLoading: false,
+      searchPhase: "idle",
+      searchActivity: "idle",
       autoQueuePhase: "idle",
     }));
     if (!targetTabId) {
@@ -702,7 +712,9 @@ export default function App() {
   }
 
   function applyQueueSnapshot(snapshot: QueueSnapshot | null | undefined) {
-    setQueue(normalizeQueueSnapshot(snapshot));
+    setQueue((current) =>
+      compactQueueSnapshot(normalizeQueueSnapshot(snapshot), current),
+    );
   }
 
   function writeFrontendSearchLog(message: string, fields?: Record<string, unknown>) {
@@ -789,6 +801,8 @@ export default function App() {
       previous.map((tab) => ({
         ...tab,
         searchLoading: false,
+        searchPhase: "idle",
+        searchActivity: "idle",
         searchError: "",
         loadMoreState: createIdleLoadMoreState(),
         autoQueuePhase: "idle",
@@ -954,11 +968,16 @@ export default function App() {
     if (!update.searchId || update.results.length === 0) {
       return;
     }
-    if (!areHydratedResultsMounted(update)) {
-      rememberPendingHydratedResults(update);
+    const normalizedResults = normalizeSubmissionCards(update.results);
+    const normalizedUpdate =
+      normalizedResults === update.results
+        ? update
+        : { ...update, results: normalizedResults };
+    if (!areHydratedResultsMounted(normalizedUpdate)) {
+      rememberPendingHydratedResults(normalizedUpdate);
     }
     startTransition(() => {
-      setTabs((previous) => mergeHydratedSearchResults(previous, update));
+      setTabs((previous) => mergeHydratedSearchResults(previous, normalizedUpdate));
     });
   }
 
@@ -971,9 +990,10 @@ export default function App() {
   }
 
   function applyPendingHydratedResults(searchId: string, results: SubmissionCard[]) {
-    const merged = mergePendingHydratedResults(searchId, results);
+    const normalizedResults = normalizeSubmissionCards(results);
+    const merged = mergePendingHydratedResults(searchId, normalizedResults);
     if (merged.matchedSubmissionIds.length === 0) {
-      return results;
+      return normalizedResults;
     }
     clearPendingHydratedResults(searchId, merged.matchedSubmissionIds);
     return merged.results;
@@ -1195,6 +1215,73 @@ export default function App() {
     return "Reloading page.";
   }
 
+  function buildMemoryReport() {
+    const allResults = tabsRef.current.flatMap((tab) => tab.results);
+    const submissionStats = getSubmissionArtistStoreStats(allResults);
+    const queueSnapshot = queueRef.current;
+    const queueEstimatedBytes = estimateValueBytes(queueSnapshot.jobs);
+    const visibleImageBytes = estimateVisibleImageBytes();
+    const queuePreviewCount = queueSnapshot.jobs.filter((job) => Boolean(job.previewUrl)).length;
+    const hiddenCompletedJobs = Math.max(
+      0,
+      queueSnapshot.completedCount -
+        queueSnapshot.jobs.filter((job) => job.status === "completed").length,
+    );
+    const hiddenCancelledJobs = Math.max(
+      0,
+      queueSnapshot.cancelledCount -
+        queueSnapshot.jobs.filter((job) => job.status === "cancelled").length,
+    );
+    const browserMemory = getBrowserMemoryStats();
+    const report = {
+      browser: browserMemory,
+      tabs: {
+        tabCount: tabsRef.current.length,
+        totalResults: allResults.length,
+        activeTabResults: tabsRef.current.find((tab) => tab.id === activeTabIdRef.current)?.results
+          .length ?? 0,
+      },
+      results: {
+        count: submissionStats.resultCount,
+        uniqueArtists: submissionStats.uniqueArtistCount,
+        normalizedBytes: submissionStats.normalizedResultBytes,
+        normalizedLabel: formatMemoryBytes(submissionStats.normalizedResultBytes),
+        uniqueArtistBytes: submissionStats.uniqueArtistBytes,
+        uniqueArtistLabel: formatMemoryBytes(submissionStats.uniqueArtistBytes),
+        denormalizedBytes: submissionStats.denormalizedResultBytes,
+        denormalizedLabel: formatMemoryBytes(submissionStats.denormalizedResultBytes),
+        savedBytes: submissionStats.savedBytes,
+        savedLabel: formatMemoryBytes(submissionStats.savedBytes),
+      },
+      queue: {
+        retainedJobs: queueSnapshot.jobs.length,
+        estimatedBytes: queueEstimatedBytes,
+        estimatedLabel: formatMemoryBytes(queueEstimatedBytes),
+        totalQueued: queueSnapshot.queuedCount,
+        totalActive: queueSnapshot.activeCount,
+        totalCompleted: queueSnapshot.completedCount,
+        totalFailed: queueSnapshot.failedCount,
+        totalCancelled: queueSnapshot.cancelledCount,
+        hiddenCompletedJobs,
+        hiddenCancelledJobs,
+        retainedPreviewUrls: queuePreviewCount,
+      },
+      images: {
+        domImageCount: typeof document === "undefined" ? 0 : document.images.length,
+        visibleDecodedBytes: visibleImageBytes,
+        visibleDecodedLabel: formatMemoryBytes(visibleImageBytes),
+      },
+      likelyDriver: summarizeLikelyMemoryDriver(
+        submissionStats.normalizedResultBytes + submissionStats.uniqueArtistBytes,
+        queueEstimatedBytes,
+        visibleImageBytes,
+      ),
+    };
+
+    console.info("Inkbunny memory report:", report);
+    return JSON.stringify(report, null, 2);
+  }
+
   async function runDebugBackendRefresh() {
     const deferredMessage = await clearDeferredDebugState();
     applyBackendSnapshot(await fetchAppSnapshotFromBackend());
@@ -1364,6 +1451,8 @@ export default function App() {
       tabId: activeTab?.id ?? "",
       mode: activeTab?.mode ?? "",
       searchLoading: activeSearchLoading,
+      searchPhase: activeSearchPhase,
+      searchActivity: activeSearchActivity,
       loadMoreMode: activeLoadMoreState.mode,
       autoQueuePhase: activeTab?.autoQueuePhase ?? "idle",
       searchId: activeSearchResponse?.searchId ?? "",
@@ -1374,6 +1463,8 @@ export default function App() {
     activeLoadMoreState.mode,
     activeResults.length,
     activeSearchLoading,
+    activeSearchPhase,
+    activeSearchActivity,
     activeSearchResponse?.resultsCount,
     activeSearchResponse?.searchId,
     activeTab?.autoQueuePhase,
@@ -1516,6 +1607,7 @@ export default function App() {
       pushToast,
       clearToasts: clearAllToasts,
       openPanel: openDebugPanel,
+      memoryReport: buildMemoryReport,
       cancelSearch: () => stopActiveSearch(),
       resetState: runDebugStateReset,
       refreshBackend: runDebugBackendRefresh,
@@ -2180,6 +2272,8 @@ export default function App() {
     updateTab(targetTabId, (currentTab) => ({
       ...currentTab,
       searchLoading: true,
+      searchPhase: "searching",
+      searchActivity: "search",
       searchError: "",
     }));
     const runId = startSearchRequestRun(targetTabId);
@@ -2246,57 +2340,61 @@ export default function App() {
         setTourSearchAttempted(true);
       }
       applySessionWithoutTabSync(response.session);
-      const hydratedResults = applyPendingHydratedResults(response.searchId, response.results);
+      const hydratedResults = applyPendingHydratedResults(
+        response.searchId,
+        normalizeSubmissionCards(response.results),
+      );
       const hydratedResponse =
         hydratedResults === response.results ? response : { ...response, results: hydratedResults };
       if (page === 1 && activeTabIdRef.current === targetTabId) {
         shouldScrollToResultsRef.current = true;
       }
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        searchPhase: "processing",
+      }));
       clearSearchLoadingInFinally = false;
-      startTransition(() => {
-        setTabs((previous) =>
-          previous.map((currentTab) => {
-            if (currentTab.id !== targetTabId) {
-              return currentTab;
-            }
-            if (page === 1) {
-              const nextTab = committedArtistName
-                ? commitArtistSelection(currentTab, committedArtistName, {
-                    avatarUrl: committedArtistSuggestion?.avatarUrl || "",
-                    validation: committedArtistSuggestion ? "valid" : "pending",
-                  })
-                : currentTab;
-              return {
-                ...nextTab,
-                searchParams: normalizedParams,
-                artistDraft: "",
-                searchLoading: false,
-                searchResponse: hydratedResponse,
-                results: hydratedResponse.results,
-                selectedSubmissionIds: getAutoSelectedSubmissionIds(
-                  hydratedResponse.results,
-                  mergeDownloadedSubmissionIds(
-                    downloadedSubmissionIdsRef.current,
-                    hydratedResponse.results,
-                  ),
-                ),
-                activeSubmissionId: hydratedResponse.results[0]?.submissionId ?? "",
-                searchError: "",
-              };
-            }
-            return {
-              ...currentTab,
-              searchLoading: false,
-              searchResponse: hydratedResponse,
-              results: [...currentTab.results, ...hydratedResponse.results],
-              activeSubmissionId:
-                currentTab.activeSubmissionId || hydratedResponse.results[0]?.submissionId || "",
-              searchError: "",
-            };
-          }),
-        );
+      updateTab(targetTabId, (currentTab) => {
+        if (page === 1) {
+          const nextTab = committedArtistName
+            ? commitArtistSelection(currentTab, committedArtistName, {
+                avatarUrl: committedArtistSuggestion?.avatarUrl || "",
+                validation: committedArtistSuggestion ? "valid" : "pending",
+              })
+            : currentTab;
+          return {
+            ...nextTab,
+            searchParams: normalizedParams,
+            artistDraft: "",
+            searchLoading: false,
+            searchPhase: "idle",
+            searchActivity: "idle",
+            searchResponse: hydratedResponse,
+            results: hydratedResponse.results,
+            selectedSubmissionIds: getAutoSelectedSubmissionIds(
+              hydratedResponse.results,
+              mergeDownloadedSubmissionIds(
+                downloadedSubmissionIdsRef.current,
+                hydratedResponse.results,
+              ),
+            ),
+            activeSubmissionId: hydratedResponse.results[0]?.submissionId ?? "",
+            searchError: "",
+          };
+        }
+        return {
+          ...currentTab,
+          searchLoading: false,
+          searchPhase: "idle",
+          searchActivity: "idle",
+          searchResponse: hydratedResponse,
+          results: [...currentTab.results, ...hydratedResponse.results],
+          activeSubmissionId:
+            currentTab.activeSubmissionId || hydratedResponse.results[0]?.submissionId || "",
+          searchError: "",
+        };
       });
-      writeFrontendSearchLog("search response scheduled for tab apply", {
+      writeFrontendSearchLog("search response applied to tab state", {
         tabId: targetTabId,
         runId,
         page,
@@ -2331,7 +2429,12 @@ export default function App() {
           runId,
           page,
         });
-        updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+        updateTab(targetTabId, (currentTab) => ({
+          ...currentTab,
+          searchLoading: false,
+          searchPhase: "idle",
+          searchActivity: "idle",
+        }));
       }
     }
   }
@@ -2347,6 +2450,8 @@ export default function App() {
     updateTab(resolvedTabId, (currentTab) => ({
       ...currentTab,
       searchLoading: true,
+      searchPhase: "searching",
+      searchActivity: "refresh",
       searchError: "",
     }));
     const runId = startSearchRequestRun(resolvedTabId);
@@ -2360,30 +2465,28 @@ export default function App() {
       const hydratedResults = applyPendingHydratedResults(response.searchId, response.results);
       const hydratedResponse =
         hydratedResults === response.results ? response : { ...response, results: hydratedResults };
+      updateTab(resolvedTabId, (currentTab) => ({
+        ...currentTab,
+        searchPhase: "processing",
+      }));
       clearSearchLoadingInFinally = false;
-      startTransition(() => {
-        setTabs((previous) =>
-            previous.map((currentTab) =>
-              currentTab.id === resolvedTabId
-                ? {
-                  ...currentTab,
-                  searchLoading: false,
-                  searchResponse: hydratedResponse,
-                  results: hydratedResponse.results,
-                  selectedSubmissionIds: getAutoSelectedSubmissionIds(
-                    hydratedResponse.results,
-                    mergeDownloadedSubmissionIds(
-                      downloadedSubmissionIdsRef.current,
-                      hydratedResponse.results,
-                    ),
-                  ),
-                  activeSubmissionId: hydratedResponse.results[0]?.submissionId ?? "",
-                  resultsRefreshToken: currentTab.resultsRefreshToken + 1,
-                }
-              : currentTab,
+      updateTab(resolvedTabId, (currentTab) => ({
+        ...currentTab,
+        searchLoading: false,
+        searchPhase: "idle",
+        searchActivity: "idle",
+        searchResponse: hydratedResponse,
+        results: hydratedResponse.results,
+        selectedSubmissionIds: getAutoSelectedSubmissionIds(
+          hydratedResponse.results,
+          mergeDownloadedSubmissionIds(
+            downloadedSubmissionIdsRef.current,
+            hydratedResponse.results,
           ),
-        );
-      });
+        ),
+        activeSubmissionId: hydratedResponse.results[0]?.submissionId ?? "",
+        resultsRefreshToken: currentTab.resultsRefreshToken + 1,
+      }));
     } catch (error) {
       if (
         isSearchRequestStopRequested(resolvedTabId, runId) ||
@@ -2400,7 +2503,12 @@ export default function App() {
       pushErrorToast(message, "refresh-search-error");
     } finally {
       if (clearSearchLoadingInFinally && isSearchRequestRunActive(resolvedTabId, runId)) {
-        updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchLoading: false }));
+        updateTab(resolvedTabId, (currentTab) => ({
+          ...currentTab,
+          searchLoading: false,
+          searchPhase: "idle",
+          searchActivity: "idle",
+        }));
       }
     }
   }
@@ -2430,11 +2538,6 @@ export default function App() {
     }));
 
     try {
-      await delay(LOAD_ALL_DELAY_MS);
-      if (isLoadMoreStopRequested(targetTabId, runId)) {
-        return;
-      }
-
       let nextPage = tab.searchResponse.page + 1;
       while (true) {
         const currentTab = tabsRef.current.find((item) => item.id === targetTabId);
@@ -2467,7 +2570,6 @@ export default function App() {
         }
 
         nextPage = response.page + 1;
-        await delay(LOAD_ALL_DELAY_MS);
         if (isLoadMoreStopRequested(targetTabId, runId)) {
           return;
         }
@@ -3111,6 +3213,8 @@ export default function App() {
               showEngagementStats
               allSelected={allResultsSelected}
               loading={activeSearchBusy}
+              searchPhase={activeSearchPhase}
+              searchActivity={activeSearchActivity}
               loadMoreState={activeLoadMoreState}
               resultsRefreshToken={activeResultsRefreshToken}
               queue={queue}
@@ -3167,6 +3271,7 @@ export default function App() {
               onRetrySubmission={(submissionId) => void handleRetrySubmission(submissionId)}
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
+              onStopSearch={() => void stopActiveSearch()}
               onDownloadAction={() =>
                 void (
                   activeDownloadButtonMode === "stop"
@@ -3385,7 +3490,10 @@ function mergeHydratedResultsIntoSearchResponse(
 }
 
 function areSubmissionCardsEqual(left: SubmissionCard, right: SubmissionCard) {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return (
+    JSON.stringify(denormalizeSubmissionCard(left)) ===
+    JSON.stringify(denormalizeSubmissionCard(right))
+  );
 }
 
 function getAutoSelectedSubmissionIds(
@@ -3816,6 +3924,8 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
     trackedDownloadSubmissionIds: [],
     autoQueueNextRunAt: 0,
     searchLoading: false,
+    searchPhase: "idle",
+    searchActivity: "idle",
     searchCollapsed: false,
     searchError: "",
     resultsRefreshToken: 0,
@@ -3891,6 +4001,208 @@ function normalizeQueueCount(
     : jobs.filter((job) => job?.status === status).length;
 }
 
+function compactQueueSnapshot(
+  snapshot: QueueSnapshot,
+  previousSnapshot: QueueSnapshot = EMPTY_QUEUE,
+): QueueSnapshot {
+  const previousJobsByID = new Map(previousSnapshot.jobs.map((job) => [job.id, job]));
+  const retainedJobs: QueueSnapshot["jobs"] = [];
+  let retainedCompleted = 0;
+  let retainedCancelled = 0;
+  let retainedCompletedPreviews = 0;
+
+  for (const inputJob of snapshot.jobs) {
+    if (!inputJob || typeof inputJob !== "object") {
+      continue;
+    }
+    const status = inputJob.status;
+    const keepCompleted =
+      status === "completed" && retainedCompleted < MAX_RETAINED_COMPLETED_QUEUE_JOBS;
+    const keepCancelled =
+      status === "cancelled" && retainedCancelled < MAX_RETAINED_CANCELLED_QUEUE_JOBS;
+    const keepJob =
+      status === "queued" ||
+      status === "active" ||
+      status === "failed" ||
+      keepCompleted ||
+      keepCancelled;
+
+    if (!keepJob) {
+      continue;
+    }
+
+    if (status === "completed") {
+      retainedCompleted++;
+    } else if (status === "cancelled") {
+      retainedCancelled++;
+    }
+
+    const shouldKeepPreview =
+      status === "queued" ||
+      status === "active" ||
+      status === "failed" ||
+      (status === "completed" &&
+        retainedCompletedPreviews < MAX_RETAINED_COMPLETED_QUEUE_PREVIEWS);
+
+    if (shouldKeepPreview && status === "completed" && inputJob.previewUrl) {
+      retainedCompletedPreviews++;
+    }
+
+    const compactedJob = compactQueueJob(inputJob, shouldKeepPreview);
+    const previousJob = previousJobsByID.get(compactedJob.id);
+    retainedJobs.push(
+      previousJob && areQueueJobsEqual(previousJob, compactedJob)
+        ? previousJob
+        : compactedJob,
+    );
+  }
+
+  return {
+    ...snapshot,
+    jobs: retainedJobs,
+  };
+}
+
+function compactQueueJob(
+  job: QueueSnapshot["jobs"][number],
+  keepPreview: boolean,
+) {
+  const previewUrl = keepPreview ? internString(job.previewUrl) : undefined;
+  return {
+    ...job,
+    id: internString(job.id) ?? "",
+    submissionId: internString(job.submissionId) ?? "",
+    fileId: internString(job.fileId) ?? "",
+    title: internString(job.title) ?? "",
+    username: internString(job.username) ?? "",
+    fileName: internString(job.fileName) ?? "",
+    previewUrl,
+    status: internString(job.status) ?? "",
+    error: internString(job.error),
+    createdAt: internString(job.createdAt) ?? "",
+    updatedAt: internString(job.updatedAt) ?? "",
+  };
+}
+
+function areQueueJobsEqual(
+  left: QueueSnapshot["jobs"][number],
+  right: QueueSnapshot["jobs"][number],
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+const internedStringPool = new Map<string, string>();
+
+function internString(value?: string) {
+  if (!value) {
+    return value;
+  }
+  const current = internedStringPool.get(value);
+  if (current) {
+    return current;
+  }
+  internedStringPool.set(value, value);
+  return value;
+}
+
+function estimateVisibleImageBytes() {
+  if (typeof document === "undefined") {
+    return 0;
+  }
+  return Array.from(document.images).reduce((total, image) => {
+    const width = image.naturalWidth || 0;
+    const height = image.naturalHeight || 0;
+    return total + width * height * 4;
+  }, 0);
+}
+
+function getBrowserMemoryStats() {
+  const performanceWithMemory = performance as Performance & {
+    memory?: {
+      usedJSHeapSize: number;
+      totalJSHeapSize: number;
+      jsHeapSizeLimit: number;
+    };
+  };
+  if (
+    typeof performance === "undefined" ||
+    !("memory" in performanceWithMemory) ||
+    !performanceWithMemory.memory
+  ) {
+    return null;
+  }
+
+  return {
+    usedJSHeapSize: performanceWithMemory.memory.usedJSHeapSize,
+    usedJSHeapLabel: formatMemoryBytes(performanceWithMemory.memory.usedJSHeapSize),
+    totalJSHeapSize: performanceWithMemory.memory.totalJSHeapSize,
+    totalJSHeapLabel: formatMemoryBytes(
+      performanceWithMemory.memory.totalJSHeapSize,
+    ),
+    jsHeapSizeLimit: performanceWithMemory.memory.jsHeapSizeLimit,
+    jsHeapSizeLimitLabel: formatMemoryBytes(
+      performanceWithMemory.memory.jsHeapSizeLimit,
+    ),
+  };
+}
+
+function summarizeLikelyMemoryDriver(
+  resultBytes: number,
+  queueBytes: number,
+  visibleImageBytes: number,
+) {
+  const buckets = [
+    { key: "results", bytes: resultBytes },
+    { key: "queue", bytes: queueBytes },
+    { key: "visible-images", bytes: visibleImageBytes },
+  ].sort((left, right) => right.bytes - left.bytes);
+
+  return {
+    bucket: buckets[0]?.key ?? "unknown",
+    bucketBytes: buckets[0]?.bytes ?? 0,
+    bucketLabel: formatMemoryBytes(buckets[0]?.bytes ?? 0),
+  };
+}
+
+function estimateValueBytes(value: unknown): number {
+  if (value == null) {
+    return 0;
+  }
+  if (typeof value === "string") {
+    return value.length * 2;
+  }
+  if (typeof value === "number") {
+    return 8;
+  }
+  if (typeof value === "boolean") {
+    return 4;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce((total, item) => total + estimateValueBytes(item), 0);
+  }
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).reduce<number>(
+      (total, item) => total + estimateValueBytes(item),
+      0,
+    );
+  }
+  return 0;
+}
+
+function formatMemoryBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let unitIndex = 0;
+  let current = value;
+  while (current >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024;
+    unitIndex++;
+  }
+  return `${current.toFixed(current >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null;
 }
@@ -3951,7 +4263,9 @@ function normalizeSavedSearchResponse(input: unknown, session: SessionInfo) {
   if (!isRecord(input) || typeof input.searchId !== "string" || !input.searchId.trim()) {
     return null;
   }
-  const results = Array.isArray(input.results) ? [...input.results] : [];
+  const results = normalizeSubmissionCards(
+    Array.isArray(input.results) ? [...input.results] : [],
+  );
   return {
     searchId: input.searchId,
     page: getNumber(input.page, 1),
@@ -3960,12 +4274,6 @@ function normalizeSavedSearchResponse(input: unknown, session: SessionInfo) {
     results,
     session,
   };
-}
-
-function delay(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
 }
 
 function getSearchTabLabel(tab: SearchTabState, index: number) {
@@ -4123,10 +4431,10 @@ function toSavedSearchTab(tab: SearchTabState): SavedSearchTab {
     searchResponse: tab.searchResponse
       ? {
           ...tab.searchResponse,
-          results: [...tab.searchResponse.results],
+          results: [],
         }
       : null,
-    results: [...tab.results],
+    results: denormalizeSubmissionCards(tab.results),
     activeSubmissionId: tab.activeSubmissionId,
     selectedSubmissionIds: [...tab.selectedSubmissionIds],
     searchCollapsed: tab.searchCollapsed,
@@ -4253,7 +4561,9 @@ function restoreSavedSearchTab(
   }
   const mode: SearchTabMode = source.mode === "unread" ? "unread" : "default";
   const searchParams = normalizeSavedSearchParams(source.searchParams, mode, session, settings);
-  const results = Array.isArray(source.results) ? [...source.results] : [];
+  const results = normalizeSubmissionCards(
+    Array.isArray(source.results) ? [...source.results] : [],
+  );
   const searchResponse = normalizeSavedSearchResponse(source.searchResponse, session);
   const activeSubmissionId =
     (typeof source.activeSubmissionId === "string" ? source.activeSubmissionId : "") ||
@@ -4272,6 +4582,8 @@ function restoreSavedSearchTab(
     activeSubmissionId,
     selectedSubmissionIds: getStringArray(source.selectedSubmissionIds),
     searchLoading: false,
+    searchPhase: "idle",
+    searchActivity: "idle",
     searchCollapsed: getBoolean(source.searchCollapsed, false),
     showCustomThumbnails: getBoolean(source.showCustomThumbnails, true),
     showSubmissionDetails: getBoolean(source.showSubmissionDetails, true),

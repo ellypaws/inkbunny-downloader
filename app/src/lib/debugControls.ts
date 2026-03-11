@@ -9,6 +9,7 @@ import type {
 
 export type InkbunnyDebugControls = {
   help: () => string;
+  memoryReport: () => string;
   showUpdateToast: () => void;
   startGuidedTour: () => void;
   showOnboarding: () => void;
@@ -50,6 +51,7 @@ type RegisterDebugControlsOptions = {
   pushToast: (toast: Omit<ToastItem, "id"> & { id?: string }) => void;
   clearToasts: () => void;
   openPanel: (panel: DebugPanelName) => void;
+  memoryReport: () => string;
   cancelSearch: () => Promise<void>;
   resetState: (scope: DebugResetTarget) => Promise<string>;
   refreshBackend: () => Promise<string>;
@@ -111,6 +113,11 @@ const DEBUG_COMMANDS: DebugCommandDefinition[] = [
     command: "debug.help()",
     description: "Show every available frontend debug command with examples.",
     example: "debug.help()",
+  },
+  {
+    command: "debug.memoryReport()",
+    description: "Print an estimated memory breakdown for results, queue state, and visible images.",
+    example: "debug.memoryReport()",
   },
   {
     command: "debug.showUpdateToast()",
@@ -241,6 +248,10 @@ class InkbunnyDebug implements InkbunnyDebugControls {
 
   help() {
     return showDebugCommandHelp();
+  }
+
+  memoryReport() {
+    return this.options.memoryReport();
   }
 
   showUpdateToast() {
@@ -382,6 +393,7 @@ function showDebugCommandHelp() {
     "Common error presets:",
     "  backend-unavailable, login-failed, invalid-credentials, search-failed, unknown-search-id, sign-in-required, member-watch-required, rate-limit, rate-limit-exhausted",
     "Extra examples:",
+    "  debug.memoryReport()",
     "  debug.showMockNotification('rate-limit')",
     "  debug.showMockNotification({ level: 'info', message: 'Queue refreshed.' })",
     "  debug.showMockErrorToast()",

@@ -55,6 +55,8 @@ type ResultsShowcaseProps = {
   showEngagementStats?: boolean;
   allSelected: boolean;
   loading: boolean;
+  searchPhase: "idle" | "searching" | "processing";
+  searchActivity: "idle" | "search" | "refresh";
   loadMoreState: LoadMoreControlState;
   resultsRefreshToken: number;
   queue: QueueSnapshot;
@@ -75,6 +77,7 @@ type ResultsShowcaseProps = {
   onRetrySubmission: (submissionId: string) => void;
   onStopAll: () => void;
   onRefresh: () => void;
+  onStopSearch: () => void;
   onDownloadAction: () => void;
   onLoadMore: () => void;
   onLoadAll: () => void;
@@ -248,6 +251,15 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   });
   const hasResults = props.results.length > 0;
   const loadingMoreResults = props.loadMoreState.mode !== "idle";
+  const emptyState = getEmptyResultsState(
+    props.searchResponse,
+    props.searchPhase,
+  );
+  const refreshButtonState = getRefreshButtonState(
+    props.searchPhase,
+    props.searchActivity,
+    props.searchResponse,
+  );
   const activeModalSubmission = useMemo(
     () =>
       activeModal
@@ -572,16 +584,19 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           </button>
           <button
             type="button"
-            onClick={props.onRefresh}
-            disabled={!props.searchResponse || props.loading}
-            className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50 sm:px-5 sm:py-3 sm:text-sm"
+            onClick={refreshButtonState.stoppable ? props.onStopSearch : props.onRefresh}
+            disabled={refreshButtonState.disabled}
+            className={`${refreshButtonState.stoppable ? "theme-button-danger" : "theme-button-secondary"} flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50 sm:px-5 sm:py-3 sm:text-sm`}
+            title={refreshButtonState.title}
           >
-            {props.loading ? (
+            {refreshButtonState.stoppable ? (
+              <Square size={14} className="fill-current" strokeWidth={2.5} />
+            ) : refreshButtonState.busy ? (
               <LoaderCircle className="animate-spin" size={16} />
             ) : (
               <RefreshCw size={16} />
             )}
-            Refresh
+            {refreshButtonState.label}
           </button>
           <button
             type="button"
@@ -614,9 +629,19 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       <div className="theme-panel flex h-[44rem] w-full flex-col overflow-hidden rounded-toy-sm border-2 shadow-pop sm:h-[52rem] md:h-[600px] md:flex-row">
         {props.results.length === 0 ? (
           <div className="theme-panel-soft flex h-full w-full flex-col items-center justify-center px-6 text-center">
-            <SearchIcon className="text-[var(--theme-info)]" size={42} />
+            {emptyState.busy ? (
+              <LoaderCircle
+                className="animate-spin text-[var(--theme-info)]"
+                size={42}
+              />
+            ) : (
+              <SearchIcon className="text-[var(--theme-info)]" size={42} />
+            )}
             <p className="theme-title mt-4 max-w-md text-lg font-bold">
-              Search results appear here.
+              {emptyState.title}
+            </p>
+            <p className="mt-2 max-w-lg text-sm text-[var(--theme-text-soft)]">
+              {emptyState.description}
             </p>
           </div>
         ) : (
@@ -806,16 +831,19 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={props.onRefresh}
-                  disabled={!props.searchResponse || props.loading}
-                  className="theme-button-secondary flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
+                  onClick={refreshButtonState.stoppable ? props.onStopSearch : props.onRefresh}
+                  disabled={refreshButtonState.disabled}
+                  className={`${refreshButtonState.stoppable ? "theme-button-danger" : "theme-button-secondary"} flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50`}
+                  title={refreshButtonState.title}
                 >
-                  {props.loading ? (
+                  {refreshButtonState.stoppable ? (
+                    <Square size={12} className="fill-current" strokeWidth={2.5} />
+                  ) : refreshButtonState.busy ? (
                     <LoaderCircle className="animate-spin" size={14} />
                   ) : (
                     <RefreshCw size={14} />
                   )}
-                  Refresh
+                  {refreshButtonState.label}
                 </button>
                 <button
                   type="button"
@@ -1127,9 +1155,92 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
         onLoadAll={props.onLoadAll}
         onStop={props.onStopLoadMore}
         className="mt-6"
+        loadedLabel={(pagesLoaded) =>
+          getLoadMoreStatusLabel(
+            props.loadMoreState.mode,
+            props.searchPhase,
+            pagesLoaded,
+          )
+        }
       />
     </section>
   );
+}
+
+function getEmptyResultsState(
+  searchResponse: SearchResponse | null,
+  searchPhase: ResultsShowcaseProps["searchPhase"],
+) {
+  if (searchPhase === "searching") {
+    return {
+      busy: true,
+      title: "Searching...",
+      description: searchResponse
+        ? "Checking the next page of matches."
+        : "Checking Inkbunny for matching submissions.",
+    };
+  }
+  if (searchPhase === "processing") {
+    return {
+      busy: true,
+      title: "Processing results...",
+      description: "Preparing matches for display.",
+    };
+  }
+  if (searchResponse) {
+    return {
+      busy: false,
+      title: "No results found.",
+      description: "Try broader keywords, different artists, or looser filters.",
+    };
+  }
+  return {
+    busy: false,
+    title: "Search results appear here.",
+    description: "Run a search to fill this panel.",
+  };
+}
+
+function getLoadMoreStatusLabel(
+  mode: LoadMoreControlState["mode"],
+  searchPhase: ResultsShowcaseProps["searchPhase"],
+  pagesLoaded: number,
+) {
+  if (searchPhase === "processing") {
+    return "Processing results";
+  }
+  if (mode === "more") {
+    return "Searching for more";
+  }
+  if (pagesLoaded <= 0) {
+    return "Searching";
+  }
+  return `Searching ${pagesLoaded} ${pagesLoaded === 1 ? "page" : "pages"}`;
+}
+
+function getRefreshButtonState(
+  searchPhase: ResultsShowcaseProps["searchPhase"],
+  searchActivity: ResultsShowcaseProps["searchActivity"],
+  searchResponse: SearchResponse | null,
+) {
+  const busy = searchPhase !== "idle";
+  if (busy) {
+    const label = searchActivity === "refresh" ? "Refreshing" : "Searching";
+    return {
+      busy: true,
+      stoppable: true,
+      disabled: false,
+      label,
+      title: `Stop ${label.toLowerCase()}`,
+    };
+  }
+  return {
+    busy: false,
+    stoppable: false,
+    disabled: !searchResponse,
+    label: "Refresh",
+    title: "Refresh the current search",
+  };
 }
 
 function SubmissionPreview(props: {
