@@ -3122,7 +3122,7 @@ export default function App() {
                         if (!directory) {
                           return;
                         }
-                        syncSettings({ ...settingsRef.current, downloadDirectory: directory });
+                        void persistSettings({ downloadDirectory: directory });
                         pushToast({
                           level: "success",
                           message: `Download folder set to ${directory}.`,
