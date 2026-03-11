@@ -38,7 +38,6 @@ import {
   resolveMediaURL,
 } from "../lib/wails";
 import type {
-  DownloadJobSnapshot,
   QueueSnapshot,
   SearchResponse,
   SubmissionCard,
@@ -2005,28 +2004,73 @@ function buildSubmissionDownloadSummaries(
 ) {
   const summaries = new Map<string, SubmissionDownloadSummary>();
   const pendingSubmissionIds = new Set(pendingDownloadSubmissionIds);
-  const jobsBySubmission = new Map<string, DownloadJobSnapshot[]>();
+  const aggregates = new Map<
+    string,
+    {
+      totalJobs: number;
+      relevantJobs: number;
+      anyActive: boolean;
+      anyQueued: boolean;
+      allCompleted: boolean;
+      allFailed: boolean;
+      knownBytes: number;
+      writtenBytes: number;
+      fallbackProgressTotal: number;
+      fallbackProgressCount: number;
+    }
+  >();
 
   for (const job of queue.jobs) {
     if (!job.submissionId) {
       continue;
     }
-    const jobs = jobsBySubmission.get(job.submissionId) ?? [];
-    jobs.push(job);
-    jobsBySubmission.set(job.submissionId, jobs);
+    const aggregate = aggregates.get(job.submissionId) ?? {
+      totalJobs: 0,
+      relevantJobs: 0,
+      anyActive: false,
+      anyQueued: false,
+      allCompleted: true,
+      allFailed: true,
+      knownBytes: 0,
+      writtenBytes: 0,
+      fallbackProgressTotal: 0,
+      fallbackProgressCount: 0,
+    };
+
+    aggregate.totalJobs++;
+    if (job.status !== "cancelled") {
+      aggregate.relevantJobs++;
+      aggregate.anyActive = aggregate.anyActive || job.status === "active";
+      aggregate.anyQueued = aggregate.anyQueued || job.status === "queued";
+      aggregate.allCompleted =
+        aggregate.allCompleted && job.status === "completed";
+      aggregate.allFailed = aggregate.allFailed && job.status === "failed";
+
+      const totalBytes = Math.max(0, job.totalBytes || 0);
+      const bytesWritten = Math.max(0, job.bytesWritten || 0);
+      if (totalBytes > 0) {
+        aggregate.knownBytes += totalBytes;
+        aggregate.writtenBytes += Math.min(bytesWritten, totalBytes);
+      } else {
+        aggregate.fallbackProgressTotal +=
+          job.status === "completed" ? 1 : clampProgress(job.progress);
+        aggregate.fallbackProgressCount++;
+      }
+    }
+
+    aggregates.set(job.submissionId, aggregate);
   }
 
   const submissionIds = new Set([
     ...downloadedSubmissionIds,
     ...pendingSubmissionIds,
-    ...jobsBySubmission.keys(),
+    ...aggregates.keys(),
   ]);
 
   for (const submissionId of submissionIds) {
-    const jobs = jobsBySubmission.get(submissionId) ?? [];
-    const relevantJobs = jobs.filter((job) => job.status !== "cancelled");
+    const aggregate = aggregates.get(submissionId);
 
-    if (jobs.length === 0) {
+    if (!aggregate || aggregate.totalJobs === 0) {
       if (downloadedSubmissionIds.has(submissionId)) {
         summaries.set(submissionId, {
           state: "downloaded",
@@ -2041,7 +2085,7 @@ function buildSubmissionDownloadSummaries(
       continue;
     }
 
-    if (relevantJobs.length === 0) {
+    if (aggregate.relevantJobs === 0) {
       if (downloadedSubmissionIds.has(submissionId)) {
         summaries.set(submissionId, {
           state: "downloaded",
@@ -2053,14 +2097,14 @@ function buildSubmissionDownloadSummaries(
       continue;
     }
 
-    if (relevantJobs.every((job) => job.status === "completed")) {
+    if (aggregate.allCompleted) {
       summaries.set(submissionId, {
         state: "downloaded",
         progress: 1,
       });
       continue;
     }
-    if (relevantJobs.every((job) => job.status === "failed")) {
+    if (aggregate.allFailed) {
       summaries.set(submissionId, {
         state: "failed",
         progress: 0,
@@ -2068,48 +2112,34 @@ function buildSubmissionDownloadSummaries(
       continue;
     }
 
-    const anyActive = relevantJobs.some((job) => job.status === "active");
-    const anyQueued = relevantJobs.some((job) => job.status === "queued");
-    const state = anyActive
+    const state = aggregate.anyActive
       ? "downloading"
-      : anyQueued || pendingSubmissionIds.has(submissionId)
+      : aggregate.anyQueued || pendingSubmissionIds.has(submissionId)
         ? "queued"
         : "idle";
 
     summaries.set(submissionId, {
       state,
-      progress: getSubmissionProgress(relevantJobs),
+      progress: getAggregateSubmissionProgress(aggregate),
     });
   }
 
   return summaries;
 }
 
-function getSubmissionProgress(jobs: DownloadJobSnapshot[]) {
-  let knownBytes = 0;
-  let writtenBytes = 0;
-  let fallbackProgressTotal = 0;
-  let fallbackProgressCount = 0;
-
-  for (const job of jobs) {
-    const totalBytes = Math.max(0, job.totalBytes || 0);
-    const bytesWritten = Math.max(0, job.bytesWritten || 0);
-    if (totalBytes > 0) {
-      knownBytes += totalBytes;
-      writtenBytes += Math.min(bytesWritten, totalBytes);
-      continue;
-    }
-
-    fallbackProgressTotal +=
-      job.status === "completed" ? 1 : clampProgress(job.progress);
-    fallbackProgressCount++;
+function getAggregateSubmissionProgress(aggregate: {
+  knownBytes: number;
+  writtenBytes: number;
+  fallbackProgressTotal: number;
+  fallbackProgressCount: number;
+}) {
+  if (aggregate.knownBytes > 0) {
+    return clampProgress(aggregate.writtenBytes / aggregate.knownBytes);
   }
-
-  if (knownBytes > 0) {
-    return clampProgress(writtenBytes / knownBytes);
-  }
-  if (fallbackProgressCount > 0) {
-    return clampProgress(fallbackProgressTotal / fallbackProgressCount);
+  if (aggregate.fallbackProgressCount > 0) {
+    return clampProgress(
+      aggregate.fallbackProgressTotal / aggregate.fallbackProgressCount,
+    );
   }
   return 0;
 }

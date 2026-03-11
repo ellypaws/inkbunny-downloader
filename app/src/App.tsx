@@ -259,17 +259,10 @@ export default function App() {
           ? formatAutoQueueCountdown(activeTab?.autoQueueNextRunAt ?? 0, autoQueueClock)
           : "Search";
   const activeSearchButtonDisabled = activeSearchButtonMode === "downloading";
-  const activeDownloadButtonMode = activeTabDownloading
-    ? "stop"
-    : "default";
-  const activeDownloadButtonLabel =
-    activeDownloadButtonMode === "stop"
-      ? "Stop Downloads"
-      : "Download";
+  const activeDownloadButtonMode = "default";
+  const activeDownloadButtonLabel = "Download";
   const activeDownloadButtonDisabled =
-    activeDownloadButtonMode === "stop"
-      ? false
-      : !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
+    !activeSearchResponse || activeSelectedSubmissionIds.length === 0;
   const unreadModeActive = activeTab?.mode === "unread";
   const folderPreviewImages = useMemo(
     () =>
@@ -718,6 +711,9 @@ export default function App() {
   }
 
   function writeFrontendSearchLog(message: string, fields?: Record<string, unknown>) {
+    if (!isFrontendSearchLoggingEnabled()) {
+      return;
+    }
     console.info(`[frontend][search] ${message}`, fields ?? "");
   }
 
@@ -2690,44 +2686,6 @@ export default function App() {
     }
   }
 
-  async function handleStopTrackedDownloads(targetTabId = activeTabIdRef.current) {
-    const tab = tabsRef.current.find((item) => item.id === targetTabId);
-    if (!tab) {
-      return;
-    }
-    const trackedSubmissionIds = getTrackedActiveSubmissionIds(
-      tab,
-      queueRef.current,
-      pendingDownloadSubmissionIdsRef.current,
-    );
-    if (trackedSubmissionIds.length === 0) {
-      return;
-    }
-    setPendingDownloadSubmissionIds((previous) =>
-      previous.filter((submissionId) => !trackedSubmissionIds.includes(submissionId)),
-    );
-    try {
-      const snapshots = await Promise.all(
-        trackedSubmissionIds.map((submissionId) =>
-          backend.cancelSubmission(submissionId),
-        ),
-      );
-      const latestSnapshot = snapshots[snapshots.length - 1];
-      if (latestSnapshot) {
-        applyQueueSnapshot(latestSnapshot);
-      }
-      updateQueueMessage(
-        `Stopping ${formatCountLabel(trackedSubmissionIds.length, "submission")} for this tab.`,
-        "success",
-        "queue-stop-tab",
-      );
-    } catch (error) {
-      const message = getErrorMessage(error, "Failed to stop this tab's downloads.");
-      updateQueueMessage(message);
-      pushErrorToast(message, "stop-tab-downloads-error");
-    }
-  }
-
   async function runAutoQueue(targetTabId: string) {
     const tab = tabsRef.current.find((item) => item.id === targetTabId);
     if (!tab || !tab.autoQueueEnabled || tab.autoQueuePhase !== "idle") {
@@ -2778,6 +2736,7 @@ export default function App() {
       previous.filter((value) => value !== submissionId),
     );
     try {
+      applyQueueSnapshot(cancelSubmissionInQueueSnapshot(queueRef.current, submissionId));
       applyQueueSnapshot(await backend.cancelSubmission(submissionId));
     } catch (error) {
       const message = getErrorMessage(error, "Failed to cancel download.");
@@ -2882,6 +2841,7 @@ export default function App() {
     }
     setPendingDownloadSubmissionIds([]);
     try {
+      applyQueueSnapshot(cancelAllInQueueSnapshot(queueRef.current));
       applyQueueSnapshot(await backend.stopAllDownloads());
       updateQueueMessage(
         "Stopping all active and queued downloads.",
@@ -3272,13 +3232,7 @@ export default function App() {
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
               onStopSearch={() => void stopActiveSearch()}
-              onDownloadAction={() =>
-                void (
-                  activeDownloadButtonMode === "stop"
-                    ? handleStopTrackedDownloads()
-                    : handleQueueDownloads()
-                )
-              }
+              onDownloadAction={() => void handleQueueDownloads()}
               onLoadMore={() => void handleLoadMore("more")}
               onLoadAll={() => void handleLoadMore("all")}
               onStopLoadMore={() => void handleStopLoadMore()}
@@ -4088,10 +4042,99 @@ function areQueueJobsEqual(
   left: QueueSnapshot["jobs"][number],
   right: QueueSnapshot["jobs"][number],
 ) {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return (
+    left.id === right.id &&
+    left.submissionId === right.submissionId &&
+    left.fileId === right.fileId &&
+    left.title === right.title &&
+    left.username === right.username &&
+    left.fileName === right.fileName &&
+    left.previewUrl === right.previewUrl &&
+    left.fileExists === right.fileExists &&
+    left.status === right.status &&
+    left.bytesWritten === right.bytesWritten &&
+    left.totalBytes === right.totalBytes &&
+    left.progress === right.progress &&
+    left.error === right.error &&
+    left.attempt === right.attempt &&
+    left.createdAt === right.createdAt &&
+    left.updatedAt === right.updatedAt
+  );
 }
 
 const internedStringPool = new Map<string, string>();
+
+function isFrontendSearchLoggingEnabled() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const debugWindow = window as Window & {
+    __inkbunnySearchDebug?: boolean;
+  };
+  if (debugWindow.__inkbunnySearchDebug === true) {
+    return true;
+  }
+
+  try {
+    return window.localStorage.getItem("inkbunny.debug.search") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function cancelSubmissionInQueueSnapshot(
+  snapshot: QueueSnapshot,
+  submissionId: string,
+) {
+  return updateQueueSnapshotJobs(snapshot, (job) =>
+    job.submissionId === submissionId &&
+    (job.status === "queued" || job.status === "active")
+      ? {
+          ...job,
+          status: "cancelled",
+          error: "",
+          updatedAt: new Date().toISOString(),
+        }
+      : job,
+  );
+}
+
+function cancelAllInQueueSnapshot(snapshot: QueueSnapshot) {
+  return updateQueueSnapshotJobs(snapshot, (job) =>
+    job.status === "queued" || job.status === "active"
+      ? {
+          ...job,
+          status: "cancelled",
+          error: "",
+          updatedAt: new Date().toISOString(),
+        }
+      : job,
+  );
+}
+
+function updateQueueSnapshotJobs(
+  snapshot: QueueSnapshot,
+  updateJob: (job: QueueSnapshot["jobs"][number]) => QueueSnapshot["jobs"][number],
+) {
+  let changed = false;
+  const jobs = snapshot.jobs.map((job) => {
+    const nextJob = updateJob(job);
+    if (nextJob !== job) {
+      changed = true;
+    }
+    return nextJob;
+  });
+
+  if (!changed) {
+    return snapshot;
+  }
+
+  return normalizeQueueSnapshot({
+    ...snapshot,
+    jobs,
+  });
+}
 
 function internString(value?: string) {
   if (!value) {

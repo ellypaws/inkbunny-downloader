@@ -699,13 +699,14 @@ func (a *App) fetchSubmissionDetailsBatchForDownload(
 	submissionIDs []string,
 	includePools bool,
 ) (inkbunny.SubmissionDetailsResponse, *inkbunny.User, error) {
-	response, err := a.fetchSubmissionDetailsBatchWithoutCache(ctx, submissionIDs, includePools)
+	_ = includePools
+	response, err := a.cachedSubmissionDetailsBatchedWithContext(ctx, user, submissionIDs)
 	if err != nil && a.handleSessionError(err) {
 		current, sessionErr := a.ensureSearchSession()
 		if sessionErr != nil {
 			return inkbunny.SubmissionDetailsResponse{}, nil, sessionErr
 		}
-		response, err = a.fetchSubmissionDetailsBatchWithoutCache(ctx, submissionIDs, includePools)
+		response, err = a.cachedSubmissionDetailsBatchedWithContext(ctx, current, submissionIDs)
 		user = current
 	}
 	if err != nil {
