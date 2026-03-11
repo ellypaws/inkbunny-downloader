@@ -217,6 +217,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
+		Secure:   shouldMarkAuthCookieSecure(r),
 	})
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -422,12 +423,12 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/resource":
 		s.proxyRemoteResource(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/open":
-		target := s.app.ResolveRemoteURL(r.URL.Query().Get("url"))
-		if target == "" {
-			writeJSONError(w, http.StatusBadRequest, "resource url is required")
+		target, err := state.ParseApprovedRemoteURL(s.app.ResolveRemoteURL(r.URL.Query().Get("url")))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+		http.Redirect(w, r, target.String(), http.StatusTemporaryRedirect)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/search":
 		var params types.SearchParams
 		if !decodeJSON(w, r, &params) {
@@ -664,14 +665,25 @@ func hostWithoutPort(value string) string {
 	return value
 }
 
+func shouldMarkAuthCookieSecure(r *http.Request) bool {
+	if r != nil && r.TLS != nil {
+		return true
+	}
+	switch strings.ToLower(hostWithoutPort(r.Host)) {
+	case "127.0.0.1", "::1", "localhost":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Server) proxyRemoteResource(w http.ResponseWriter, r *http.Request) {
-	target := s.app.ResolveRemoteURL(r.URL.Query().Get("url"))
-	if target == "" {
-		writeJSONError(w, http.StatusBadRequest, "resource url is required")
+	target, err := state.ParseApprovedRemoteURL(s.app.ResolveRemoteURL(r.URL.Query().Get("url")))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target.String(), nil)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid resource url")
 		return

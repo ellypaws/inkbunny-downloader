@@ -301,7 +301,12 @@ func (a *App) UpdateRatings(mask string) (types.SessionInfo, error) {
 func (a *App) UpdateSettings(settings types.AppSettings) (types.AppSettings, error) {
 	a.mu.Lock()
 	if settings.DownloadDirectory != "" {
-		a.settings.DownloadDirectory = settings.DownloadDirectory
+		directory, err := normalizeDownloadDirectory(settings.DownloadDirectory)
+		if err != nil {
+			a.mu.Unlock()
+			return types.AppSettings{}, err
+		}
+		a.settings.DownloadDirectory = directory
 	}
 	a.settings.DownloadPattern = downloads.NormalizePattern(settings.DownloadPattern)
 	if settings.MaxActive > 0 {
@@ -498,9 +503,9 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 	}
 
 	saveKeywords := options.SaveKeywords
-	downloadRoot := options.DownloadDirectory
-	if downloadRoot == "" {
-		downloadRoot = a.GetSession().Settings.DownloadDirectory
+	downloadRoot, err := a.resolveDownloadDirectory(options.DownloadDirectory)
+	if err != nil {
+		return types.QueueSnapshot{}, err
 	}
 	maxActive := options.MaxActive
 	if maxActive <= 0 {

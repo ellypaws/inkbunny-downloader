@@ -15,6 +15,16 @@ import (
 
 const DefaultAvatarURL = "https://inkbunny.net/images80/usericons/large/noicon.png"
 
+func hasSafeAbsolutePathPrefix(raw string) bool {
+	if !strings.HasPrefix(raw, "/") {
+		return false
+	}
+	if len(raw) == 1 {
+		return true
+	}
+	return raw[1] != '/' && raw[1] != '\\'
+}
+
 func NormalizeInkbunnyURL(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -33,6 +43,9 @@ func NormalizeInkbunnyURL(raw string) string {
 	}
 
 	if strings.HasPrefix(trimmed, "/") {
+		if !hasSafeAbsolutePathPrefix(trimmed) {
+			return trimmed
+		}
 		return "https://inkbunny.net" + trimmed
 	}
 
