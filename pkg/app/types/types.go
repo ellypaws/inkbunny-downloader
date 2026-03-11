@@ -1,5 +1,7 @@
 package types
 
+import "encoding/json"
+
 type SessionInfo struct {
 	HasSession     bool        `json:"hasSession"`
 	Username       string      `json:"username"`
@@ -81,9 +83,22 @@ type SavedSearchTab struct {
 	SelectedSubmissionIDs        []string          `json:"selectedSubmissionIds"`
 	SearchCollapsed              bool              `json:"searchCollapsed"`
 	ShowCustomThumbnails         bool              `json:"showCustomThumbnails"`
+	ShowSubmissionDetails        bool              `json:"showSubmissionDetails"`
 	AutoQueueEnabled             bool              `json:"autoQueueEnabled"`
 	TrackedDownloadSubmissionIDs []string          `json:"trackedDownloadSubmissionIds"`
 	AutoQueueNextRunAt           int64             `json:"autoQueueNextRunAt"`
+}
+
+func (tab *SavedSearchTab) UnmarshalJSON(data []byte) error {
+	type savedSearchTabAlias SavedSearchTab
+	decoded := savedSearchTabAlias{
+		ShowSubmissionDetails: true,
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*tab = SavedSearchTab(decoded)
+	return nil
 }
 
 type WorkspaceState struct {
