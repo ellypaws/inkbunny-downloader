@@ -20,7 +20,14 @@ type SubmissionWritingReaderProps = {
 };
 
 type ReaderBackground = "white" | "sepia" | "gray" | "black";
-type ReaderFontFamily = "serif" | "sans" | "mono";
+type ReaderFontGroup = "serif" | "sans" | "mono";
+type ReaderFontFamily =
+  | "georgia"
+  | "times"
+  | "sf"
+  | "roboto"
+  | "jetbrains"
+  | "cascadia";
 
 const MIN_READER_WIDTH = 520;
 const MAX_READER_WIDTH = 1120;
@@ -72,24 +79,66 @@ const backgroundPresets: Record<
   },
 };
 
-const fontFamilyPresets: Record<
-  ReaderFontFamily,
+const fontFamilyGroups: Record<
+  ReaderFontGroup,
   {
     label: string;
-    fontFamily: string;
+    options: ReaderFontFamily[];
   }
 > = {
   serif: {
     label: "Serif",
-    fontFamily: '"Georgia", "Times New Roman", serif',
+    options: ["georgia", "times"],
   },
   sans: {
     label: "Sans",
-    fontFamily: '"Trebuchet MS", "Segoe UI", sans-serif',
+    options: ["sf", "roboto"],
   },
   mono: {
     label: "Mono",
-    fontFamily: '"Cascadia Mono", "Consolas", "Courier New", monospace',
+    options: ["jetbrains", "cascadia"],
+  },
+};
+
+const fontFamilyOptions: Record<
+  ReaderFontFamily,
+  {
+    label: string;
+    group: ReaderFontGroup;
+    fontFamily: string;
+  }
+> = {
+  georgia: {
+    label: "Georgia",
+    group: "serif",
+    fontFamily: '"Georgia", "Times New Roman", serif',
+  },
+  times: {
+    label: "Times New Roman",
+    group: "serif",
+    fontFamily: '"Times New Roman", Georgia, serif',
+  },
+  sf: {
+    label: "San Francisco",
+    group: "sans",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif',
+  },
+  roboto: {
+    label: "Roboto",
+    group: "sans",
+    fontFamily: 'Roboto, "Segoe UI", "Helvetica Neue", Arial, sans-serif',
+  },
+  jetbrains: {
+    label: "JetBrains Mono",
+    group: "mono",
+    fontFamily:
+      '"JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace',
+  },
+  cascadia: {
+    label: "Cascadia Mono",
+    group: "mono",
+    fontFamily: '"Cascadia Mono", Consolas, "Courier New", monospace',
   },
 };
 
@@ -97,7 +146,9 @@ export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
   const [readerWidth, setReaderWidth] = useState(DEFAULT_READER_WIDTH);
   const [background, setBackground] = useState<ReaderBackground>("white");
-  const [fontFamily, setFontFamily] = useState<ReaderFontFamily>("serif");
+  const [fontFamily, setFontFamily] = useState<ReaderFontFamily>("georgia");
+  const [openFontGroup, setOpenFontGroup] =
+    useState<ReaderFontGroup | null>(null);
   const [containerWidth, setContainerWidth] = useState(DEFAULT_READER_WIDTH);
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(
     null,
@@ -108,7 +159,8 @@ export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
     setFontSize(DEFAULT_FONT_SIZE);
     setReaderWidth(DEFAULT_READER_WIDTH);
     setBackground("white");
-    setFontFamily("serif");
+    setFontFamily("georgia");
+    setOpenFontGroup(null);
   }, [props.submissionId]);
 
   useEffect(() => {
@@ -157,7 +209,8 @@ export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
   }, []);
 
   const backgroundPreset = backgroundPresets[background];
-  const fontFamilyPreset = fontFamilyPresets[fontFamily];
+  const fontFamilyPreset = fontFamilyOptions[fontFamily];
+  const activeFontGroup = fontFamilyPreset.group;
   const compactToolbar = containerWidth < 920;
   const readerStyle = useMemo(
     () => ({
@@ -172,10 +225,10 @@ export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
   const contentStyle = useMemo(
     () => ({
       fontSize: `${fontSize}px`,
-      lineHeight: fontFamily === "mono" ? 1.9 : 1.82,
+      lineHeight: activeFontGroup === "mono" ? 1.9 : 1.82,
       fontFamily: fontFamilyPreset.fontFamily,
     }),
-    [fontFamily, fontFamilyPreset.fontFamily, fontSize],
+    [activeFontGroup, fontFamilyPreset.fontFamily, fontSize],
   );
 
   return (
@@ -212,20 +265,75 @@ export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
 
           <div className="inline-flex items-center gap-1 rounded-full border px-1 py-1" style={{ borderColor: backgroundPreset.borderColor }}>
             {(
-              Object.entries(fontFamilyPresets) as Array<
-                [ReaderFontFamily, (typeof fontFamilyPresets)[ReaderFontFamily]]
+              Object.entries(fontFamilyGroups) as Array<
+                [ReaderFontGroup, (typeof fontFamilyGroups)[ReaderFontGroup]]
               >
-            ).map(([key, preset]) => (
-              <ReaderChipButton
+            ).map(([key, group]) => (
+              <div
                 key={key}
-                active={fontFamily === key}
-                label={preset.label}
-                compactLabel={getCompactFontFamilyLabel(key)}
-                onClick={() => setFontFamily(key)}
-                toneColor={backgroundPreset.textColor}
-                style={{ fontFamily: preset.fontFamily }}
-                compact={compactToolbar}
-              />
+                className="relative"
+                onMouseLeave={() => {
+                  setOpenFontGroup((current) =>
+                    current === key ? null : current,
+                  );
+                }}
+              >
+                <ReaderChipButton
+                  active={activeFontGroup === key}
+                  label={group.label}
+                  compactLabel={getCompactFontFamilyLabel(key)}
+                  onClick={() =>
+                    setOpenFontGroup((current) =>
+                      current === key ? null : key,
+                    )
+                  }
+                  toneColor={backgroundPreset.textColor}
+                  style={{ fontFamily: fontFamilyPresetForGroup(key).fontFamily }}
+                  compact={compactToolbar}
+                />
+                {openFontGroup === key ? (
+                  <div
+                    className="absolute left-0 top-full z-20 min-w-52 pt-2"
+                  >
+                    <div
+                      className={`rounded-2xl border p-2 shadow-xl backdrop-blur-xl ${backgroundPreset.toolbarClassName}`}
+                      style={{
+                        borderColor: backgroundPreset.borderColor,
+                      }}
+                    >
+                      <div className="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] opacity-70">
+                        {group.label}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        {group.options.map((optionKey) => {
+                          const option = fontFamilyOptions[optionKey];
+                          return (
+                            <button
+                              key={optionKey}
+                              type="button"
+                              onClick={() => {
+                                setFontFamily(optionKey);
+                                setOpenFontGroup(null);
+                              }}
+                              className={`rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+                                fontFamily === optionKey
+                                  ? "bg-black/10"
+                                  : "hover:bg-black/6"
+                              }`}
+                              style={{
+                                color: backgroundPreset.textColor,
+                                fontFamily: option.fontFamily,
+                              }}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
 
@@ -276,7 +384,7 @@ export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
                 setFontSize(DEFAULT_FONT_SIZE);
                 setReaderWidth(DEFAULT_READER_WIDTH);
                 setBackground("white");
-                setFontFamily("serif");
+                setFontFamily("georgia");
               }}
               className="inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition-colors hover:bg-black/6"
               style={{ borderColor: backgroundPreset.borderColor, color: backgroundPreset.textColor }}
@@ -395,7 +503,7 @@ function ReaderWidthGlyph(props: { glyph: string }) {
   );
 }
 
-function getCompactFontFamilyLabel(fontFamily: ReaderFontFamily) {
+function getCompactFontFamilyLabel(fontFamily: ReaderFontGroup) {
   if (fontFamily === "serif") {
     return "Se";
   }
@@ -403,6 +511,10 @@ function getCompactFontFamilyLabel(fontFamily: ReaderFontFamily) {
     return "Sa";
   }
   return "Mo";
+}
+
+function fontFamilyPresetForGroup(group: ReaderFontGroup) {
+  return fontFamilyOptions[fontFamilyGroups[group].options[0]];
 }
 
 function clampReaderWidth(value: number) {
