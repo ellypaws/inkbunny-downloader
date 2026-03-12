@@ -583,6 +583,13 @@ func renderActionButton(label string, fg lipgloss.Color, bg lipgloss.Color) stri
 		Render(label)
 }
 
+func newDownloadView(content string) tea.View {
+	v := tea.NewView(content)
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeAllMotion
+	return v
+}
+
 func (m *DownloadModel) View() tea.View {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -590,7 +597,7 @@ func (m *DownloadModel) View() tea.View {
 		Padding(0, 1)
 
 	if m.Aborted {
-		return tea.NewView(m.ZoneManager.Scan(borderStyle.Render("Aborted.")))
+		return newDownloadView(m.ZoneManager.Scan(borderStyle.Render("Aborted.")))
 	}
 
 	if !m.Confirmed {
@@ -630,7 +637,7 @@ func (m *DownloadModel) View() tea.View {
 
 		rendered := borderStyle.Render(strings.Join(out, "\n"))
 		rendered = m.applyHorizontalViewport(rendered)
-		return tea.NewView(m.ZoneManager.Scan(rendered))
+		return newDownloadView(m.ZoneManager.Scan(rendered))
 	}
 
 	contentWidth := max(m.Width-6, 40)
@@ -729,7 +736,7 @@ func (m *DownloadModel) View() tea.View {
 
 	rendered := borderStyle.Render(strings.Join(out, "\n"))
 	rendered = m.applyHorizontalViewport(rendered)
-	return tea.NewView(m.ZoneManager.Scan(rendered))
+	return newDownloadView(m.ZoneManager.Scan(rendered))
 }
 
 func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Client, saveCaption bool, ctx context.Context, runID int64) tea.Cmd {
