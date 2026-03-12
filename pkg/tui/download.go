@@ -466,7 +466,7 @@ func (m *DownloadModel) View() tea.View {
 	contentWidth := max(m.Width-6, 40)
 	statusWidth := 2
 	nameWidth := min(32, max(contentWidth/4, 16))
-	barWidth := max(contentWidth-statusWidth-nameWidth-2, 10)
+	barWidth := max((contentWidth-statusWidth-nameWidth-2)/2, 5)
 
 	var active []string
 	var queued []string
