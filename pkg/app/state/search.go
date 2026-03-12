@@ -1336,7 +1336,6 @@ func mapSubmissionDescription(
 		SubmissionID: submissionID,
 		Description: firstNonEmpty(
 			strings.TrimSpace(detail.Description),
-			strings.TrimSpace(detail.Writing),
 			strings.TrimSpace(detail.SalesDescription),
 		),
 		DescriptionHTML: firstNonEmpty(
@@ -1345,6 +1344,9 @@ func mapSubmissionDescription(
 				sid,
 				isPublic,
 			),
+		),
+		Writing: strings.TrimSpace(detail.Writing),
+		WritingHTML: firstNonEmpty(
 			apputils.NormalizeSubmissionDescriptionHTML(
 				strings.TrimSpace(detail.WritingBBCodeParsed),
 				sid,

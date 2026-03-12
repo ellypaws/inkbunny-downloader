@@ -1865,12 +1865,12 @@ function PreviewFallback(props: {
 }
 
 function getPreviewFallbackContent(submission: SubmissionCard) {
-  const typeName = submission.typeName.toLowerCase();
   const primaryMime = (
     submission.mimeType ||
     submission.latestMimeType ||
     ""
   ).toLowerCase();
+  const typeName = submission.typeName.toLowerCase();
 
   if (
     submission.submissionTypeId === 12 ||

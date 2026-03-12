@@ -103,6 +103,10 @@ func (a *App) Startup(ctx context.Context) {
 		a.emitRuntimeEvent(event, payload)
 		if event == "download-progress" {
 			a.broadcastQueueStateFromSnapshot(extractQueueSnapshot(payload))
+			return
+		}
+		if event == downloadJobUpdatedEvent {
+			a.publishSharedEvent(event, payload)
 		}
 	})
 	a.broadcastSessionState()

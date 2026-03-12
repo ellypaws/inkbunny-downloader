@@ -38,6 +38,7 @@ import type {
   BackendDebugEvent,
   BuildInfo,
   DebugResetResult,
+  DownloadJobUpdateEvent,
   KeywordSuggestion,
   QueueSnapshot,
   QueueStateUpdate,
@@ -1179,6 +1180,14 @@ export default function App() {
     applyQueueSnapshot(update.queue);
   }
 
+  function handleQueueJobUpdated(update: DownloadJobUpdateEvent) {
+    const nextJob = update?.job;
+    if (!nextJob?.id) {
+      return;
+    }
+    setQueue((current) => applyQueueJobUpdate(current, compactQueueJob(nextJob, true)));
+  }
+
   async function handleEnableRemoteAccess() {
     setRemoteAccessLoading(true);
     try {
@@ -1683,6 +1692,9 @@ export default function App() {
     const unsubscribeQueue = subscribeBackendEvent("queue.updated", (update) => {
       handleQueueStateUpdate(update);
     });
+    const unsubscribeQueueJobUpdated = subscribeBackendEvent("download.jobUpdated", (update) => {
+      handleQueueJobUpdated(update);
+    });
     const unsubscribeHydratedResults = subscribeBackendEvent("search.resultsHydrated", (update) => {
       handleSearchResultsHydrated(update);
     });
@@ -1698,6 +1710,7 @@ export default function App() {
       unsubscribeSettings();
       unsubscribeWorkspace();
       unsubscribeQueue();
+      unsubscribeQueueJobUpdated();
       unsubscribeHydratedResults();
       unsubscribeDebugLogs();
       unsubscribeNotifications();
@@ -4111,6 +4124,32 @@ function cancelAllInQueueSnapshot(snapshot: QueueSnapshot) {
         }
       : job,
   );
+}
+
+function applyQueueJobUpdate(
+  snapshot: QueueSnapshot,
+  updatedJob: QueueSnapshot["jobs"][number],
+) {
+  let changed = false;
+  const jobs = snapshot.jobs.map((job) => {
+    if (job.id !== updatedJob.id) {
+      return job;
+    }
+    if (areQueueJobsEqual(job, updatedJob)) {
+      return job;
+    }
+    changed = true;
+    return updatedJob;
+  });
+
+  if (!changed) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    jobs,
+  };
 }
 
 function updateQueueSnapshotJobs(

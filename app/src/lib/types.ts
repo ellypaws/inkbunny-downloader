@@ -111,6 +111,8 @@ export type SubmissionDescription = {
   submissionId: string
   description?: string
   descriptionHtml?: string
+  writing?: string
+  writingHtml?: string
 }
 
 export type SubmissionMediaFile = {
@@ -217,6 +219,10 @@ export type QueueSnapshot = {
 export type DownloadProgressEvent = {
   job: DownloadJobSnapshot
   queue: QueueSnapshot
+}
+
+export type DownloadJobUpdateEvent = {
+  job: DownloadJobSnapshot
 }
 
 export type AppNotification = {

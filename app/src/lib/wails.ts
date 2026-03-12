@@ -6,6 +6,7 @@ import type {
   BuildInfo,
   DebugResetResult,
   DebugResetScope,
+  DownloadJobUpdateEvent,
   DownloadOptions,
   DownloadSelection,
   KeywordSuggestion,
@@ -81,6 +82,7 @@ type BackendEventMap = {
   'settings.updated': SettingsStateUpdate
   'workspace.updated': WorkspaceStateUpdate
   'queue.updated': QueueStateUpdate
+  'download.jobUpdated': DownloadJobUpdateEvent
   'search.resultsHydrated': SearchResultsHydratedUpdate
   notification: AppNotification
   debug: BackendDebugEvent

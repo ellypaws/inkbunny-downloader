@@ -649,8 +649,7 @@ func (m *Manager) setAttempt(jobID string, attempt int) {
 	}
 	job.snapshot.Attempt = attempt
 	job.snapshot.UpdatedAt = time.Now().Format(time.RFC3339Nano)
-	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, job.snapshot)
+	m.emitJobUpdatedLocked(job.snapshot)
 }
 
 func (m *Manager) setProgress(jobID string, written, total int64) {
@@ -666,8 +665,7 @@ func (m *Manager) setProgress(jobID string, written, total int64) {
 		job.snapshot.Progress = float64(written) / float64(total)
 	}
 	job.snapshot.UpdatedAt = time.Now().Format(time.RFC3339Nano)
-	snapshot := m.snapshotLocked()
-	m.emitLocked(snapshot, job.snapshot)
+	m.emitJobUpdatedLocked(job.snapshot)
 }
 
 func (m *Manager) snapshotLocked() types.QueueSnapshot {
@@ -739,6 +737,15 @@ func (m *Manager) emitLocked(snapshot types.QueueSnapshot, job types.DownloadJob
 	m.emit("download-progress", types.DownloadProgressEvent{
 		Job:   job,
 		Queue: snapshot,
+	})
+}
+
+func (m *Manager) emitJobUpdatedLocked(job types.DownloadJobSnapshot) {
+	if m.emit == nil {
+		return
+	}
+	m.emit("download.jobUpdated", types.DownloadJobUpdateEvent{
+		Job: job,
 	})
 }
 

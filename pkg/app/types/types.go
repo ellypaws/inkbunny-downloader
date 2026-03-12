@@ -156,6 +156,8 @@ type SubmissionDescription struct {
 	SubmissionID    string `json:"submissionId"`
 	Description     string `json:"description,omitempty"`
 	DescriptionHTML string `json:"descriptionHtml,omitempty"`
+	Writing         string `json:"writing,omitempty"`
+	WritingHTML     string `json:"writingHtml,omitempty"`
 }
 
 type SubmissionMediaFile struct {
@@ -235,6 +237,10 @@ type DownloadJobSnapshot struct {
 type DownloadProgressEvent struct {
 	Job   DownloadJobSnapshot `json:"job"`
 	Queue QueueSnapshot       `json:"queue"`
+}
+
+type DownloadJobUpdateEvent struct {
+	Job DownloadJobSnapshot `json:"job"`
 }
 
 type AppNotification struct {

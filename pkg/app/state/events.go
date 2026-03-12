@@ -14,6 +14,7 @@ const (
 	settingsUpdatedEvent       = "settings.updated"
 	workspaceUpdatedEvent      = "workspace.updated"
 	queueUpdatedEvent          = "queue.updated"
+	downloadJobUpdatedEvent    = "download.jobUpdated"
 	searchResultsHydratedEvent = "search.resultsHydrated"
 	notificationEvent          = "notification"
 	debugEvent                 = "debug"

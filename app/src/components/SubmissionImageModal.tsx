@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { gsap } from "gsap";
 import {
-  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -26,11 +25,10 @@ import {
   useState,
 } from "react";
 
+import { SubmissionContent } from "./SubmissionContent";
+import { SubmissionWritingReader } from "./SubmissionWritingReader";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
-import type {
-  SubmissionCard,
-  SubmissionDescription as SubmissionDescriptionPayload,
-} from "../lib/types";
+import type { SubmissionCard } from "../lib/types";
 import {
   backend,
   resolveMediaSrcSet,
@@ -570,9 +568,11 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               {props.submission.title}
             </h2>
 
-            <SubmissionDescription
+            <SubmissionContent
               className="sim-panel-item theme-muted mt-4 max-h-[26vh] overflow-y-auto pr-1 text-[13px] leading-6 sm:mt-5 sm:max-h-[30vh] sm:text-[15px] sm:leading-7 md:max-h-[calc(100vh-12rem)] [&_a]:text-[var(--theme-info-strong)] [&_a]:underline-offset-4 [&_a]:transition-colors [&_a:hover]:text-[var(--theme-title)] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--theme-border-soft)] [&_blockquote]:pl-4 [&_em]:italic [&_img]:h-auto [&_img]:max-w-full [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-3 [&_strong]:font-bold [&_ul]:my-3"
               submissionId={props.submission.submissionId}
+              mode="description"
+              interactive
             />
             <div className="sim-panel-item mt-auto flex justify-end pt-4">
               <button
@@ -742,6 +742,19 @@ function SubmissionModalImage(props: {
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
 }) {
+  if (isWritingSubmission(props.submission)) {
+    return <SubmissionWritingReader submissionId={props.submission.submissionId} />;
+  }
+
+  return <SubmissionModalVisual {...props} />;
+}
+
+function SubmissionModalVisual(props: {
+  submission: SubmissionCard;
+  sources: SubmissionModalPreviewSource[];
+  thumbnail: SubmissionModalPreviewSource | null;
+  alt: string;
+}) {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [sourceIndex, setSourceIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -861,142 +874,6 @@ function ModalThumbnailImage(props: {
   );
 }
 
-const SubmissionDescription = memo(function SubmissionDescription(props: {
-  className: string;
-  submissionId: string;
-}) {
-  const [description, setDescription] =
-    useState<SubmissionDescriptionPayload | null>(null);
-  const [resolvedDescriptionHtml, setResolvedDescriptionHtml] =
-    useState<string>();
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    setDescription(null);
-    setResolvedDescriptionHtml(undefined);
-    setLoading(true);
-    setLoadError("");
-
-    void backend
-      .getSubmissionDescription(props.submissionId)
-      .then((nextDescription) => {
-        if (cancelled) {
-          return;
-        }
-        setDescription(nextDescription);
-        setLoading(false);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        setDescription(null);
-        setResolvedDescriptionHtml(undefined);
-        setLoading(false);
-        setLoadError(
-          error instanceof Error && error.message.trim()
-            ? error.message.trim()
-            : "Could not load description.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [props.submissionId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const descriptionHtml = description?.descriptionHtml;
-
-    if (!descriptionHtml) {
-      setResolvedDescriptionHtml(undefined);
-      return;
-    }
-
-    const documentFragment = new DOMParser().parseFromString(
-      descriptionHtml,
-      "text/html",
-    );
-    const mediaNodes = Array.from(
-      documentFragment.querySelectorAll("img, source"),
-    );
-    for (const node of mediaNodes) {
-      const src = node.getAttribute("src");
-      const srcSet = node.getAttribute("srcset");
-      if (src) {
-        node.setAttribute("src", resolveMediaURL(src) ?? src);
-      }
-      if (srcSet) {
-        node.setAttribute("srcset", resolveMediaSrcSet(srcSet) ?? srcSet);
-      }
-    }
-
-    const userIconImages = Array.from(documentFragment.querySelectorAll("img"))
-      .map((image) => ({
-        image,
-        src: image.getAttribute("src") || "",
-      }))
-      .filter((entry) => isUserIconURL(entry.src));
-
-    if (userIconImages.length === 0) {
-      setResolvedDescriptionHtml(documentFragment.body.innerHTML);
-      return;
-    }
-
-    void Promise.all(
-      userIconImages.map(async ({ image, src }) => {
-        const proxiedSource = await resolveAvatarImageURL(src);
-        if (proxiedSource) {
-          image.setAttribute("src", proxiedSource);
-        }
-      }),
-    ).then(() => {
-      if (cancelled) {
-        return;
-      }
-      setResolvedDescriptionHtml(documentFragment.body.innerHTML);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [description?.descriptionHtml]);
-
-  return (
-    <div
-      className={props.className}
-      onClick={(event) => {
-        const anchor = (event.target as HTMLElement).closest("a");
-        if (!anchor) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        void openExternal(anchor.getAttribute("href") || undefined);
-      }}
-    >
-      {loading ? (
-        <div className="inline-flex items-center gap-2 text-[var(--theme-subtle)]">
-          <LoaderCircle size={14} className="animate-spin" />
-          <span>Loading description</span>
-        </div>
-      ) : resolvedDescriptionHtml ? (
-        <div dangerouslySetInnerHTML={{ __html: resolvedDescriptionHtml }} />
-      ) : description?.description ? (
-        <p className="whitespace-pre-wrap">{description.description}</p>
-      ) : loadError ? (
-        <p className="theme-subtle">{loadError}</p>
-      ) : (
-        <p className="theme-subtle">No description available.</p>
-      )}
-    </div>
-  );
-});
-
 function ModalPreviewFallback(props: {
   submission: SubmissionCard;
   className: string;
@@ -1019,19 +896,13 @@ function ModalPreviewFallback(props: {
 }
 
 function getPreviewFallbackContent(submission: SubmissionCard) {
-  const typeName = submission.typeName.toLowerCase();
   const primaryMime = (
     submission.mimeType ||
     submission.latestMimeType ||
     ""
   ).toLowerCase();
 
-  if (
-    submission.submissionTypeId === 12 ||
-    primaryMime.startsWith("text/") ||
-    typeName.includes("writing") ||
-    typeName.includes("document")
-  ) {
+  if (isWritingSubmission(submission)) {
     return {
       icon: <FileText size={30} />,
       label: "Writing",
@@ -1141,31 +1012,20 @@ function measureSidebarExpandedSize(element: HTMLElement) {
   return measured;
 }
 
-const proxiedAvatarImageRequests = new Map<string, Promise<string>>();
+function isWritingSubmission(submission: SubmissionCard) {
+  const typeName = submission.typeName.toLowerCase();
+  const primaryMime = (
+    submission.mimeType ||
+    submission.latestMimeType ||
+    ""
+  ).toLowerCase();
 
-function isUserIconURL(src?: string) {
-  return (src || "").toLowerCase().includes("/usericons/");
-}
-
-function resolveAvatarImageURL(src?: string) {
-  if (!src) {
-    return Promise.resolve("");
-  }
-  if (!isUserIconURL(src)) {
-    return Promise.resolve(resolveMediaURL(src) ?? src);
-  }
-
-  const cached = proxiedAvatarImageRequests.get(src);
-  if (cached) {
-    return cached;
-  }
-
-  const request = backend
-    .proxyAvatarImageURL(src)
-    .then((resolved) => resolveMediaURL(resolved) ?? resolved)
-    .catch(() => resolveMediaURL(src) ?? src);
-  proxiedAvatarImageRequests.set(src, request);
-  return request;
+  return (
+    submission.submissionTypeId === 12 ||
+    primaryMime.startsWith("text/") ||
+    typeName.includes("writing") ||
+    typeName.includes("document")
+  );
 }
 
 async function openExternal(url?: string) {

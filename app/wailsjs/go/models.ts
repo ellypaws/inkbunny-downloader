@@ -740,6 +740,8 @@ export namespace types {
 	    submissionId: string;
 	    description?: string;
 	    descriptionHtml?: string;
+	    writing?: string;
+	    writingHtml?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SubmissionDescription(source);
@@ -750,6 +752,8 @@ export namespace types {
 	        this.submissionId = source["submissionId"];
 	        this.description = source["description"];
 	        this.descriptionHtml = source["descriptionHtml"];
+	        this.writing = source["writing"];
+	        this.writingHtml = source["writingHtml"];
 	    }
 	}
 	
