@@ -146,6 +146,8 @@ Search:
 	request.StringJoinType = finalModel.StringJoinType
 	request.DaysLimit = finalModel.TimeRange()
 	request.Type = finalModel.SubmissionType()
+	request.PoolID = finalModel.PoolIDValue()
+	request.Scraps = finalModel.Scraps()
 	request.OrderBy = finalModel.OrderBy()
 	request.UnreadSubmissions = inkbunny.No
 	maxDownloads = finalModel.MaxDownloads.Value()

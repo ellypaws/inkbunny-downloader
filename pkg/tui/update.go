@@ -142,6 +142,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ArtistName, cmd = updateInput(m.ArtistName, msg)
 		} else if m.ActiveField == FieldFavBy {
 			m.FavBy, cmd = updateInput(m.FavBy, msg)
+		} else if m.ActiveField == FieldPoolID {
+			m.PoolID, cmd = updateInput(m.PoolID, msg)
 		} else if m.ActiveField == FieldMaxDownloads {
 			m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
 		} else if m.ActiveField == FieldMaxActive {
@@ -165,6 +167,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 	m.FavBy, cmd = updateInput(m.FavBy, msg)
+	cmds = append(cmds, cmd)
+	m.PoolID, cmd = updateInput(m.PoolID, msg)
 	cmds = append(cmds, cmd)
 	m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
 	cmds = append(cmds, cmd)
@@ -266,14 +270,14 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.HoveredZone == "" {
-		_ = hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
+		_ = hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("pool_id") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
 			hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
 			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_watches_artist") || hoverCheck("link_use_my_name_fav") ||
 			hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
 			hoverCheck("chk_keywords") || hoverCheck("chk_title") || hoverCheck("chk_desc") || hoverCheck("chk_md5") ||
 			hoverCheck("chk_rate_gen") || hoverCheck("chk_rate_nudity") || hoverCheck("chk_rate_mildv") || hoverCheck("chk_rate_sex") || hoverCheck("chk_rate_strongv") ||
 			hoverCheck("rad_type_any") || hoverCheck("chk_type_pic") || hoverCheck("chk_type_sketch") || hoverCheck("chk_type_picseries") || hoverCheck("chk_type_comic") || hoverCheck("chk_type_port") || hoverCheck("chk_type_swfanim") || hoverCheck("chk_type_swfint") || hoverCheck("chk_type_vidfeat") || hoverCheck("chk_type_vidanim") || hoverCheck("chk_type_musicsing") || hoverCheck("chk_type_musicalb") || hoverCheck("chk_type_writing") || hoverCheck("chk_type_char") || hoverCheck("chk_type_photo") ||
-			hoverCheck("cycle_time") || hoverCheck("cycle_order") || hoverCheck("chk_dl_caption")
+			hoverCheck("cycle_time") || hoverCheck("cycle_scraps") || hoverCheck("cycle_order") || hoverCheck("chk_dl_caption")
 	}
 
 	return m, nil
@@ -289,6 +293,9 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 		m.focusActiveField()
 	case "fav_by":
 		m.ActiveField = FieldFavBy
+		m.focusActiveField()
+	case "pool_id":
+		m.ActiveField = FieldPoolID
 		m.focusActiveField()
 	case "max_dl":
 		m.ActiveField = FieldMaxDownloads
@@ -403,6 +410,8 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 		m.TypeAny = false
 	case "cycle_time":
 		m.TimeRangeIndex = (m.TimeRangeIndex + 1) % len(m.TimeRangeLabels)
+	case "cycle_scraps":
+		m.ScrapsIndex = (m.ScrapsIndex + 1) % len(m.ScrapsLabels)
 	case "cycle_order":
 		m.OrderByIndex = (m.OrderByIndex + 1) % len(m.OrderByLabels)
 	case "chk_dl_caption":
@@ -420,6 +429,8 @@ func (m *Model) updateActiveField() {
 		m.ActiveField = FieldArtistName
 	case "fav_by":
 		m.ActiveField = FieldFavBy
+	case "pool_id":
+		m.ActiveField = FieldPoolID
 	case "max_dl":
 		m.ActiveField = FieldMaxDownloads
 	case "max_active":
@@ -558,6 +569,7 @@ func (m *Model) focusActiveField() {
 	m.SearchWords.Blur()
 	m.ArtistName.Blur()
 	m.FavBy.Blur()
+	m.PoolID.Blur()
 	m.MaxDownloads.Blur()
 	m.MaxActive.Blur()
 	m.DownloadDir.Blur()
@@ -570,6 +582,8 @@ func (m *Model) focusActiveField() {
 		m.ArtistName.Focus()
 	case FieldFavBy:
 		m.FavBy.Focus()
+	case FieldPoolID:
+		m.PoolID.Focus()
 	case FieldMaxDownloads:
 		m.MaxDownloads.Focus()
 	case FieldMaxActive:

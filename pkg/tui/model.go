@@ -19,6 +19,7 @@ const (
 	FieldSearchWords activeField = iota
 	FieldArtistName
 	FieldFavBy
+	FieldPoolID
 	FieldMaxDownloads
 	FieldMaxActive
 	FieldDownloadDirectory
@@ -32,7 +33,7 @@ var FocusableZones = []string{
 	"chk_keywords", "chk_title", "chk_desc", "chk_md5",
 	"artist_name", "link_use_my_name_artist", "link_use_my_watches_artist",
 	"fav_by", "link_use_my_name_fav",
-	"cycle_time",
+	"cycle_time", "pool_id", "cycle_scraps",
 	"chk_rate_gen", "chk_rate_nudity", "chk_rate_mildv", "chk_rate_sex", "chk_rate_strongv",
 	"rad_type_any", "chk_type_pic", "chk_type_sketch", "chk_type_picseries", "chk_type_comic",
 	"chk_type_port", "chk_type_swfanim", "chk_type_swfint", "chk_type_vidfeat", "chk_type_vidanim",
@@ -65,6 +66,7 @@ type Model struct {
 	SearchWords  textinput.Model
 	ArtistName   textinput.Model
 	FavBy        textinput.Model
+	PoolID       textinput.Model
 	MaxDownloads textinput.Model
 	MaxActive    textinput.Model
 	DownloadDir  textinput.Model
@@ -93,6 +95,10 @@ type Model struct {
 	TimeRangeIndex  int
 	TimeRangeLabels []string
 	TimeRangeValues []inkbunny.IntString
+
+	ScrapsIndex  int
+	ScrapsLabels []string
+	ScrapsValues []inkbunny.Scraps
 
 	OrderByIndex  int
 	OrderByLabels []string
@@ -162,6 +168,17 @@ func NewModel(
 	favBy.Placeholder = "search only work favorited by this user"
 	favBy.Prompt = ""
 
+	poolID := textinput.New()
+	poolID.Placeholder = "12345"
+	poolID.Validate = func(s string) error {
+		if s == "" {
+			return nil
+		}
+		_, err := strconv.Atoi(s)
+		return err
+	}
+	poolID.Prompt = ""
+
 	maxDownloads := textinput.New()
 	maxDownloads.Placeholder = "Unlimited"
 	maxDownloads.Prompt = ""
@@ -192,6 +209,7 @@ func NewModel(
 		SearchWords:   searchWords,
 		ArtistName:    artistName,
 		FavBy:         favBy,
+		PoolID:        poolID,
 		MaxDownloads:  maxDownloads,
 		MaxActive:     maxActive,
 		DownloadDir:   downloadDir,
@@ -207,6 +225,9 @@ func NewModel(
 
 		TimeRangeLabels: []string{"Any Time", "24 Hrs", "3 Days", "1 Week", "2 Weeks", "1 Month", "3 Months", "6 Months", "1 Year"},
 		TimeRangeValues: []inkbunny.IntString{0, 1, 3, 7, 14, 30, 90, 180, 365},
+
+		ScrapsLabels: []string{"Include scraps", "Exclude scraps", "Scraps only"},
+		ScrapsValues: []inkbunny.Scraps{inkbunny.ScrapsBoth, inkbunny.ScrapsNo, inkbunny.ScrapsOnly},
 
 		OrderByLabels: []string{"Newest First", "Most Popular First (by Favs)", "Most Popular First (by Views)"},
 		OrderByValues: []string{inkbunny.OrderByCreateDatetime, inkbunny.OrderByFavs, inkbunny.OrderByViews},
@@ -278,6 +299,22 @@ func (m *Model) TimeRange() inkbunny.IntString {
 
 func (m *Model) OrderBy() string {
 	return m.OrderByValues[m.OrderByIndex]
+}
+
+func (m *Model) Scraps() inkbunny.Scraps {
+	return m.ScrapsValues[m.ScrapsIndex]
+}
+
+func (m *Model) PoolIDValue() inkbunny.IntString {
+	value := strings.TrimSpace(m.PoolID.Value())
+	if value == "" {
+		return 0
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0
+	}
+	return inkbunny.IntString(parsed)
 }
 
 func (m *Model) DownloadDirectoryValue() string {
