@@ -93,9 +93,10 @@ type DownloadModel struct {
 	ToDownload      int
 	DownloadCaption bool
 
-	Aborted   bool
-	Confirmed bool
-	Paused    bool
+	Aborted     bool
+	Confirmed   bool
+	Paused      bool
+	HoveredZone string
 
 	ScrollOffset  int
 	HScrollOffset int
@@ -279,6 +280,34 @@ func (m *DownloadModel) handleMouseRelease(v1msg teaV1.MouseMsg) (tea.Model, tea
 	return m, nil
 }
 
+func (m *DownloadModel) handleMouseMove(v1msg teaV1.MouseMsg) {
+	inBounds := func(id string) bool { return m.ZoneManager.Get(id).InBounds(v1msg) }
+	m.HoveredZone = ""
+
+	if !m.Confirmed {
+		if inBounds("btn_start") {
+			m.HoveredZone = "btn_start"
+			return
+		}
+		if inBounds("btn_cancel") {
+			m.HoveredZone = "btn_cancel"
+		}
+		return
+	}
+
+	if inBounds("btn_pause_resume") {
+		m.HoveredZone = "btn_pause_resume"
+		return
+	}
+	if inBounds("btn_retry_all") {
+		m.HoveredZone = "btn_retry_all"
+		return
+	}
+	if inBounds("btn_stop_all") {
+		m.HoveredZone = "btn_stop_all"
+	}
+}
+
 func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
@@ -442,6 +471,8 @@ func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else if v1msg.Type == teaV1.MouseRelease && v1msg.Button == teaV1.MouseButtonLeft {
 			return m.handleMouseRelease(v1msg)
+		} else {
+			m.handleMouseMove(v1msg)
 		}
 
 	case tea.MouseMsg:
@@ -449,6 +480,7 @@ func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if mRelease, ok := msg.(tea.MouseReleaseMsg); ok && mRelease.Button == tea.MouseLeft {
 			return m.handleMouseRelease(v1msg)
 		}
+		m.handleMouseMove(v1msg)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -574,13 +606,16 @@ func truncateToWidth(value string, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(ansi.Cut(value, 0, width-1) + "…")
 }
 
-func renderActionButton(label string, fg lipgloss.Color, bg lipgloss.Color) string {
-	return lipgloss.NewStyle().
+func (m *DownloadModel) renderActionButton(id string, label string, fg lipgloss.Color, bg lipgloss.Color, hoverBg lipgloss.Color) string {
+	style := lipgloss.NewStyle().
 		Foreground(fg).
 		Background(bg).
 		Padding(0, 2).
-		Bold(true).
-		Render(label)
+		Bold(true)
+	if m.HoveredZone == id {
+		style = style.Background(hoverBg).Underline(true)
+	}
+	return m.ZoneManager.Mark(id, style.Render(label))
 }
 
 func newDownloadView(content string) tea.View {
@@ -603,11 +638,8 @@ func (m *DownloadModel) View() tea.View {
 	if !m.Confirmed {
 		var out []string
 
-		btnStart := renderActionButton("Start", lipgloss.Color("#FFFFFF"), lipgloss.Color("#5F7FFF"))
-		btnCancel := renderActionButton("Cancel", lipgloss.Color("#FFFFFF"), lipgloss.Color("#6B6B6B"))
-
-		btnStart = m.ZoneManager.Mark("btn_start", btnStart)
-		btnCancel = m.ZoneManager.Mark("btn_cancel", btnCancel)
+		btnStart := m.renderActionButton("btn_start", "Start", lipgloss.Color("#FFFFFF"), lipgloss.Color("#5F7FFF"), lipgloss.Color("#E04080"))
+		btnCancel := m.renderActionButton("btn_cancel", "Cancel", lipgloss.Color("#FFFFFF"), lipgloss.Color("#6B6B6B"), lipgloss.Color("#5F7FFF"))
 
 		out = append(out, fmt.Sprintf("Ready to download %d files. Use %s or press ENTER. Use %s or press ESC.", len(m.Items), btnStart, btnCancel))
 		out = append(out, "---")
@@ -688,9 +720,9 @@ func (m *DownloadModel) View() tea.View {
 	if m.Paused {
 		pauseLabel = "Resume All"
 	}
-	btnPauseResume := m.ZoneManager.Mark("btn_pause_resume", renderActionButton(pauseLabel, lipgloss.Color("#FFFFFF"), lipgloss.Color("#7A4BFF")))
-	btnRetryAll := m.ZoneManager.Mark("btn_retry_all", renderActionButton("Retry All", lipgloss.Color("#FFFFFF"), lipgloss.Color("#2F6F4F")))
-	btnStopAll := m.ZoneManager.Mark("btn_stop_all", renderActionButton("Stop All", lipgloss.Color("#FFFFFF"), lipgloss.Color("#A83A3A")))
+	btnPauseResume := m.renderActionButton("btn_pause_resume", pauseLabel, lipgloss.Color("#FFFFFF"), lipgloss.Color("#7A4BFF"), lipgloss.Color("#E04080"))
+	btnRetryAll := m.renderActionButton("btn_retry_all", "Retry All", lipgloss.Color("#FFFFFF"), lipgloss.Color("#2F6F4F"), lipgloss.Color("#5F7FFF"))
+	btnStopAll := m.renderActionButton("btn_stop_all", "Stop All", lipgloss.Color("#FFFFFF"), lipgloss.Color("#A83A3A"), lipgloss.Color("#E04080"))
 	stateLabel := "Running"
 	if m.Paused {
 		stateLabel = "Paused"
