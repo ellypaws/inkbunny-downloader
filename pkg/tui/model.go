@@ -30,7 +30,7 @@ var FocusableZones = []string{
 	"search_words", "btn_search_top",
 	"rad_and", "rad_or", "rad_exact",
 	"chk_keywords", "chk_title", "chk_desc", "chk_md5",
-	"artist_name", "link_use_my_name_artist",
+	"artist_name", "link_use_my_name_artist", "link_use_my_watches_artist",
 	"fav_by", "link_use_my_name_fav",
 	"cycle_time",
 	"chk_rate_gen", "chk_rate_nudity", "chk_rate_mildv", "chk_rate_sex", "chk_rate_strongv",
@@ -98,10 +98,13 @@ type Model struct {
 	OrderByLabels []string
 	OrderByValues []string
 
-	DownloadCaption bool
-	UnreadMode      bool
-	UnreadCount     int
-	CanUseUnread    bool
+	DownloadCaption   bool
+	UnreadMode        bool
+	UnreadCount       int
+	CanUseUnread      bool
+	CanUseWatching    bool
+	WatchingUsers     []string
+	UseWatchingArtist bool
 
 	// Ratings
 	RatingGeneral        bool
@@ -137,6 +140,8 @@ func NewModel(
 	username string,
 	unreadCount int,
 	canUseUnread bool,
+	canUseWatching bool,
+	watchingUsers []string,
 	defaultDownloadDir string,
 	defaultDownloadPattern string,
 	keywordCache *flight.Cache[string, []inkbunny.KeywordAutocomplete],
@@ -209,6 +214,8 @@ func NewModel(
 		DownloadCaption: false,
 		UnreadCount:     unreadCount,
 		CanUseUnread:    canUseUnread,
+		CanUseWatching:  canUseWatching,
+		WatchingUsers:   append([]string(nil), watchingUsers...),
 		ActiveField:     FieldSearchWords,
 		FocusIndex:      0,
 
@@ -287,6 +294,17 @@ func (m *Model) DownloadPatternValue() string {
 		return value
 	}
 	return strings.TrimSpace(m.DownloadPath.Placeholder)
+}
+
+func (m *Model) ArtistFilters() []string {
+	if m.UseWatchingArtist {
+		return append([]string(nil), m.WatchingUsers...)
+	}
+	return normalizeUserFilters(m.ArtistName.Value())
+}
+
+func (m *Model) FavoriteFilters() []string {
+	return normalizeUserFilters(m.FavBy.Value())
 }
 
 func (m *Model) SubmissionType() []inkbunny.SubmissionType {
@@ -402,6 +420,64 @@ func (m *Model) moveFocus(delta int) {
 	m.Suggestions = nil
 	m.SuggestionIndex = -1
 	m.ensureFocusVisible()
+}
+
+func normalizeUserFilters(raw string) []string {
+	seen := make(map[string]struct{})
+	values := make([]string, 0)
+	for _, part := range strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r'
+	}) {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		values = append(values, trimmed)
+	}
+	return values
+}
+
+func currentUserToken(raw string) string {
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r'
+	})
+	if len(parts) == 0 {
+		return strings.TrimSpace(raw)
+	}
+	return strings.TrimSpace(parts[len(parts)-1])
+}
+
+func replaceCurrentUserToken(raw string, value string) string {
+	trimmedRaw := strings.TrimRight(raw, " \t\r\n")
+	if trimmedRaw == "" {
+		return value
+	}
+
+	lastSep := strings.LastIndexAny(trimmedRaw, ",\n\r")
+	if lastSep < 0 {
+		return value
+	}
+	prefix := strings.TrimRight(trimmedRaw[:lastSep+1], " \t")
+	if prefix == "" {
+		return value
+	}
+	return prefix + " " + value
+}
+
+func appendUniqueUserFilter(raw string, value string) string {
+	values := normalizeUserFilters(raw)
+	for _, existing := range values {
+		if strings.EqualFold(existing, value) {
+			return strings.Join(values, ", ")
+		}
+	}
+	values = append(values, value)
+	return strings.Join(values, ", ")
 }
 
 func (m *Model) Init() tea.Cmd {

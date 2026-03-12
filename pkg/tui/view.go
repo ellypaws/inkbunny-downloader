@@ -221,18 +221,35 @@ func (m *Model) renderTopSection() string {
 
 func (m *Model) renderMiddleSection() string {
 	artistLabel := labelStyle.Render("Artist name:")
-	artistSub := subLabelStyle.Render("search only submissions by\nthis user (optional)")
+	artistSub := subLabelStyle.Render("search submissions by these\nusers (optional, comma-separated)")
 	artistInput := m.renderInput("artist_name", m.ArtistName, FieldArtistName)
+	if m.UseWatchingArtist {
+		label := fmt.Sprintf("Searching through %d watched users", len(m.WatchingUsers))
+		if len(m.WatchingUsers) == 0 {
+			label = "Watch list is empty"
+		}
+		artistInput = m.renderStaticInput("artist_name", label)
+	}
 	artistLink := m.renderLink("link_use_my_name_artist", "Use my name", "(Search my uploads only)")
+	artistWatchLink := ""
+	if m.CanUseWatching {
+		artistWatchLink = m.renderLink("link_use_my_watches_artist", "My watches", fmt.Sprintf("(Use %d watched users)", len(m.WatchingUsers)))
+	}
 
 	var artistSugBlock string
-	if len(m.Suggestions) > 0 && m.SuggestionField == FieldArtistName && m.ActiveField == FieldArtistName {
+	if !m.UseWatchingArtist && len(m.Suggestions) > 0 && m.SuggestionField == FieldArtistName && m.ActiveField == FieldArtistName {
 		artistSugBlock = m.renderSuggestions()
 	}
 
 	artistParts := []string{
 		lipgloss.JoinHorizontal(lipgloss.Top, artistLabel, artistInput),
 		lipgloss.JoinHorizontal(lipgloss.Top, subLabelStyle.Render(""), artistLink),
+	}
+	if artistWatchLink != "" {
+		artistParts = append(artistParts, lipgloss.JoinHorizontal(lipgloss.Top, subLabelStyle.Render(""), artistWatchLink))
+	}
+	if m.UseWatchingArtist {
+		artistParts = append(artistParts, helperTextStyle.Render(fmt.Sprintf("Using watched artists only (%d users).", len(m.WatchingUsers))))
 	}
 	if artistSugBlock != "" {
 		artistParts = append(artistParts, artistSugBlock)
@@ -241,7 +258,7 @@ func (m *Model) renderMiddleSection() string {
 	artistCol := lipgloss.JoinVertical(lipgloss.Left, artistParts...)
 
 	favLabel := labelStyle.Render("Search favorites by:")
-	favSub := subLabelStyle.Render("search only work favorited\nby this user (optional)")
+	favSub := subLabelStyle.Render("search work favorited by these\nusers (optional, comma-separated)")
 	favInput := m.renderInput("fav_by", m.FavBy, FieldFavBy)
 	favLink := m.renderLink("link_use_my_name_fav", "Use my name", "(Search my favorites only)")
 
@@ -480,6 +497,15 @@ func (m *Model) renderInput(id string, in textinput.Model, field activeField) st
 	return m.markFocused(id, m.ZoneManager.Mark(id, style.Render(in.View())))
 }
 
+func (m *Model) renderStaticInput(id string, value string) string {
+	currentFocus := m.currentFocusZone()
+	style := inputInactiveStyle
+	if m.HoveredZone == id || currentFocus == id {
+		style = inputHoverStyle
+	}
+	return m.markFocused(id, m.ZoneManager.Mark(id, style.Render(value)))
+}
+
 func (m *Model) renderCheckbox(id string, checked bool, label string) string {
 	currentFocus := m.currentFocusZone()
 	style := checkboxStyle
@@ -549,7 +575,8 @@ func (m *Model) renderCycle(id string, label string) string {
 func (m *Model) renderLink(id string, text string, hint string) string {
 	currentFocus := m.currentFocusZone()
 	style := linkStyle
-	if m.HoveredZone == id || currentFocus == id {
+	active := id == "link_use_my_watches_artist" && m.UseWatchingArtist
+	if active || m.HoveredZone == id || currentFocus == id {
 		style = linkHoverStyle
 	}
 	caret := "  "

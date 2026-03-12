@@ -26,17 +26,19 @@ import (
 
 func RunTUI(config flags.Config) {
 	var (
-		request      inkbunny.SubmissionSearchRequest
-		searchIn     []int
-		favBy        string
-		maxDownloads string
-		maxActiveStr string
-		downloadDir  string
-		downloadPath string
+		request         inkbunny.SubmissionSearchRequest
+		searchIn        []int
+		favBy           string
+		maxDownloads    string
+		maxActiveStr    string
+		downloadDir     string
+		downloadPath    string
+		artistFilters   []string
+		favoriteFilters []string
 
 		toDownload      int
 		downloadCaption bool
-		search          inkbunny.SubmissionSearchResponse
+		searches        []inkbunny.SubmissionSearchResponse
 	)
 
 Login:
@@ -67,6 +69,8 @@ Login:
 	})
 	canUseUnread := user != nil && user.SID != "" && !strings.EqualFold(user.Username, "guest")
 	unreadCount := 0
+	canUseWatching := user != nil && user.SID != "" && !strings.EqualFold(user.Username, "guest")
+	watchingUsers := []string(nil)
 	if canUseUnread {
 		spinner.New().
 			Title("Checking unread submissions...").
@@ -78,11 +82,24 @@ Login:
 			unreadCount = 0
 		}
 	}
+	if canUseWatching {
+		spinner.New().
+			Title("Loading watch list...").
+			Action(func() {
+				watchingUsers, err = fetchWatchingUsers(user)
+			}).Run()
+		if err != nil {
+			log.Warn("failed to load watch list", "err", err)
+			watchingUsers = nil
+		}
+	}
 	model := uitui.NewModel(
 		user,
 		user.Username,
 		unreadCount,
 		canUseUnread,
+		canUseWatching,
+		watchingUsers,
 		appstorage.DefaultDownloadDirectory(),
 		appdownloads.DefaultPattern,
 		&keywordSuggestionsCache,
@@ -123,8 +140,8 @@ Search:
 	}
 
 	request.Text = finalModel.SearchWords.Value()
-	request.Username = finalModel.ArtistName.Value()
-	favBy = finalModel.FavBy.Value()
+	artistFilters = finalModel.ArtistFilters()
+	favoriteFilters = finalModel.FavoriteFilters()
 
 	request.StringJoinType = finalModel.StringJoinType
 	request.DaysLimit = finalModel.TimeRange()
@@ -173,15 +190,6 @@ Process:
 		}
 	}
 
-	if favBy != "" {
-		suggestions, _ := usernameCache.Get(favBy)
-		for _, v := range suggestions {
-			if v.SingleWord == favBy {
-				request.FavsUserID = v.ID
-			}
-		}
-	}
-
 	if maxDownloads != "" {
 		toDownload, err = strconv.Atoi(maxDownloads)
 		if err != nil {
@@ -196,21 +204,43 @@ Process:
 	downloadPath = appdownloads.NormalizePattern(downloadPath)
 
 	request.GetRID = inkbunny.Yes
-
-	if request.Username != "" {
-		suggestions, _ := usernameCache.Get(request.Username)
-		for _, v := range suggestions {
-			if strings.EqualFold(v.Value, request.Username) {
-				request.UserID = v.ID
-				break
-			}
+	if finalModel == nil {
+		if trimmed := strings.TrimSpace(request.Username); trimmed != "" {
+			artistFilters = []string{trimmed}
 		}
+		if trimmed := strings.TrimSpace(favBy); trimmed != "" {
+			favoriteFilters = []string{trimmed}
+		}
+	}
+	request.Username = ""
+	request.UserID = 0
+	request.FavsUserID = 0
+
+	if finalModel != nil {
+		if finalModel.UseWatchingArtist && len(artistFilters) == 0 {
+			log.Warn("your watch list is empty, so artist My watches cannot be used")
+			goto Search
+		}
+	}
+
+	requests, err := buildSearchRequests(request, artistFilters, favoriteFilters, &usernameCache)
+	if err != nil {
+		log.Error("failed to build search requests", "err", err)
+		goto Search
 	}
 
 	spinner.New().
 		Title("Searching...").
 		Action(func() {
-			search, err = user.SearchSubmissions(request)
+			searches = searches[:0]
+			for _, req := range requests {
+				search, searchErr := user.SearchSubmissions(req)
+				if searchErr != nil {
+					err = searchErr
+					return
+				}
+				searches = append(searches, search)
+			}
 		}).Run()
 	if err != nil {
 		if err, ok := errors.AsType[inkbunny.ErrorResponse](err); ok && err.Code != nil && *err.Code == inkbunny.ErrInvalidSessionID {
@@ -220,7 +250,7 @@ Process:
 		}
 		log.Fatal("failed to search submissions", "err", err)
 	}
-	log.Infof("Total number of submissions: %d", search.ResultsCountAll)
+	log.Infof("Search requests executed: %d", len(searches))
 	if toDownload > 0 {
 		log.Infof("To download: %d", toDownload)
 	} else {
@@ -236,60 +266,75 @@ Process:
 		fileCount       int
 	)
 	gather.Action(func() {
-		for page, err := range search.AllPages() {
-			if err != nil {
-				log.Error("Failed to search pages", "err", err)
-				break
-			}
-			details, err := page.Details()
-			if err != nil {
-				log.Error("Failed to get submission details", "err", err)
-				continue
-			}
-
-			for _, d := range details.Submissions {
-				if toDownload > 0 && len(items) >= toDownload {
+		seenSubmissions := make(map[string]struct{})
+		seenFiles := make(map[string]struct{})
+		for _, search := range searches {
+			for page, pageErr := range search.AllPages() {
+				if pageErr != nil {
+					log.Error("Failed to search pages", "err", pageErr)
 					break
 				}
-				submissionCount++
-				gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
-
-				var keywords strings.Builder
-				for i, keyword := range d.Keywords {
-					if i > 0 {
-						keywords.WriteString(", ")
-					}
-					keywords.WriteString(keyword.KeywordName)
+				details, detailsErr := page.Details()
+				if detailsErr != nil {
+					log.Error("Failed to get submission details", "err", detailsErr)
+					continue
 				}
+				pageCount++
 
-				for _, file := range d.Files {
+				for _, d := range details.Submissions {
+					submissionID := d.SubmissionID.String()
+					if _, ok := seenSubmissions[submissionID]; !ok {
+						seenSubmissions[submissionID] = struct{}{}
+						submissionCount++
+					}
+					gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
+
+					var keywords strings.Builder
+					for i, keyword := range d.Keywords {
+						if i > 0 {
+							keywords.WriteString(", ")
+						}
+						keywords.WriteString(keyword.KeywordName)
+					}
+
+					for _, file := range d.Files {
+						key := submissionID + ":" + file.FileID.String()
+						if _, ok := seenFiles[key]; ok {
+							continue
+						}
+						if toDownload > 0 && len(items) >= toDownload {
+							break
+						}
+						seenFiles[key] = struct{}{}
+						fileCount++
+						gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
+
+						items = append(items, &uitui.DownloadItem{
+							SubmissionID: submissionID,
+							Title:        d.Title,
+							URL:          file.FileURLFull.String(),
+							Username:     d.Username,
+							FileName:     filepath.Base(file.FileName),
+							FileMD5:      file.FullFileMD5,
+							IsPublic:     d.Public.Bool(),
+							Keywords:     keywords.String(),
+							DownloadRoot: downloadDir,
+							Destinations: appdownloads.ResolveDestinations(downloadDir, downloadPath, d, file),
+							Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
+							Status:       uitui.StatusQueued,
+						})
+					}
 					if toDownload > 0 && len(items) >= toDownload {
 						break
 					}
-					fileCount++
-					gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
-
-					items = append(items, &uitui.DownloadItem{
-						SubmissionID: d.SubmissionID.String(),
-						Title:        d.Title,
-						URL:          file.FileURLFull.String(),
-						Username:     d.Username,
-						FileName:     filepath.Base(file.FileName),
-						FileMD5:      file.FullFileMD5,
-						IsPublic:     d.Public.Bool(),
-						Keywords:     keywords.String(),
-						DownloadRoot: downloadDir,
-						Destinations: appdownloads.ResolveDestinations(downloadDir, downloadPath, d, file),
-						Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
-						Status:       uitui.StatusQueued,
-					})
+				}
+				if toDownload > 0 && len(items) >= toDownload {
+					break
 				}
 			}
 			if toDownload > 0 && len(items) >= toDownload {
 				break
 			}
-			pageCount++
-			gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
 		}
 	}).Run()
 
@@ -344,4 +389,93 @@ func fetchUnreadSubmissionCount(user *inkbunny.User) (int, error) {
 	}
 
 	return int(response.ResultsCountAll), nil
+}
+
+func fetchWatchingUsers(user *inkbunny.User) ([]string, error) {
+	if user == nil || user.SID == "" {
+		return nil, nil
+	}
+
+	items, err := user.GetWatching()
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{}, len(items))
+	users := make([]string, 0, len(items))
+	for _, item := range items {
+		name := strings.TrimSpace(item.Username)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		users = append(users, name)
+	}
+
+	return users, nil
+}
+
+func buildSearchRequests(
+	base inkbunny.SubmissionSearchRequest,
+	artistFilters []string,
+	favoriteFilters []string,
+	usernameCache *flight.Cache[string, []inkbunny.Autocomplete],
+) ([]inkbunny.SubmissionSearchRequest, error) {
+	artists := artistFilters
+	if len(artists) == 0 {
+		artists = []string{""}
+	}
+	favorites := favoriteFilters
+	if len(favorites) == 0 {
+		favorites = []string{""}
+	}
+
+	seen := make(map[string]struct{}, len(artists)*len(favorites))
+	requests := make([]inkbunny.SubmissionSearchRequest, 0, len(artists)*len(favorites))
+	for _, artist := range artists {
+		for _, favorite := range favorites {
+			key := strings.ToLower(strings.TrimSpace(artist)) + "|" + strings.ToLower(strings.TrimSpace(favorite))
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			req := base
+			req.Username = strings.TrimSpace(artist)
+			req.UserID = 0
+			req.FavsUserID = 0
+
+			if req.Username != "" && usernameCache != nil {
+				suggestions, _ := usernameCache.Get(req.Username)
+				for _, suggestion := range suggestions {
+					if strings.EqualFold(suggestion.Value, req.Username) || strings.EqualFold(suggestion.SingleWord, req.Username) {
+						req.UserID = suggestion.ID
+						break
+					}
+				}
+			}
+
+			favorite = strings.TrimSpace(favorite)
+			if favorite != "" && usernameCache != nil {
+				suggestions, _ := usernameCache.Get(favorite)
+				for _, suggestion := range suggestions {
+					if strings.EqualFold(suggestion.Value, favorite) || strings.EqualFold(suggestion.SingleWord, favorite) {
+						req.FavsUserID = suggestion.ID
+						break
+					}
+				}
+			}
+
+			requests = append(requests, req)
+		}
+	}
+
+	if len(requests) == 0 {
+		return []inkbunny.SubmissionSearchRequest{base}, nil
+	}
+	return requests, nil
 }

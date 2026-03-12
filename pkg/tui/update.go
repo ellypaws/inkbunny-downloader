@@ -138,7 +138,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		if m.ActiveField == FieldSearchWords {
 			m.SearchWords, cmd = updateInput(m.SearchWords, msg)
-		} else if m.ActiveField == FieldArtistName {
+		} else if m.ActiveField == FieldArtistName && !m.UseWatchingArtist {
 			m.ArtistName, cmd = updateInput(m.ArtistName, msg)
 		} else if m.ActiveField == FieldFavBy {
 			m.FavBy, cmd = updateInput(m.FavBy, msg)
@@ -160,8 +160,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.SearchWords, cmd = updateInput(m.SearchWords, msg)
 	cmds = append(cmds, cmd)
-	m.ArtistName, cmd = updateInput(m.ArtistName, msg)
-	cmds = append(cmds, cmd)
+	if !m.UseWatchingArtist {
+		m.ArtistName, cmd = updateInput(m.ArtistName, msg)
+		cmds = append(cmds, cmd)
+	}
 	m.FavBy, cmd = updateInput(m.FavBy, msg)
 	cmds = append(cmds, cmd)
 	m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
@@ -182,14 +184,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if q := m.ArtistName.Value(); q != prevArtist && m.ActiveField == FieldArtistName {
-		if c := m.fetchUsernameSuggestions(FieldArtistName, q); c != nil {
-			cmds = append(cmds, c)
+		if !m.UseWatchingArtist {
+			if c := m.fetchUsernameSuggestions(FieldArtistName, currentUserToken(q)); c != nil {
+				cmds = append(cmds, c)
+			} else {
+				m.Suggestions = nil
+			}
 		} else {
 			m.Suggestions = nil
 		}
 	}
 	if q := m.FavBy.Value(); q != prevFav && m.ActiveField == FieldFavBy {
-		if c := m.fetchUsernameSuggestions(FieldFavBy, q); c != nil {
+		if c := m.fetchUsernameSuggestions(FieldFavBy, currentUserToken(q)); c != nil {
 			cmds = append(cmds, c)
 		} else {
 			m.Suggestions = nil
@@ -205,10 +211,12 @@ func (m *Model) applySuggestion(value string) {
 		m.SearchWords.SetValue(value + " ")
 		m.SearchWords.CursorEnd()
 	case FieldArtistName:
-		m.ArtistName.SetValue(value)
+		next := replaceCurrentUserToken(m.ArtistName.Value(), value)
+		m.ArtistName.SetValue(next + ", ")
 		m.ArtistName.CursorEnd()
 	case FieldFavBy:
-		m.FavBy.SetValue(value)
+		next := replaceCurrentUserToken(m.FavBy.Value(), value)
+		m.FavBy.SetValue(next + ", ")
 		m.FavBy.CursorEnd()
 	}
 }
@@ -260,7 +268,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.HoveredZone == "" {
 		_ = hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
 			hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
-			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_name_fav") ||
+			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_watches_artist") || hoverCheck("link_use_my_name_fav") ||
 			hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
 			hoverCheck("chk_keywords") || hoverCheck("chk_title") || hoverCheck("chk_desc") || hoverCheck("chk_md5") ||
 			hoverCheck("chk_rate_gen") || hoverCheck("chk_rate_nudity") || hoverCheck("chk_rate_mildv") || hoverCheck("chk_rate_sex") || hoverCheck("chk_rate_strongv") ||
@@ -312,9 +320,18 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 			m.UnreadMode = !m.UnreadMode
 		}
 	case "link_use_my_name_artist":
-		m.ArtistName.SetValue(m.Username)
+		m.UseWatchingArtist = false
+		m.ArtistName.SetValue(appendUniqueUserFilter(m.ArtistName.Value(), m.Username))
+		m.ArtistName.CursorEnd()
+	case "link_use_my_watches_artist":
+		if m.CanUseWatching {
+			m.UseWatchingArtist = !m.UseWatchingArtist
+			m.Suggestions = nil
+			m.SuggestionIndex = -1
+		}
 	case "link_use_my_name_fav":
-		m.FavBy.SetValue(m.Username)
+		m.FavBy.SetValue(appendUniqueUserFilter(m.FavBy.Value(), m.Username))
+		m.FavBy.CursorEnd()
 	case "rad_and":
 		m.StringJoinType = inkbunny.JoinTypeAnd
 	case "rad_or":
