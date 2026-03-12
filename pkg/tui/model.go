@@ -21,6 +21,8 @@ const (
 	FieldFavBy
 	FieldMaxDownloads
 	FieldMaxActive
+	FieldDownloadDirectory
+	FieldDownloadPattern
 	FieldNone
 )
 
@@ -35,7 +37,7 @@ var FocusableZones = []string{
 	"rad_type_any", "chk_type_pic", "chk_type_sketch", "chk_type_picseries", "chk_type_comic",
 	"chk_type_port", "chk_type_swfanim", "chk_type_swfint", "chk_type_vidfeat", "chk_type_vidanim",
 	"chk_type_musicsing", "chk_type_musicalb", "chk_type_writing", "chk_type_char", "chk_type_photo",
-	"cycle_order", "max_dl", "max_active", "chk_dl_caption",
+	"cycle_order", "max_dl", "max_active", "download_dir", "download_pattern", "chk_dl_caption",
 	"btn_search_bottom", "btn_unread", "btn_logout",
 }
 
@@ -65,6 +67,8 @@ type Model struct {
 	FavBy        textinput.Model
 	MaxDownloads textinput.Model
 	MaxActive    textinput.Model
+	DownloadDir  textinput.Model
+	DownloadPath textinput.Model
 
 	ActiveField activeField
 	HoveredZone string
@@ -133,6 +137,8 @@ func NewModel(
 	username string,
 	unreadCount int,
 	canUseUnread bool,
+	defaultDownloadDir string,
+	defaultDownloadPattern string,
 	keywordCache *flight.Cache[string, []inkbunny.KeywordAutocomplete],
 	usernameCache *flight.Cache[string, []inkbunny.Autocomplete],
 ) *Model {
@@ -166,6 +172,14 @@ func NewModel(
 	}
 	maxActive.Prompt = ""
 
+	downloadDir := textinput.New()
+	downloadDir.Placeholder = defaultDownloadDir
+	downloadDir.Prompt = ""
+
+	downloadPattern := textinput.New()
+	downloadPattern.Placeholder = defaultDownloadPattern
+	downloadPattern.Prompt = ""
+
 	return &Model{
 		ZoneManager:   zm,
 		User:          user,
@@ -175,6 +189,8 @@ func NewModel(
 		FavBy:         favBy,
 		MaxDownloads:  maxDownloads,
 		MaxActive:     maxActive,
+		DownloadDir:   downloadDir,
+		DownloadPath:  downloadPattern,
 		KeywordCache:  keywordCache,
 		UsernameCache: usernameCache,
 
@@ -255,6 +271,22 @@ func (m *Model) TimeRange() inkbunny.IntString {
 
 func (m *Model) OrderBy() string {
 	return m.OrderByValues[m.OrderByIndex]
+}
+
+func (m *Model) DownloadDirectoryValue() string {
+	value := strings.TrimSpace(m.DownloadDir.Value())
+	if value != "" {
+		return value
+	}
+	return strings.TrimSpace(m.DownloadDir.Placeholder)
+}
+
+func (m *Model) DownloadPatternValue() string {
+	value := strings.TrimSpace(m.DownloadPath.Value())
+	if value != "" {
+		return value
+	}
+	return strings.TrimSpace(m.DownloadPath.Placeholder)
 }
 
 func (m *Model) SubmissionType() []inkbunny.SubmissionType {

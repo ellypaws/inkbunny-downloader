@@ -17,6 +17,35 @@ const DefaultPattern = "inkbunny/{artist}/{file_name_full}"
 
 var downloadPatternTokenRE = regexp.MustCompile(`\{([a-z0-9_]+)\}`)
 
+var previewSubmission = inkbunny.SubmissionDetails{
+	SubmissionBasic: inkbunny.SubmissionBasic{
+		SubmissionID:     inkbunny.IntString(908172),
+		Username:         "elly",
+		UserID:           inkbunny.IntString(12345),
+		CreateDateUser:   "2026-03-09 16:27:00",
+		CreateDateSystem: "2026-03-09 16:27:00",
+		Title:            "Star Patrol",
+		Public:           inkbunny.Yes,
+		PageCount:        inkbunny.IntString(3),
+		RatingName:       "Adult",
+		SubmissionTypeID: inkbunny.IntString(inkbunny.SubmissionTypePictureSeries),
+	},
+	Pools: []inkbunny.Pool{
+		{PoolID: inkbunny.IntString(7001), Name: "season-one"},
+		{PoolID: inkbunny.IntString(7002), Name: "favorites"},
+	},
+}
+
+var previewFile = inkbunny.File{
+	FileID:              inkbunny.IntString(27491),
+	FileName:            "27491_elly_star-patrol.png",
+	SubmissionID:        inkbunny.IntString(908172),
+	UserID:              inkbunny.IntString(12345),
+	SubmissionFileOrder: inkbunny.IntString(2),
+	CreateDateTimeUser:  "2026-03-09 16:27:00",
+	CreateDateTime:      "2026-03-09 16:27:00",
+}
+
 type downloadPathContext struct {
 	Submission inkbunny.SubmissionDetails
 	File       inkbunny.File
@@ -64,6 +93,14 @@ func ResolveDestinations(
 		destinations = append(destinations, renderDownloadDestination(cleanRoot, pattern, ctx))
 	}
 	return uniqueNonEmptyPaths(destinations)
+}
+
+func ResolvePreviewDestinations(root, pattern string) []string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(root))
+	if cleanRoot == "" {
+		cleanRoot = "Downloads"
+	}
+	return ResolveDestinations(cleanRoot, pattern, previewSubmission, previewFile)
 }
 
 func ResolveOpenDirectory(root, pattern string) string {

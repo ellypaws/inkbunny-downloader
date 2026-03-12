@@ -47,6 +47,8 @@ type DownloadItem struct {
 	FileMD5      string
 	IsPublic     bool
 	Keywords     string
+	DownloadRoot string
+	Destinations []string
 
 	Written   atomic.Int64
 	TotalSize atomic.Int64
@@ -531,14 +533,29 @@ func (m *DownloadModel) View() tea.View {
 
 func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Client, saveCaption bool) tea.Cmd {
 	return func() tea.Msg {
-		folder := filepath.Join("inkbunny", item.Username)
-		filename := filepath.Join(folder, item.FileName)
+		destinations := uniqueNonEmptyPaths(item.Destinations)
+		if len(destinations) == 0 {
+			root := strings.TrimSpace(item.DownloadRoot)
+			if root == "" {
+				root = "Downloads"
+			}
+			destinations = []string{filepath.Join(root, item.Username, item.FileName)}
+		}
+		filename := destinations[0]
 		if fileExists(filename) {
 			item.Written.Store(item.TotalSize.Load())
+			if err := ensureDownloadTargetsFromSource(filename, destinations); err != nil {
+				return DownloadErrorMsg{Item: item, Err: err}
+			}
+			if saveCaption && item.Keywords != "" {
+				if err := writeKeywordSidecars(destinations, item.Keywords); err != nil {
+					return DownloadErrorMsg{Item: item, Err: err}
+				}
+			}
 			return DownloadCompleteMsg{Item: item}
 		}
 
-		err := os.MkdirAll(folder, os.ModePerm)
+		err := os.MkdirAll(filepath.Dir(filename), os.ModePerm)
 		if err != nil {
 			return DownloadErrorMsg{Item: item, Err: err}
 		}
@@ -626,8 +643,11 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 			return DownloadErrorMsg{Item: item, Err: fmt.Errorf("MD5 mismatch: got %s, expected %s", hashStr, item.FileMD5)}
 		}
 
+		if err := ensureDownloadTargetsFromSource(filename, destinations); err != nil {
+			return DownloadErrorMsg{Item: item, Err: err}
+		}
 		if saveCaption && item.Keywords != "" {
-			err := os.WriteFile(strings.TrimSuffix(filename, filepath.Ext(filename))+".txt", []byte(item.Keywords), 0600)
+			err := writeKeywordSidecars(destinations, item.Keywords)
 			if err != nil {
 				return DownloadErrorMsg{Item: item, Err: err}
 			}
@@ -635,6 +655,81 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 
 		return DownloadCompleteMsg{Item: item}
 	}
+}
+
+func uniqueNonEmptyPaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	unique := make([]string, 0, len(paths))
+	for _, path := range paths {
+		clean := filepath.Clean(strings.TrimSpace(path))
+		if clean == "." || clean == "" {
+			continue
+		}
+		if _, ok := seen[clean]; ok {
+			continue
+		}
+		seen[clean] = struct{}{}
+		unique = append(unique, clean)
+	}
+	return unique
+}
+
+func ensureDownloadTargetsFromSource(source string, destinations []string) error {
+	cleanSource := filepath.Clean(strings.TrimSpace(source))
+	if cleanSource == "" {
+		return nil
+	}
+
+	for _, destination := range uniqueNonEmptyPaths(destinations) {
+		cleanDestination := filepath.Clean(destination)
+		if cleanDestination == cleanSource {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(cleanDestination), 0o755); err != nil {
+			return err
+		}
+		if err := copyFile(cleanSource, cleanDestination); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeKeywordSidecars(destinations []string, keywords string) error {
+	if strings.TrimSpace(keywords) == "" {
+		return nil
+	}
+	for _, destination := range uniqueNonEmptyPaths(destinations) {
+		sidecar := strings.TrimSuffix(destination, filepath.Ext(destination)) + ".txt"
+		if err := os.MkdirAll(filepath.Dir(sidecar), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(sidecar, []byte(keywords), 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFile(source, destination string) error {
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(destination)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = out.Close()
+	}()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
 }
 
 func fileExists(path string) bool {

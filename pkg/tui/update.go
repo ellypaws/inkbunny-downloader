@@ -146,6 +146,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
 		} else if m.ActiveField == FieldMaxActive {
 			m.MaxActive, cmd = updateInput(m.MaxActive, msg)
+		} else if m.ActiveField == FieldDownloadDirectory {
+			m.DownloadDir, cmd = updateInput(m.DownloadDir, msg)
+		} else if m.ActiveField == FieldDownloadPattern {
+			m.DownloadPath, cmd = updateInput(m.DownloadPath, msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -163,6 +167,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
 	cmds = append(cmds, cmd)
 	m.MaxActive, cmd = updateInput(m.MaxActive, msg)
+	cmds = append(cmds, cmd)
+	m.DownloadDir, cmd = updateInput(m.DownloadDir, msg)
+	cmds = append(cmds, cmd)
+	m.DownloadPath, cmd = updateInput(m.DownloadPath, msg)
 	cmds = append(cmds, cmd)
 
 	if q := m.SearchWords.Value(); q != prevSearch && q != m.lastQuery {
@@ -250,7 +258,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.HoveredZone == "" {
-		_ = hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") ||
+		_ = hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
 			hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
 			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_name_fav") ||
 			hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
@@ -279,6 +287,12 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 		m.focusActiveField()
 	case "max_active":
 		m.ActiveField = FieldMaxActive
+		m.focusActiveField()
+	case "download_dir":
+		m.ActiveField = FieldDownloadDirectory
+		m.focusActiveField()
+	case "download_pattern":
+		m.ActiveField = FieldDownloadPattern
 		m.focusActiveField()
 	case "btn_logout":
 		if m.User != nil {
@@ -393,6 +407,10 @@ func (m *Model) updateActiveField() {
 		m.ActiveField = FieldMaxDownloads
 	case "max_active":
 		m.ActiveField = FieldMaxActive
+	case "download_dir":
+		m.ActiveField = FieldDownloadDirectory
+	case "download_pattern":
+		m.ActiveField = FieldDownloadPattern
 	default:
 		m.ActiveField = FieldNone
 	}
@@ -525,6 +543,8 @@ func (m *Model) focusActiveField() {
 	m.FavBy.Blur()
 	m.MaxDownloads.Blur()
 	m.MaxActive.Blur()
+	m.DownloadDir.Blur()
+	m.DownloadPath.Blur()
 
 	switch m.ActiveField {
 	case FieldSearchWords:
@@ -537,5 +557,9 @@ func (m *Model) focusActiveField() {
 		m.MaxDownloads.Focus()
 	case FieldMaxActive:
 		m.MaxActive.Focus()
+	case FieldDownloadDirectory:
+		m.DownloadDir.Focus()
+	case FieldDownloadPattern:
+		m.DownloadPath.Focus()
 	}
 }

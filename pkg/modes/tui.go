@@ -17,6 +17,8 @@ import (
 
 	"github.com/ellypaws/inkbunny"
 
+	appdownloads "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/downloads"
+	appstorage "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/storage"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 	uitui "github.com/ellypaws/inkbunny/cmd/downloader/pkg/tui"
@@ -29,6 +31,8 @@ func RunTUI(config flags.Config) {
 		favBy        string
 		maxDownloads string
 		maxActiveStr string
+		downloadDir  string
+		downloadPath string
 
 		toDownload      int
 		downloadCaption bool
@@ -74,7 +78,16 @@ Login:
 			unreadCount = 0
 		}
 	}
-	model := uitui.NewModel(user, user.Username, unreadCount, canUseUnread, &keywordSuggestionsCache, &usernameCache)
+	model := uitui.NewModel(
+		user,
+		user.Username,
+		unreadCount,
+		canUseUnread,
+		appstorage.DefaultDownloadDirectory(),
+		appdownloads.DefaultPattern,
+		&keywordSuggestionsCache,
+		&usernameCache,
+	)
 
 	var (
 		p          *tea.Program
@@ -120,6 +133,8 @@ Search:
 	request.UnreadSubmissions = inkbunny.No
 	maxDownloads = finalModel.MaxDownloads.Value()
 	maxActiveStr = finalModel.MaxActive.Value()
+	downloadDir = finalModel.DownloadDirectoryValue()
+	downloadPath = finalModel.DownloadPatternValue()
 	downloadCaption = finalModel.DownloadCaption
 	if finalModel.UnreadMode {
 		request.UnreadSubmissions = inkbunny.Yes
@@ -173,6 +188,12 @@ Process:
 			log.Fatal(err)
 		}
 	}
+	downloadDir = strings.TrimSpace(downloadDir)
+	if downloadDir == "" {
+		downloadDir = appstorage.DefaultDownloadDirectory()
+	}
+	downloadDir = filepath.Clean(downloadDir)
+	downloadPath = appdownloads.NormalizePattern(downloadPath)
 
 	request.GetRID = inkbunny.Yes
 
@@ -257,6 +278,8 @@ Process:
 						FileMD5:      file.FullFileMD5,
 						IsPublic:     d.Public.Bool(),
 						Keywords:     keywords.String(),
+						DownloadRoot: downloadDir,
+						Destinations: appdownloads.ResolveDestinations(downloadDir, downloadPath, d, file),
 						Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
 						Status:       uitui.StatusQueued,
 					})

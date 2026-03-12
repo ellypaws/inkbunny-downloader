@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ellypaws/inkbunny"
+	appdownloads "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/downloads"
 )
 
 var (
@@ -320,20 +321,37 @@ func (m *Model) renderFooterSection() string {
 	activeMaxLabel := labelStyle.Render("Simultaneous downloads:")
 	activeMaxInput := m.renderInput("max_active", m.MaxActive, FieldMaxActive)
 
+	downloadDirLabel := labelStyle.Render("Download directory:")
+	downloadDirInput := m.renderInput("download_dir", m.DownloadDir, FieldDownloadDirectory)
+
+	downloadPatternLabel := labelStyle.Render("Download pattern:")
+	downloadPatternInput := m.renderInput("download_pattern", m.DownloadPath, FieldDownloadPattern)
+
 	dlCaptionLabel := labelStyle.Render("Download keywords:")
 	dlCaptionCheckbox := m.renderCheckbox("chk_dl_caption", m.DownloadCaption, "Save as .txt")
 
-	var orderBlock, dlMaxBlock, activeMaxBlock, dlCaptionBlock string
+	patternHint := helperTextStyle.Render("Pattern tokens use {name}, e.g. {artist}, {submission_id}, {file_name_full}, {ext}.")
+	patternPreview := m.renderDownloadPatternPreview()
+
+	var orderBlock, dlMaxBlock, activeMaxBlock, downloadDirBlock, downloadPatternBlock, dlCaptionBlock string
 
 	if m.Width > 0 && m.Width < 100 {
 		orderBlock = lipgloss.JoinVertical(lipgloss.Left, orderLabel, orderCycle)
 		dlMaxBlock = lipgloss.JoinVertical(lipgloss.Left, dlMaxLabel, dlMaxInput)
 		activeMaxBlock = lipgloss.JoinVertical(lipgloss.Left, activeMaxLabel, activeMaxInput)
+		downloadDirBlock = lipgloss.JoinVertical(lipgloss.Left, downloadDirLabel, downloadDirInput)
+		downloadPatternBlock = lipgloss.JoinVertical(lipgloss.Left, downloadPatternLabel, downloadPatternInput, patternHint, patternPreview)
 		dlCaptionBlock = lipgloss.JoinVertical(lipgloss.Left, dlCaptionLabel, dlCaptionCheckbox)
 	} else {
 		orderBlock = lipgloss.JoinHorizontal(lipgloss.Center, orderLabel, orderCycle)
 		dlMaxBlock = lipgloss.JoinHorizontal(lipgloss.Center, dlMaxLabel, dlMaxInput)
 		activeMaxBlock = lipgloss.JoinHorizontal(lipgloss.Center, activeMaxLabel, activeMaxInput)
+		downloadDirBlock = lipgloss.JoinHorizontal(lipgloss.Center, downloadDirLabel, downloadDirInput)
+		downloadPatternBlock = lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.JoinHorizontal(lipgloss.Center, downloadPatternLabel, downloadPatternInput),
+			patternHint,
+			patternPreview,
+		)
 		dlCaptionBlock = lipgloss.JoinHorizontal(lipgloss.Top, dlCaptionLabel, dlCaptionCheckbox)
 	}
 
@@ -343,9 +361,30 @@ func (m *Model) renderFooterSection() string {
 		orderBlock, "",
 		dlMaxBlock, "",
 		activeMaxBlock, "",
+		downloadDirBlock, "",
+		downloadPatternBlock, "",
 		dlCaptionBlock, "",
 		searchBtn,
 	)
+}
+
+func (m *Model) renderDownloadPatternPreview() string {
+	root := m.DownloadDirectoryValue()
+	pattern := m.DownloadPatternValue()
+	paths := appdownloads.ResolvePreviewDestinations(root, pattern)
+	if len(paths) == 0 {
+		return helperTextStyle.Render("Preview: unavailable")
+	}
+
+	lines := make([]string, 0, len(paths))
+	for i, path := range paths {
+		prefix := "Preview: "
+		if i > 0 {
+			prefix = "         "
+		}
+		lines = append(lines, helperTextStyle.Render(prefix+strings.ReplaceAll(path, "\\", "/")))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
 func (m *Model) renderUserBar() string {
