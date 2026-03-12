@@ -398,6 +398,19 @@ func (m *DownloadModel) applyHorizontalViewport(content string) string {
 	return strings.Join(lines, "\n")
 }
 
+func truncateToWidth(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(value) <= width {
+		return lipgloss.NewStyle().Width(width).Render(value)
+	}
+	if width == 1 {
+		return "…"
+	}
+	return lipgloss.NewStyle().Width(width).Render(ansi.Cut(value, 0, width-1) + "…")
+}
+
 func (m *DownloadModel) View() tea.View {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -448,7 +461,10 @@ func (m *DownloadModel) View() tea.View {
 		return tea.NewView(m.ZoneManager.Scan(rendered))
 	}
 
-	progWidth := max(m.Width-40, 10)
+	contentWidth := max(m.Width-6, 40)
+	statusWidth := 2
+	nameWidth := min(32, max(contentWidth/4, 16))
+	barWidth := max(contentWidth-statusWidth-nameWidth-2, 10)
 
 	var active []string
 	var queued []string
@@ -462,9 +478,11 @@ func (m *DownloadModel) View() tea.View {
 			if total > 0 {
 				pct = float64(item.Written.Load()) / float64(total)
 			}
-			item.Progress.Width = progWidth
+			item.Progress.Width = barWidth
 			prog := item.Progress.ViewAs(pct)
-			line := fmt.Sprintf("%s Downloading %s... %s", item.Spinner.View(), item.FileName, prog)
+			status := lipgloss.NewStyle().Width(statusWidth).Render(item.Spinner.View())
+			name := truncateToWidth(item.FileName, nameWidth)
+			line := lipgloss.JoinHorizontal(lipgloss.Top, status, " ", name, " ", prog)
 			active = append(active, line)
 		case StatusQueued:
 			queued = append(queued, fmt.Sprintf("  Queued: %s", item.FileName))

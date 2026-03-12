@@ -61,7 +61,20 @@ Login:
 	keywordSuggestionsCache := flight.NewCache(func(_ context.Context, query string) ([]inkbunny.KeywordAutocomplete, error) {
 		return keywordCache(user.Ratings)(query)
 	})
-	model := uitui.NewModel(user, user.Username, &keywordSuggestionsCache, &usernameCache)
+	canUseUnread := user != nil && user.SID != "" && !strings.EqualFold(user.Username, "guest")
+	unreadCount := 0
+	if canUseUnread {
+		spinner.New().
+			Title("Checking unread submissions...").
+			Action(func() {
+				unreadCount, err = fetchUnreadSubmissionCount(user)
+			}).Run()
+		if err != nil {
+			log.Warn("failed to fetch unread submissions", "err", err)
+			unreadCount = 0
+		}
+	}
+	model := uitui.NewModel(user, user.Username, unreadCount, canUseUnread, &keywordSuggestionsCache, &usernameCache)
 
 	var (
 		p          *tea.Program
@@ -104,9 +117,13 @@ Search:
 	request.DaysLimit = finalModel.TimeRange()
 	request.Type = finalModel.SubmissionType()
 	request.OrderBy = finalModel.OrderBy()
+	request.UnreadSubmissions = inkbunny.No
 	maxDownloads = finalModel.MaxDownloads.Value()
 	maxActiveStr = finalModel.MaxActive.Value()
 	downloadCaption = finalModel.DownloadCaption
+	if finalModel.UnreadMode {
+		request.UnreadSubmissions = inkbunny.Yes
+	}
 
 	searchIn = nil
 	if finalModel.SearchInKeywords {
@@ -285,4 +302,23 @@ Process:
 	if !exit {
 		goto Search
 	}
+}
+
+func fetchUnreadSubmissionCount(user *inkbunny.User) (int, error) {
+	if user == nil || user.SID == "" {
+		return 0, nil
+	}
+
+	response, err := user.SearchSubmissions(inkbunny.SubmissionSearchRequest{
+		SID:                user.SID,
+		UnreadSubmissions:  inkbunny.Yes,
+		NoSubmissions:      inkbunny.Yes,
+		SubmissionsPerPage: 1,
+		Page:               1,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return int(response.ResultsCountAll), nil
 }

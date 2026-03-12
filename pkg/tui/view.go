@@ -35,8 +35,10 @@ var (
 	activeCheckboxStyle = lipgloss.NewStyle().Foreground(activeColor).Bold(true)
 	hoverCheckboxStyle  = lipgloss.NewStyle().Foreground(hoverColor)
 
-	buttonStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Padding(0, 3).Bold(true)
-	hoverButtonStyle = buttonStyle.Background(hoverColor)
+	buttonStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Padding(0, 3).Bold(true)
+	hoverButtonStyle  = buttonStyle.Background(hoverColor)
+	activeButtonStyle = buttonStyle.Background(activeColor)
+	infoBadgeStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#2F6F4F")).Padding(0, 2).Bold(true)
 
 	linkStyle      = lipgloss.NewStyle().Foreground(hoverColor).Underline(true)
 	linkHoverStyle = lipgloss.NewStyle().Foreground(activeColor).Underline(true)
@@ -49,21 +51,10 @@ var (
 	sugBoxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(inactiveColor).MarginLeft(23)
 )
 
+const focusMeasureMarker = "\x1b[9998z"
+
 func (m *Model) View() tea.View {
-	var sections []string
-
-	sections = append(sections, m.renderUserBar())
-	sections = append(sections, panelStyle.Render(m.renderTopSection()))
-	sections = append(sections, panelStyle.Render(m.renderMiddleSection()))
-	sections = append(sections, panelStyle.Render(m.renderBottomSection()))
-	sections = append(sections, panelStyle.Render(m.renderFooterSection()))
-
-	rendered := lipgloss.JoinVertical(lipgloss.Left, sections...)
-
-	outer := lipgloss.NewStyle().Padding(1, 2)
-	full := outer.Render(rendered)
-
-	lines := strings.Split(full, "\n")
+	lines := strings.Split(m.renderContent(false), "\n")
 	m.contentLines = len(lines)
 	m.clampScroll()
 
@@ -105,6 +96,60 @@ func (m *Model) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeAllMotion
 	return v
+}
+
+func (m *Model) renderContent(measureFocus bool) string {
+	m.measuringFocus = measureFocus
+	defer func() {
+		m.measuringFocus = false
+	}()
+
+	var sections []string
+
+	sections = append(sections, m.renderUserBar())
+	sections = append(sections, panelStyle.Render(m.renderTopSection()))
+	sections = append(sections, panelStyle.Render(m.renderMiddleSection()))
+	sections = append(sections, panelStyle.Render(m.renderBottomSection()))
+	sections = append(sections, panelStyle.Render(m.renderFooterSection()))
+
+	rendered := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return lipgloss.NewStyle().Padding(1, 2).Render(rendered)
+}
+
+func (m *Model) markFocused(id string, content string) string {
+	if !m.measuringFocus || m.currentFocusZone() != id {
+		return content
+	}
+	return focusMeasureMarker + content + focusMeasureMarker
+}
+
+func (m *Model) ensureFocusVisible() {
+	if m.Height <= 0 || len(m.focusableZones()) == 0 {
+		return
+	}
+
+	lines := strings.Split(m.renderContent(true), "\n")
+	m.contentLines = len(lines)
+
+	targetLine := -1
+	for i, line := range lines {
+		if strings.Contains(line, focusMeasureMarker) {
+			targetLine = i
+			break
+		}
+	}
+	if targetLine < 0 {
+		m.clampScroll()
+		return
+	}
+
+	if targetLine < m.ScrollOffset {
+		m.ScrollOffset = targetLine
+	} else if targetLine >= m.ScrollOffset+m.Height {
+		m.ScrollOffset = targetLine - m.Height + 1
+	}
+
+	m.clampScroll()
 }
 
 func (m *Model) renderTopSection() string {
@@ -163,6 +208,9 @@ func (m *Model) renderTopSection() string {
 	}
 
 	parts := []string{row1, helper}
+	if m.UnreadMode {
+		parts = append(parts, "", helperTextStyle.Render("Unread mode enabled. Search results are limited to unread submissions for the active account."))
+	}
 	if sugBlock != "" {
 		parts = append(parts, sugBlock)
 	}
@@ -301,6 +349,7 @@ func (m *Model) renderFooterSection() string {
 }
 
 func (m *Model) renderUserBar() string {
+	currentFocus := m.currentFocusZone()
 	name := m.Username
 	if name == "" {
 		name = "Guest"
@@ -320,16 +369,40 @@ func (m *Model) renderUserBar() string {
 		Foreground(lipgloss.Color("#FFFFFF")).
 		Background(lipgloss.Color("#444444")).
 		Bold(true)
-	if m.HoveredZone == "btn_logout" || FocusableZones[m.FocusIndex] == "btn_logout" {
+	if m.HoveredZone == "btn_logout" || currentFocus == "btn_logout" {
 		logoutStyle = logoutStyle.Background(hoverColor).BorderForeground(hoverColor)
 	}
 	caret := "  "
-	if FocusableZones[m.FocusIndex] == "btn_logout" {
+	if currentFocus == "btn_logout" {
 		caret = lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("> ")
 	}
+	unreadButton := ""
+	if m.CanUseUnread {
+		unreadStyle := infoBadgeStyle
+		if m.UnreadMode {
+			unreadStyle = activeButtonStyle
+		} else if m.HoveredZone == "btn_unread" || currentFocus == "btn_unread" {
+			unreadStyle = hoverButtonStyle
+		}
+		unreadCaret := "  "
+		if currentFocus == "btn_unread" {
+			unreadCaret = lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("> ")
+		}
+		unreadLabel := fmt.Sprintf("New submissions: %d", m.UnreadCount)
+		if m.UnreadMode {
+			unreadLabel += " (Unread Mode)"
+		}
+		unreadButton = m.markFocused("btn_unread", m.ZoneManager.Mark("btn_unread", unreadCaret+unreadStyle.Render(unreadLabel)))
+	}
 	logoutBtn := m.ZoneManager.Mark("btn_logout", caret+logoutStyle.Render("Logout"))
+	logoutBtn = m.markFocused("btn_logout", logoutBtn)
 
-	bar := lipgloss.JoinHorizontal(lipgloss.Center, userBox, " ", logoutBtn)
+	parts := []string{userBox}
+	if unreadButton != "" {
+		parts = append(parts, " ", unreadButton)
+	}
+	parts = append(parts, " ", logoutBtn)
+	bar := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
 
 	return lipgloss.JoinVertical(lipgloss.Left, bar)
 }
@@ -358,19 +431,21 @@ func (m *Model) renderSuggestions() string {
 }
 
 func (m *Model) renderInput(id string, in textinput.Model, field activeField) string {
+	currentFocus := m.currentFocusZone()
 	style := inputInactiveStyle
 	if m.ActiveField == field {
 		style = inputActiveStyle
-	} else if m.HoveredZone == id || FocusableZones[m.FocusIndex] == id {
+	} else if m.HoveredZone == id || currentFocus == id {
 		style = inputHoverStyle
 	}
-	return m.ZoneManager.Mark(id, style.Render(in.View()))
+	return m.markFocused(id, m.ZoneManager.Mark(id, style.Render(in.View())))
 }
 
 func (m *Model) renderCheckbox(id string, checked bool, label string) string {
+	currentFocus := m.currentFocusZone()
 	style := checkboxStyle
 	markStyle := checkboxStyle
-	if m.HoveredZone == id || FocusableZones[m.FocusIndex] == id {
+	if m.HoveredZone == id || currentFocus == id {
 		style = hoverCheckboxStyle
 		markStyle = hoverCheckboxStyle
 	}
@@ -380,16 +455,17 @@ func (m *Model) renderCheckbox(id string, checked bool, label string) string {
 		markStyle = activeCheckboxStyle
 	}
 	caret := "  "
-	if FocusableZones[m.FocusIndex] == id {
+	if currentFocus == id {
 		caret = lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("> ")
 	}
-	return m.ZoneManager.Mark(id, caret+markStyle.Render(mark)+" "+style.Render(label))
+	return m.markFocused(id, m.ZoneManager.Mark(id, caret+markStyle.Render(mark)+" "+style.Render(label)))
 }
 
 func (m *Model) renderRadio(id string, checked bool, label string) string {
+	currentFocus := m.currentFocusZone()
 	style := checkboxStyle
 	markStyle := checkboxStyle
-	if m.HoveredZone == id || FocusableZones[m.FocusIndex] == id {
+	if m.HoveredZone == id || currentFocus == id {
 		style = hoverCheckboxStyle
 		markStyle = hoverCheckboxStyle
 	}
@@ -399,44 +475,48 @@ func (m *Model) renderRadio(id string, checked bool, label string) string {
 		markStyle = activeCheckboxStyle
 	}
 	caret := "  "
-	if FocusableZones[m.FocusIndex] == id {
+	if currentFocus == id {
 		caret = lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("> ")
 	}
-	return m.ZoneManager.Mark(id, caret+markStyle.Render(mark)+" "+style.Render(label))
+	return m.markFocused(id, m.ZoneManager.Mark(id, caret+markStyle.Render(mark)+" "+style.Render(label)))
 }
 
 func (m *Model) renderButton(id string, label string) string {
+	currentFocus := m.currentFocusZone()
 	style := buttonStyle
-	if m.HoveredZone == id || FocusableZones[m.FocusIndex] == id {
+	if m.HoveredZone == id || currentFocus == id {
 		style = hoverButtonStyle
 	}
 	caret := "  "
-	if FocusableZones[m.FocusIndex] == id {
+	if currentFocus == id {
 		caret = lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("> ")
 	}
-	return m.ZoneManager.Mark(id, caret+style.Render(label))
+	return m.markFocused(id, m.ZoneManager.Mark(id, caret+style.Render(label)))
 }
 
 func (m *Model) renderCycle(id string, label string) string {
+	currentFocus := m.currentFocusZone()
 	style := buttonStyle
-	if m.HoveredZone == id || FocusableZones[m.FocusIndex] == id {
+	if m.HoveredZone == id || currentFocus == id {
 		style = hoverButtonStyle
 	}
 	caret := "  "
-	if FocusableZones[m.FocusIndex] == id {
+	if currentFocus == id {
 		caret = lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("> ")
 	}
-	return m.ZoneManager.Mark(id, caret+style.Render(fmt.Sprintf("◀ %s ▶", label)))
+	return m.markFocused(id, m.ZoneManager.Mark(id, caret+style.Render(fmt.Sprintf("◀ %s ▶", label))))
 }
 
 func (m *Model) renderLink(id string, text string, hint string) string {
+	currentFocus := m.currentFocusZone()
 	style := linkStyle
-	if m.HoveredZone == id || FocusableZones[m.FocusIndex] == id {
+	if m.HoveredZone == id || currentFocus == id {
 		style = linkHoverStyle
 	}
 	caret := "  "
-	if FocusableZones[m.FocusIndex] == id {
+	if currentFocus == id {
 		caret = lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("> ")
 	}
-	return m.ZoneManager.Mark(id, caret+style.Render(text)) + " " + lipgloss.NewStyle().Foreground(dimTextColor).Render(hint)
+	link := m.ZoneManager.Mark(id, caret+style.Render(text)) + " " + lipgloss.NewStyle().Foreground(dimTextColor).Render(hint)
+	return m.markFocused(id, link)
 }

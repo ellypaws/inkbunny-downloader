@@ -36,7 +36,7 @@ var FocusableZones = []string{
 	"chk_type_port", "chk_type_swfanim", "chk_type_swfint", "chk_type_vidfeat", "chk_type_vidanim",
 	"chk_type_musicsing", "chk_type_musicalb", "chk_type_writing", "chk_type_char", "chk_type_photo",
 	"cycle_order", "max_dl", "max_active", "chk_dl_caption",
-	"btn_search_bottom", "btn_logout",
+	"btn_search_bottom", "btn_unread", "btn_logout",
 }
 
 type SuggestKeywordMsg struct {
@@ -95,6 +95,9 @@ type Model struct {
 	OrderByValues []string
 
 	DownloadCaption bool
+	UnreadMode      bool
+	UnreadCount     int
+	CanUseUnread    bool
 
 	// Ratings
 	RatingGeneral        bool
@@ -121,11 +124,15 @@ type Model struct {
 	TypePhotography   bool
 
 	Aborted bool
+
+	measuringFocus bool
 }
 
 func NewModel(
 	user *inkbunny.User,
 	username string,
+	unreadCount int,
+	canUseUnread bool,
 	keywordCache *flight.Cache[string, []inkbunny.KeywordAutocomplete],
 	usernameCache *flight.Cache[string, []inkbunny.Autocomplete],
 ) *Model {
@@ -184,6 +191,8 @@ func NewModel(
 		OrderByValues: []string{inkbunny.OrderByCreateDatetime, inkbunny.OrderByFavs, inkbunny.OrderByViews},
 
 		DownloadCaption: false,
+		UnreadCount:     unreadCount,
+		CanUseUnread:    canUseUnread,
 		ActiveField:     FieldSearchWords,
 		FocusIndex:      0,
 
@@ -309,6 +318,58 @@ func (m *Model) clampScroll() {
 	if m.ScrollOffset < 0 {
 		m.ScrollOffset = 0
 	}
+}
+
+func (m *Model) focusableZones() []string {
+	if m.CanUseUnread {
+		return FocusableZones
+	}
+
+	zones := make([]string, 0, len(FocusableZones)-1)
+	for _, id := range FocusableZones {
+		if id == "btn_unread" {
+			continue
+		}
+		zones = append(zones, id)
+	}
+	return zones
+}
+
+func (m *Model) currentFocusZone() string {
+	zones := m.focusableZones()
+	if len(zones) == 0 {
+		return ""
+	}
+	if m.FocusIndex < 0 {
+		m.FocusIndex = 0
+	}
+	if m.FocusIndex >= len(zones) {
+		m.FocusIndex = len(zones) - 1
+	}
+	return zones[m.FocusIndex]
+}
+
+func (m *Model) focusIndexForZone(id string) int {
+	for i, zone := range m.focusableZones() {
+		if zone == id {
+			return i
+		}
+	}
+	return 0
+}
+
+func (m *Model) moveFocus(delta int) {
+	zones := m.focusableZones()
+	if len(zones) == 0 {
+		return
+	}
+
+	m.FocusIndex = (m.FocusIndex + delta + len(zones)) % len(zones)
+	m.updateActiveField()
+	m.focusActiveField()
+	m.Suggestions = nil
+	m.SuggestionIndex = -1
+	m.ensureFocusVisible()
 }
 
 func (m *Model) Init() tea.Cmd {

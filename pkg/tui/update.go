@@ -21,6 +21,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Width = msg.Width
 		m.Height = msg.Height
 		m.clampScroll()
+		m.ensureFocusVisible()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -58,62 +59,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Aborted = true
 			return m, tea.Quit
 		case "tab", "down":
-			m.FocusIndex++
-			if m.FocusIndex >= len(FocusableZones) {
-				m.FocusIndex = 0
-			}
-			m.updateActiveField()
-			m.focusActiveField()
-			m.Suggestions = nil
-			m.SuggestionIndex = -1
+			m.moveFocus(1)
 			return m, nil
 		case "shift+tab", "up":
-			m.FocusIndex--
-			if m.FocusIndex < 0 {
-				m.FocusIndex = len(FocusableZones) - 1
-			}
-			m.updateActiveField()
-			m.focusActiveField()
-			m.Suggestions = nil
-			m.SuggestionIndex = -1
+			m.moveFocus(-1)
 			return m, nil
 		case "right":
 			if m.ActiveField == FieldNone {
-				m.FocusIndex++
-				if m.FocusIndex >= len(FocusableZones) {
-					m.FocusIndex = 0
-				}
-				m.updateActiveField()
-				m.focusActiveField()
+				m.moveFocus(1)
 				return m, nil
 			}
 		case "left":
 			if m.ActiveField == FieldNone {
-				m.FocusIndex--
-				if m.FocusIndex < 0 {
-					m.FocusIndex = len(FocusableZones) - 1
-				}
-				m.updateActiveField()
-				m.focusActiveField()
+				m.moveFocus(-1)
 				return m, nil
 			}
 		case " ", "space":
 			if m.ActiveField == FieldNone {
-				return m.triggerZone(FocusableZones[m.FocusIndex])
+				return m.triggerZone(m.currentFocusZone())
 			}
 		case "enter":
-			zone := FocusableZones[m.FocusIndex]
-			if zone == "btn_search_top" || zone == "btn_search_bottom" || zone == "btn_logout" {
+			zone := m.currentFocusZone()
+			if zone == "btn_search_top" || zone == "btn_search_bottom" || zone == "btn_unread" || zone == "btn_logout" {
 				return m.triggerZone(zone)
 			}
-			m.FocusIndex++
-			if m.FocusIndex >= len(FocusableZones) {
-				m.FocusIndex = 0
-			}
-			m.updateActiveField()
-			m.focusActiveField()
-			m.Suggestions = nil
-			m.SuggestionIndex = -1
+			m.moveFocus(1)
 			return m, nil
 		case "pgdown":
 			m.ScrollOffset += m.Height / 2
@@ -258,10 +228,12 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		for _, id := range FocusableZones {
+		for _, id := range m.focusableZones() {
 			if inBounds(id) {
-				m.FocusIndex = findFocusIndex(id)
+				m.FocusIndex = m.focusIndexForZone(id)
 				m.updateActiveField()
+				m.focusActiveField()
+				m.ensureFocusVisible()
 				return m.triggerZone(id)
 			}
 		}
@@ -278,7 +250,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.HoveredZone == "" {
-		_ = hoverCheck("btn_logout") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") ||
+		_ = hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("max_dl") ||
 			hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
 			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_name_fav") ||
 			hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
@@ -321,6 +293,10 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "btn_search_top", "btn_search_bottom":
 		return m, tea.Quit
+	case "btn_unread":
+		if m.CanUseUnread {
+			m.UnreadMode = !m.UnreadMode
+		}
 	case "link_use_my_name_artist":
 		m.ArtistName.SetValue(m.Username)
 	case "link_use_my_name_fav":
@@ -404,17 +380,8 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func findFocusIndex(id string) int {
-	for i, zone := range FocusableZones {
-		if zone == id {
-			return i
-		}
-	}
-	return 0
-}
-
 func (m *Model) updateActiveField() {
-	id := FocusableZones[m.FocusIndex]
+	id := m.currentFocusZone()
 	switch id {
 	case "search_words":
 		m.ActiveField = FieldSearchWords
