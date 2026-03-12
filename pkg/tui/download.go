@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"context"
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,16 +28,24 @@ import (
 )
 
 type DownloadCompleteMsg struct {
-	Item *DownloadItem
+	Item  *DownloadItem
+	RunID int64
 }
 
 type DownloadErrorMsg struct {
-	Item *DownloadItem
-	Err  error
+	Item  *DownloadItem
+	Err   error
+	RunID int64
 }
 
 type RetryDownloadMsg struct {
-	Item *DownloadItem
+	Item  *DownloadItem
+	RunID int64
+}
+
+type DownloadCanceledMsg struct {
+	Item  *DownloadItem
+	RunID int64
 }
 
 type DownloadItem struct {
@@ -65,6 +75,7 @@ type DownloadStatus int
 const (
 	StatusQueued DownloadStatus = iota
 	StatusActive
+	StatusPaused
 	StatusCompleted
 	StatusFailed
 )
@@ -84,12 +95,20 @@ type DownloadModel struct {
 
 	Aborted   bool
 	Confirmed bool
+	Paused    bool
 
 	ScrollOffset  int
 	HScrollOffset int
 	contentWidth  int
 
 	ZoneManager *zone.Manager
+	runs        map[*DownloadItem]downloadRun
+	nextRunID   int64
+}
+
+type downloadRun struct {
+	id     int64
+	cancel context.CancelFunc
 }
 
 func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int, toDownload int, caption bool) *DownloadModel {
@@ -101,6 +120,7 @@ func NewDownloadModel(user *inkbunny.User, items []*DownloadItem, maxActive int,
 		ToDownload:      toDownload,
 		DownloadCaption: caption,
 		ZoneManager:     zone.New(),
+		runs:            make(map[*DownloadItem]downloadRun),
 	}
 	if m.MaxActive <= 0 {
 		m.MaxActive = 4
@@ -118,6 +138,147 @@ func (m *DownloadModel) Init() tea.Cmd {
 	return nil
 }
 
+func (m *DownloadModel) runFor(item *DownloadItem) (downloadRun, bool) {
+	run, ok := m.runs[item]
+	return run, ok
+}
+
+func (m *DownloadModel) clearRun(item *DownloadItem, runID int64) bool {
+	run, ok := m.runs[item]
+	if !ok || run.id != runID {
+		return false
+	}
+	delete(m.runs, item)
+	return true
+}
+
+func (m *DownloadModel) launchItem(item *DownloadItem) tea.Cmd {
+	if item == nil {
+		return nil
+	}
+	if run, ok := m.runs[item]; ok && run.cancel != nil {
+		run.cancel()
+	}
+	m.nextRunID++
+	runID := m.nextRunID
+	ctx, cancel := context.WithCancel(context.Background())
+	m.runs[item] = downloadRun{id: runID, cancel: cancel}
+	item.Status = StatusActive
+	item.Error = nil
+	item.Written.Store(0)
+	item.TotalSize.Store(0)
+	return startDownloadCmd(item, m.User, m.Client, m.DownloadCaption, ctx, runID)
+}
+
+func (m *DownloadModel) activeCount() int {
+	active := 0
+	for _, item := range m.Items {
+		if item.Status == StatusActive {
+			active++
+		}
+	}
+	return active
+}
+
+func (m *DownloadModel) startOrResumeDownloads() tea.Cmd {
+	var cmds []tea.Cmd
+	if m.activeCount() == 0 {
+		cmds = append(cmds, func() tea.Msg { return spinner.TickMsg{Time: time.Now()} })
+	}
+	for _, item := range m.Items {
+		if m.activeCount() >= m.MaxActive {
+			break
+		}
+		if item.Status == StatusQueued {
+			cmds = append(cmds, m.launchItem(item))
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *DownloadModel) startDownloads() tea.Cmd {
+	m.Confirmed = true
+	m.Paused = false
+	return m.startOrResumeDownloads()
+}
+
+func (m *DownloadModel) pauseAll() {
+	m.Paused = true
+	for _, item := range m.Items {
+		if item.Status != StatusActive {
+			continue
+		}
+		item.Status = StatusPaused
+		if run, ok := m.runs[item]; ok && run.cancel != nil {
+			run.cancel()
+		}
+	}
+}
+
+func (m *DownloadModel) resumeAll() tea.Cmd {
+	m.Paused = false
+	for _, item := range m.Items {
+		if item.Status == StatusPaused {
+			item.Status = StatusQueued
+			item.Error = nil
+		}
+	}
+	return m.startOrResumeDownloads()
+}
+
+func (m *DownloadModel) retryAll() tea.Cmd {
+	for _, item := range m.Items {
+		if item.Status == StatusFailed {
+			item.Status = StatusQueued
+			item.Error = nil
+			item.Written.Store(0)
+			item.TotalSize.Store(0)
+		}
+	}
+	if m.Paused {
+		return nil
+	}
+	return m.startOrResumeDownloads()
+}
+
+func (m *DownloadModel) stopAll() tea.Cmd {
+	for _, run := range m.runs {
+		if run.cancel != nil {
+			run.cancel()
+		}
+	}
+	m.Aborted = true
+	return tea.Quit
+}
+
+func (m *DownloadModel) handleMouseRelease(v1msg teaV1.MouseMsg) (tea.Model, tea.Cmd) {
+	if !m.Confirmed {
+		if m.ZoneManager.Get("btn_start").InBounds(v1msg) {
+			return m, m.startDownloads()
+		}
+		if m.ZoneManager.Get("btn_cancel").InBounds(v1msg) {
+			m.Aborted = true
+			return m, tea.Quit
+		}
+		return m, nil
+	}
+
+	if m.ZoneManager.Get("btn_pause_resume").InBounds(v1msg) {
+		if m.Paused {
+			return m, m.resumeAll()
+		}
+		m.pauseAll()
+		return m, nil
+	}
+	if m.ZoneManager.Get("btn_retry_all").InBounds(v1msg) {
+		return m, m.retryAll()
+	}
+	if m.ZoneManager.Get("btn_stop_all").InBounds(v1msg) {
+		return m, m.stopAll()
+	}
+	return m, nil
+}
+
 func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
@@ -129,21 +290,30 @@ func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
+			if m.Confirmed {
+				return m, m.stopAll()
+			}
 			m.Aborted = true
 			return m, tea.Quit
 		case "enter":
 			if !m.Confirmed {
-				m.Confirmed = true
-				activeCount := 0
-				cmds = []tea.Cmd{func() tea.Msg { return spinner.TickMsg{Time: time.Now()} }}
-				for _, item := range m.Items {
-					if activeCount >= m.MaxActive {
-						break
-					}
-					item.Status = StatusActive
-					cmds = append(cmds, startDownloadCmd(item, m.User, m.Client, m.DownloadCaption))
-					activeCount++
+				return m, m.startDownloads()
+			}
+		case "p":
+			if m.Confirmed {
+				if m.Paused {
+					return m, m.resumeAll()
 				}
+				m.pauseAll()
+				return m, nil
+			}
+		case "r":
+			if m.Confirmed {
+				return m, m.retryAll()
+			}
+		case "s":
+			if m.Confirmed {
+				return m, m.stopAll()
 			}
 		case "up", "k":
 			if !m.Confirmed && m.ScrollOffset > 0 {
@@ -194,24 +364,53 @@ func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case DownloadCompleteMsg:
+		if !m.clearRun(msg.Item, msg.RunID) {
+			return m, nil
+		}
 		msg.Item.Status = StatusCompleted
+		msg.Item.Error = nil
 		m.Downloaded++
-		cmds = append(cmds, m.startNextDownload())
+		if !m.Paused {
+			cmds = append(cmds, m.startNextDownload())
+		}
 		if m.isDone() {
 			return m, tea.Quit
 		}
 
 	case DownloadErrorMsg:
+		if !m.clearRun(msg.Item, msg.RunID) {
+			return m, nil
+		}
 		msg.Item.Status = StatusFailed
 		msg.Item.Error = msg.Err
-		cmds = append(cmds, m.startNextDownload())
+		if !m.Paused {
+			cmds = append(cmds, m.startNextDownload())
+		}
 		if m.isDone() {
 			return m, tea.Quit
 		}
 
 	case RetryDownloadMsg:
-		msg.Item.Status = StatusActive
-		cmds = append(cmds, startDownloadCmd(msg.Item, m.User, m.Client, m.DownloadCaption))
+		if !m.clearRun(msg.Item, msg.RunID) {
+			return m, nil
+		}
+		if m.Paused || msg.Item.Status != StatusActive {
+			return m, nil
+		}
+		cmds = append(cmds, m.launchItem(msg.Item))
+
+	case DownloadCanceledMsg:
+		if !m.clearRun(msg.Item, msg.RunID) {
+			return m, nil
+		}
+		if msg.Item.Status == StatusPaused {
+			return m, nil
+		}
+		if msg.Item.Status == StatusActive {
+			msg.Item.Status = StatusQueued
+			msg.Item.Written.Store(0)
+			msg.Item.TotalSize.Store(0)
+		}
 
 	case tea.MouseWheelMsg:
 		if msg.Mouse().Button == tea.MouseWheelUp {
@@ -242,51 +441,13 @@ func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ScrollOffset++
 			}
 		} else if v1msg.Type == teaV1.MouseRelease && v1msg.Button == teaV1.MouseButtonLeft {
-			if !m.Confirmed {
-				if m.ZoneManager.Get("btn_confirm").InBounds(v1msg) {
-					m.Confirmed = true
-					var initCmds []tea.Cmd
-					activeCount := 0
-					for _, item := range m.Items {
-						if activeCount >= m.MaxActive {
-							break
-						}
-						item.Status = StatusActive
-						initCmds = append(initCmds, startDownloadCmd(item, m.User, m.Client, m.DownloadCaption))
-						activeCount++
-					}
-					cmds = append(cmds, initCmds...)
-				}
-				if m.ZoneManager.Get("btn_cancel").InBounds(v1msg) {
-					m.Aborted = true
-					return m, tea.Quit
-				}
-			}
+			return m.handleMouseRelease(v1msg)
 		}
 
 	case tea.MouseMsg:
 		v1msg := teaV1.MouseMsg{X: msg.Mouse().X, Y: msg.Mouse().Y}
 		if mRelease, ok := msg.(tea.MouseReleaseMsg); ok && mRelease.Button == tea.MouseLeft {
-			if !m.Confirmed {
-				if m.ZoneManager.Get("btn_confirm").InBounds(v1msg) {
-					m.Confirmed = true
-					var initCmds []tea.Cmd
-					activeCount := 0
-					for _, item := range m.Items {
-						if activeCount >= m.MaxActive {
-							break
-						}
-						item.Status = StatusActive
-						initCmds = append(initCmds, startDownloadCmd(item, m.User, m.Client, m.DownloadCaption))
-						activeCount++
-					}
-					cmds = append(cmds, initCmds...)
-				}
-				if m.ZoneManager.Get("btn_cancel").InBounds(v1msg) {
-					m.Aborted = true
-					return m, tea.Quit
-				}
-			}
+			return m.handleMouseRelease(v1msg)
 		}
 	}
 
@@ -294,24 +455,24 @@ func (m *DownloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *DownloadModel) startNextDownload() tea.Cmd {
+	if m.Paused {
+		return nil
+	}
 	if m.ToDownload > 0 && m.Downloaded >= m.ToDownload {
 		return tea.Quit // Done
 	}
 
-	activeCount := 0
-	for _, item := range m.Items {
-		if item.Status == StatusActive {
-			activeCount++
-		}
-	}
+	activeCount := m.activeCount()
 	if activeCount >= m.MaxActive {
 		return nil
 	}
 
 	for _, item := range m.Items {
 		if item.Status == StatusQueued {
-			item.Status = StatusActive
-			return startDownloadCmd(item, m.User, m.Client, m.DownloadCaption)
+			return tea.Batch(
+				func() tea.Msg { return spinner.TickMsg{Time: time.Now()} },
+				m.launchItem(item),
+			)
 		}
 	}
 	return nil
@@ -322,7 +483,7 @@ func (m *DownloadModel) isDone() bool {
 		return true
 	}
 	for _, item := range m.Items {
-		if item.Status == StatusQueued || item.Status == StatusActive {
+		if item.Status == StatusQueued || item.Status == StatusActive || item.Status == StatusPaused {
 			return false
 		}
 	}
@@ -413,6 +574,15 @@ func truncateToWidth(value string, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(ansi.Cut(value, 0, width-1) + "…")
 }
 
+func renderActionButton(label string, fg lipgloss.Color, bg lipgloss.Color) string {
+	return lipgloss.NewStyle().
+		Foreground(fg).
+		Background(bg).
+		Padding(0, 2).
+		Bold(true).
+		Render(label)
+}
+
 func (m *DownloadModel) View() tea.View {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -426,13 +596,13 @@ func (m *DownloadModel) View() tea.View {
 	if !m.Confirmed {
 		var out []string
 
-		btnConfirm := lipgloss.NewStyle().Foreground(lipgloss.Color("#5F7FFF")).Render("ENTER to confirm")
-		btnCancel := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B6B6B")).Render("ESC to cancel")
+		btnStart := renderActionButton("Start", lipgloss.Color("#FFFFFF"), lipgloss.Color("#5F7FFF"))
+		btnCancel := renderActionButton("Cancel", lipgloss.Color("#FFFFFF"), lipgloss.Color("#6B6B6B"))
 
-		btnConfirm = m.ZoneManager.Mark("btn_confirm", btnConfirm)
+		btnStart = m.ZoneManager.Mark("btn_start", btnStart)
 		btnCancel = m.ZoneManager.Mark("btn_cancel", btnCancel)
 
-		out = append(out, fmt.Sprintf("Ready to download %d files. Press %s, %s.", len(m.Items), btnConfirm, btnCancel))
+		out = append(out, fmt.Sprintf("Ready to download %d files. Use %s or press ENTER. Use %s or press ESC.", len(m.Items), btnStart, btnCancel))
 		out = append(out, "---")
 
 		start := m.ScrollOffset
@@ -469,8 +639,10 @@ func (m *DownloadModel) View() tea.View {
 	barWidth := max((contentWidth-statusWidth-nameWidth-2)/2, 5)
 
 	var active []string
+	var paused []string
 	var queued []string
 	var completed []string
+	failedCount := 0
 
 	for _, item := range m.Items {
 		switch item.Status {
@@ -486,12 +658,15 @@ func (m *DownloadModel) View() tea.View {
 			name := truncateToWidth(item.FileName, nameWidth)
 			line := lipgloss.JoinHorizontal(lipgloss.Top, status, " ", name, " ", prog)
 			active = append(active, line)
+		case StatusPaused:
+			paused = append(paused, fmt.Sprintf("Ⅱ Paused: %s", item.FileName))
 		case StatusQueued:
 			queued = append(queued, fmt.Sprintf("  Queued: %s", item.FileName))
 		case StatusCompleted:
 			completed = append(completed, fmt.Sprintf("✓ Downloaded: %s", item.FileName))
 		case StatusFailed:
 			completed = append(completed, fmt.Sprintf("✗ Failed: %s (%v)", item.FileName, item.Error))
+			failedCount++
 		}
 	}
 
@@ -502,9 +677,35 @@ func (m *DownloadModel) View() tea.View {
 	}
 
 	var out []string
+	pauseLabel := "Pause All"
+	if m.Paused {
+		pauseLabel = "Resume All"
+	}
+	btnPauseResume := m.ZoneManager.Mark("btn_pause_resume", renderActionButton(pauseLabel, lipgloss.Color("#FFFFFF"), lipgloss.Color("#7A4BFF")))
+	btnRetryAll := m.ZoneManager.Mark("btn_retry_all", renderActionButton("Retry All", lipgloss.Color("#FFFFFF"), lipgloss.Color("#2F6F4F")))
+	btnStopAll := m.ZoneManager.Mark("btn_stop_all", renderActionButton("Stop All", lipgloss.Color("#FFFFFF"), lipgloss.Color("#A83A3A")))
+	stateLabel := "Running"
+	if m.Paused {
+		stateLabel = "Paused"
+	}
+	out = append(out, lipgloss.JoinHorizontal(lipgloss.Top, btnPauseResume, "  ", btnRetryAll, "  ", btnStopAll))
+	out = append(out, fmt.Sprintf("State: %s | Completed: %d | Active: %d | Paused: %d | Queued: %d | Failed: %d", stateLabel, m.Downloaded, len(active), len(paused), len(queued), failedCount))
+	out = append(out, "")
+	availableLines -= 3
+
 	if len(active) > 0 {
 		out = append(out, active...)
 		availableLines -= len(active) + 1
+		out = append(out, "")
+	}
+
+	if len(paused) > 0 && availableLines > 0 {
+		showCount := min(len(paused), availableLines/2)
+		if showCount == 0 && availableLines > 0 {
+			showCount = 1
+		}
+		out = append(out, paused[:showCount]...)
+		availableLines -= showCount + 1
 		out = append(out, "")
 	}
 
@@ -531,7 +732,7 @@ func (m *DownloadModel) View() tea.View {
 	return tea.NewView(m.ZoneManager.Scan(rendered))
 }
 
-func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Client, saveCaption bool) tea.Cmd {
+func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Client, saveCaption bool, ctx context.Context, runID int64) tea.Cmd {
 	return func() tea.Msg {
 		destinations := uniqueNonEmptyPaths(item.Destinations)
 		if len(destinations) == 0 {
@@ -545,49 +746,56 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 		if fileExists(filename) {
 			item.Written.Store(item.TotalSize.Load())
 			if err := ensureDownloadTargetsFromSource(filename, destinations); err != nil {
-				return DownloadErrorMsg{Item: item, Err: err}
+				return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 			}
 			if saveCaption && item.Keywords != "" {
 				if err := writeKeywordSidecars(destinations, item.Keywords); err != nil {
-					return DownloadErrorMsg{Item: item, Err: err}
+					return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 				}
 			}
-			return DownloadCompleteMsg{Item: item}
+			return DownloadCompleteMsg{Item: item, RunID: runID}
 		}
 
 		err := os.MkdirAll(filepath.Dir(filename), os.ModePerm)
 		if err != nil {
-			return DownloadErrorMsg{Item: item, Err: err}
+			return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 		}
 
 		var resp *http.Response
 		url := utils.ResourceURL(item.URL, user.SID, item.IsPublic)
 		sidURL := utils.AppendSID(item.URL, user.SID)
 
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			return DownloadErrorMsg{Item: item, Err: err}
+			return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 		}
 
 		resp, err = client.Do(req)
 		if err != nil {
-			return DownloadErrorMsg{Item: item, Err: err}
+			if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+				return DownloadCanceledMsg{Item: item, RunID: runID}
+			}
+			return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			resp.Body.Close()
 			log.Warn("Rate limited, pausing 5s before retrying...", "file", item.FileName)
-			time.Sleep(5 * time.Second)
-			return RetryDownloadMsg{Item: item}
+			select {
+			case <-ctx.Done():
+				return DownloadCanceledMsg{Item: item, RunID: runID}
+			case <-time.After(5 * time.Second):
+			}
+			return RetryDownloadMsg{Item: item, RunID: runID}
 		}
 
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
 			if sidURL != "" && sidURL != url {
 				item.URL = sidURL
-				return RetryDownloadMsg{Item: item}
+				return RetryDownloadMsg{Item: item, RunID: runID}
 			}
-			return DownloadErrorMsg{Item: item, Err: fmt.Errorf("unexpected status: %d", resp.StatusCode)}
+			return DownloadErrorMsg{Item: item, Err: fmt.Errorf("unexpected status: %d", resp.StatusCode), RunID: runID}
 		}
 
 		if resp.ContentLength > 0 {
@@ -597,7 +805,7 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 		f, err := os.Create(filename)
 		if err != nil {
 			resp.Body.Close()
-			return DownloadErrorMsg{Item: item, Err: err}
+			return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 		}
 
 		hasher := md5.New()
@@ -616,7 +824,7 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 				if ew != nil {
 					f.Close()
 					resp.Body.Close()
-					return DownloadErrorMsg{Item: item, Err: ew}
+					return DownloadErrorMsg{Item: item, Err: ew, RunID: runID}
 				}
 			}
 			if err != nil {
@@ -625,7 +833,11 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 				}
 				f.Close()
 				resp.Body.Close()
-				return DownloadErrorMsg{Item: item, Err: err}
+				if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+					_ = os.Remove(filename)
+					return DownloadCanceledMsg{Item: item, RunID: runID}
+				}
+				return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 			}
 		}
 
@@ -638,22 +850,22 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 				item.MD5Retries++
 				_ = os.Remove(filename)
 				log.Warn("MD5 mismatch, retrying...", "file", item.FileName, "attempt", item.MD5Retries)
-				return RetryDownloadMsg{Item: item}
+				return RetryDownloadMsg{Item: item, RunID: runID}
 			}
-			return DownloadErrorMsg{Item: item, Err: fmt.Errorf("MD5 mismatch: got %s, expected %s", hashStr, item.FileMD5)}
+			return DownloadErrorMsg{Item: item, Err: fmt.Errorf("MD5 mismatch: got %s, expected %s", hashStr, item.FileMD5), RunID: runID}
 		}
 
 		if err := ensureDownloadTargetsFromSource(filename, destinations); err != nil {
-			return DownloadErrorMsg{Item: item, Err: err}
+			return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 		}
 		if saveCaption && item.Keywords != "" {
 			err := writeKeywordSidecars(destinations, item.Keywords)
 			if err != nil {
-				return DownloadErrorMsg{Item: item, Err: err}
+				return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 			}
 		}
 
-		return DownloadCompleteMsg{Item: item}
+		return DownloadCompleteMsg{Item: item, RunID: runID}
 	}
 }
 
