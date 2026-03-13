@@ -18,7 +18,9 @@ import (
 	"github.com/ellypaws/inkbunny"
 
 	appdownloads "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/downloads"
+	appinfo "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/info"
 	appstorage "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/storage"
+	apptypes "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 	uitui "github.com/ellypaws/inkbunny/cmd/downloader/pkg/tui"
@@ -39,9 +41,41 @@ func RunTUI(config flags.Config) {
 		toDownload      int
 		downloadCaption bool
 		searches        []inkbunny.SubmissionSearchResponse
+		releaseStatus   apptypes.ReleaseStatus
 	)
 
+	skippedReleaseTag := loadSkippedReleaseTag()
+	if !config.NoTUI {
+		spinner.New().
+			Title("Checking for updates...").
+			Action(func() {
+				releaseStatus = appinfo.GetReleaseStatus()
+			}).Run()
+	}
+	showLoginReleaseNotice := shouldShowReleaseNotice(releaseStatus, skippedReleaseTag)
+	showSearchReleaseNotice := showLoginReleaseNotice
+
 Login:
+	if showLoginReleaseNotice && needsInteractiveLogin(config) {
+		action, promptErr := promptReleaseUpdate(releaseStatus)
+		if promptErr != nil {
+			if errors.Is(promptErr, errLoginPromptAborted) {
+				log.Info("Login aborted by user")
+				return
+			}
+			log.Warn("failed to show update notice", "err", promptErr)
+		} else {
+			if action == releasePromptDefer {
+				if err := saveSkippedReleaseTag(releaseStatus.LatestTag); err != nil {
+					log.Warn("failed to save skipped release tag", "err", err)
+				} else {
+					skippedReleaseTag = releaseStatus.LatestTag
+					showSearchReleaseNotice = false
+				}
+			}
+			showLoginReleaseNotice = false
+		}
+	}
 	user, source, persistSession, err := authenticateUser(config, true)
 	if err != nil {
 		if errors.Is(err, errLoginPromptAborted) {
@@ -100,6 +134,8 @@ Login:
 		canUseUnread,
 		canUseWatching,
 		watchingUsers,
+		releaseStatus,
+		showSearchReleaseNotice,
 		appstorage.DefaultDownloadDirectory(),
 		appdownloads.DefaultPattern,
 		&keywordSuggestionsCache,
@@ -127,6 +163,18 @@ Search:
 	finalModel, ok = rawModel.(*uitui.Model)
 	if !ok {
 		log.Fatal("Could not cast model")
+	}
+	if finalModel.SkippedReleaseTag != "" {
+		if err := saveSkippedReleaseTag(finalModel.SkippedReleaseTag); err != nil {
+			log.Warn("failed to save skipped release tag", "err", err)
+		} else {
+			skippedReleaseTag = finalModel.SkippedReleaseTag
+			showSearchReleaseNotice = false
+			showLoginReleaseNotice = false
+		}
+	}
+	if finalModel.UpdateNoticeDismissed {
+		showSearchReleaseNotice = false
 	}
 
 	if finalModel.NeedsLogin {

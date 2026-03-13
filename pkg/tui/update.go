@@ -3,11 +3,13 @@ package tui
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/textinput"
 	teaV1 "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/pkg/browser"
 
 	"github.com/ellypaws/inkbunny"
 )
@@ -80,7 +82,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			zone := m.currentFocusZone()
-			if zone == "btn_search_top" || zone == "btn_search_bottom" || zone == "btn_unread" || zone == "btn_logout" {
+			if zone == "btn_search_top" || zone == "btn_search_bottom" || zone == "btn_unread" || zone == "btn_logout" || zone == "btn_update_open" || zone == "btn_update_later" || zone == "btn_update_skip" {
 				return m.triggerZone(zone)
 			}
 			m.moveFocus(1)
@@ -270,7 +272,8 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.HoveredZone == "" {
-		_ = hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("pool_id") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
+		_ = hoverCheck("btn_update_open") || hoverCheck("btn_update_later") || hoverCheck("btn_update_skip") ||
+			hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("pool_id") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
 			hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
 			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_watches_artist") || hoverCheck("link_use_my_name_fav") ||
 			hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
@@ -322,6 +325,19 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "btn_search_top", "btn_search_bottom":
 		return m, tea.Quit
+	case "btn_update_open":
+		if url := strings.TrimSpace(m.ReleaseStatus.ReleaseURL); url != "" {
+			if err := browser.OpenURL(url); err != nil {
+				log.Warn("failed to open release url", "err", err)
+			}
+		}
+	case "btn_update_later":
+		m.ShowUpdateNotice = false
+		m.UpdateNoticeDismissed = true
+	case "btn_update_skip":
+		m.ShowUpdateNotice = false
+		m.UpdateNoticeDismissed = true
+		m.SkippedReleaseTag = m.ReleaseStatus.LatestTag
 	case "btn_unread":
 		if m.CanUseUnread {
 			m.UnreadMode = !m.UnreadMode

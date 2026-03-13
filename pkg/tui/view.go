@@ -108,6 +108,9 @@ func (m *Model) renderContent(measureFocus bool) string {
 	var sections []string
 
 	sections = append(sections, m.renderUserBar())
+	if m.ShowUpdateNotice {
+		sections = append(sections, panelStyle.Render(m.renderUpdateNotice()))
+	}
 	sections = append(sections, panelStyle.Render(m.renderTopSection()))
 	sections = append(sections, panelStyle.Render(m.renderMiddleSection()))
 	sections = append(sections, panelStyle.Render(m.renderBottomSection()))
@@ -217,6 +220,28 @@ func (m *Model) renderTopSection() string {
 	}
 	parts = append(parts, "", row2, "", row3)
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+func (m *Model) renderUpdateNotice() string {
+	status := m.ReleaseStatus
+	title := labelStyle.Render("Update:")
+	message := lipgloss.NewStyle().Foreground(textColor).Bold(true).Render("New version available")
+	details := helperTextStyle.Render(fmt.Sprintf("Current %s, latest %s.", status.CurrentTag, status.LatestTag))
+
+	openLabel := "Open release"
+	if strings.TrimSpace(status.LatestTag) != "" {
+		openLabel = "Update to " + status.LatestTag
+	}
+	openBtn := m.renderButton("btn_update_open", openLabel)
+	laterBtn := m.renderButton("btn_update_later", "Later")
+	skipBtn := m.renderButton("btn_update_skip", "Defer update")
+
+	buttonRow := lipgloss.JoinHorizontal(lipgloss.Top, subLabelStyle.Render(""), openBtn, "  ", laterBtn, "  ", skipBtn)
+	return lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Top, title, message),
+		details,
+		buttonRow,
+	)
 }
 
 func (m *Model) renderMiddleSection() string {

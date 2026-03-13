@@ -10,6 +10,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/ellypaws/inkbunny"
+	apptypes "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 )
 
@@ -28,6 +29,7 @@ const (
 )
 
 var FocusableZones = []string{
+	"btn_update_open", "btn_update_later", "btn_update_skip",
 	"search_words", "btn_search_top",
 	"rad_and", "rad_or", "rad_exact",
 	"chk_keywords", "chk_title", "chk_desc", "chk_md5",
@@ -52,11 +54,15 @@ type SuggestUsernameMsg struct {
 }
 
 type Model struct {
-	ZoneManager *zone.Manager
-	User        *inkbunny.User
-	Username    string
+	ZoneManager   *zone.Manager
+	User          *inkbunny.User
+	Username      string
+	ReleaseStatus apptypes.ReleaseStatus
 
-	NeedsLogin bool
+	NeedsLogin            bool
+	ShowUpdateNotice      bool
+	UpdateNoticeDismissed bool
+	SkippedReleaseTag     string
 
 	Width        int
 	Height       int
@@ -148,6 +154,8 @@ func NewModel(
 	canUseUnread bool,
 	canUseWatching bool,
 	watchingUsers []string,
+	releaseStatus apptypes.ReleaseStatus,
+	showUpdateNotice bool,
 	defaultDownloadDir string,
 	defaultDownloadPattern string,
 	keywordCache *flight.Cache[string, []inkbunny.KeywordAutocomplete],
@@ -203,19 +211,21 @@ func NewModel(
 	downloadPattern.Prompt = ""
 
 	return &Model{
-		ZoneManager:   zm,
-		User:          user,
-		Username:      username,
-		SearchWords:   searchWords,
-		ArtistName:    artistName,
-		FavBy:         favBy,
-		PoolID:        poolID,
-		MaxDownloads:  maxDownloads,
-		MaxActive:     maxActive,
-		DownloadDir:   downloadDir,
-		DownloadPath:  downloadPattern,
-		KeywordCache:  keywordCache,
-		UsernameCache: usernameCache,
+		ZoneManager:      zm,
+		User:             user,
+		Username:         username,
+		ReleaseStatus:    releaseStatus,
+		ShowUpdateNotice: showUpdateNotice,
+		SearchWords:      searchWords,
+		ArtistName:       artistName,
+		FavBy:            favBy,
+		PoolID:           poolID,
+		MaxDownloads:     maxDownloads,
+		MaxActive:        maxActive,
+		DownloadDir:      downloadDir,
+		DownloadPath:     downloadPattern,
+		KeywordCache:     keywordCache,
+		UsernameCache:    usernameCache,
 
 		SuggestionIndex: -1,
 
@@ -408,13 +418,12 @@ func (m *Model) clampScroll() {
 }
 
 func (m *Model) focusableZones() []string {
-	if m.CanUseUnread {
-		return FocusableZones
-	}
-
-	zones := make([]string, 0, len(FocusableZones)-1)
+	zones := make([]string, 0, len(FocusableZones))
 	for _, id := range FocusableZones {
-		if id == "btn_unread" {
+		if id == "btn_unread" && !m.CanUseUnread {
+			continue
+		}
+		if (id == "btn_update_open" || id == "btn_update_later" || id == "btn_update_skip") && !m.ShowUpdateNotice {
 			continue
 		}
 		zones = append(zones, id)
