@@ -523,6 +523,24 @@ func toV1KeyMsg(msg tea.KeyPressMsg) teaV1.Msg {
 
 	if msg.Mod.Contains(tea.ModCtrl) {
 		switch msg.Code {
+		case tea.KeyLeft:
+			v1.Type = teaV1.KeyCtrlLeft
+			return v1
+		case tea.KeyRight:
+			v1.Type = teaV1.KeyCtrlRight
+			return v1
+		case tea.KeyBackspace:
+			// bubbles textinput binds word delete backward to alt+backspace.
+			v1.Type = teaV1.KeyBackspace
+			v1.Alt = true
+			return v1
+		case tea.KeyDelete:
+			// bubbles textinput binds word delete forward to alt+delete.
+			v1.Type = teaV1.KeyDelete
+			v1.Alt = true
+			return v1
+		}
+		switch msg.Code {
 		case 'a':
 			v1.Type = teaV1.KeyCtrlA
 		case 'b':
