@@ -38,6 +38,7 @@ func RunTUI(config flags.Config) {
 		downloadPath    string
 		artistFilters   []string
 		favoriteFilters []string
+		resultsPerPage  = 30
 
 		toDownload      int
 		downloadCaption bool
@@ -248,6 +249,7 @@ Search:
 	maxActiveStr = strconv.Itoa(finalModel.MaxActiveValue())
 	downloadDir = finalModel.DownloadDirectoryValue()
 	downloadPath = finalModel.DownloadPatternValue()
+	resultsPerPage = finalModel.ResultsPerPageValue()
 	downloadCaption = finalModel.DownloadCaption
 	if finalModel.UnreadMode {
 		request.UnreadSubmissions = inkbunny.Yes
@@ -272,6 +274,7 @@ Process:
 	request.Title = nil
 	request.Description = nil
 	request.MD5 = nil
+	request.SubmissionsPerPage = inkbunny.IntString(resultsPerPage)
 
 	for _, v := range searchIn {
 		switch v {

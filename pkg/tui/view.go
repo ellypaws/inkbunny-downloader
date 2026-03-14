@@ -360,6 +360,9 @@ func (m *Model) renderFooterSection() string {
 	poolLabel := labelStyle.Render("Pool ID:")
 	poolInput := m.renderInput("pool_id", m.PoolID, FieldPoolID)
 
+	perPageLabel := labelStyle.Render("Results per page:")
+	perPageInput := m.renderInput("per_page", m.ResultsPerPage, FieldResultsPerPage)
+
 	scrapsLabel := labelStyle.Render("Scraps:")
 	scrapsCycle := m.renderCycle("cycle_scraps", m.ScrapsLabels[m.ScrapsIndex])
 
@@ -381,11 +384,12 @@ func (m *Model) renderFooterSection() string {
 	patternHint := helperTextStyle.Render("Pattern tokens use {name}, e.g. {artist}, {submission_id}, {file_name_full}, {ext}.")
 	patternPreview := m.renderDownloadPatternPreview()
 
-	var orderBlock, poolBlock, scrapsBlock, dlMaxBlock, activeMaxBlock, downloadDirBlock, downloadPatternBlock, dlCaptionBlock string
+	var orderBlock, poolBlock, perPageBlock, scrapsBlock, dlMaxBlock, activeMaxBlock, downloadDirBlock, downloadPatternBlock, dlCaptionBlock string
 
 	if m.Width > 0 && m.Width < 100 {
 		orderBlock = lipgloss.JoinVertical(lipgloss.Left, orderLabel, orderCycle)
 		poolBlock = lipgloss.JoinVertical(lipgloss.Left, poolLabel, poolInput)
+		perPageBlock = lipgloss.JoinVertical(lipgloss.Left, perPageLabel, perPageInput)
 		scrapsBlock = lipgloss.JoinVertical(lipgloss.Left, scrapsLabel, scrapsCycle)
 		dlMaxBlock = lipgloss.JoinVertical(lipgloss.Left, dlMaxLabel, dlMaxInput)
 		activeMaxBlock = lipgloss.JoinVertical(lipgloss.Left, activeMaxLabel, activeMaxInput)
@@ -395,6 +399,7 @@ func (m *Model) renderFooterSection() string {
 	} else {
 		orderBlock = lipgloss.JoinHorizontal(lipgloss.Center, orderLabel, orderCycle)
 		poolBlock = lipgloss.JoinHorizontal(lipgloss.Center, poolLabel, poolInput)
+		perPageBlock = lipgloss.JoinHorizontal(lipgloss.Center, perPageLabel, perPageInput)
 		scrapsBlock = lipgloss.JoinHorizontal(lipgloss.Center, scrapsLabel, scrapsCycle)
 		dlMaxBlock = lipgloss.JoinHorizontal(lipgloss.Center, dlMaxLabel, dlMaxInput)
 		activeMaxBlock = lipgloss.JoinHorizontal(lipgloss.Center, activeMaxLabel, activeMaxInput)
@@ -412,6 +417,7 @@ func (m *Model) renderFooterSection() string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		orderBlock, "",
 		poolBlock, "",
+		perPageBlock, "",
 		scrapsBlock, "",
 		dlMaxBlock, "",
 		activeMaxBlock, "",

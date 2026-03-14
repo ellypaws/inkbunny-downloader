@@ -154,6 +154,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 	m.PoolID, cmd = updateInput(m.PoolID, msg)
 	cmds = append(cmds, cmd)
+	m.ResultsPerPage, cmd = updateInput(m.ResultsPerPage, msg)
+	cmds = append(cmds, cmd)
 	m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
 	cmds = append(cmds, cmd)
 	m.MaxActive, cmd = updateInput(m.MaxActive, msg)
@@ -272,7 +274,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	if m.HoveredZone == "" {
 		_ = hoverCheck("btn_update_open") || hoverCheck("btn_update_later") || hoverCheck("btn_update_skip") ||
-			hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("pool_id") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
+			hoverCheck("btn_logout") || hoverCheck("btn_unread") || hoverCheck("search_words") || hoverCheck("artist_name") || hoverCheck("fav_by") || hoverCheck("pool_id") || hoverCheck("per_page") || hoverCheck("max_dl") || hoverCheck("max_active") || hoverCheck("download_dir") || hoverCheck("download_pattern") ||
 			hoverCheck("btn_search_top") || hoverCheck("btn_search_bottom") ||
 			hoverCheck("link_use_my_name_artist") || hoverCheck("link_use_my_watches_artist") || hoverCheck("link_use_my_name_fav") ||
 			hoverCheck("rad_and") || hoverCheck("rad_or") || hoverCheck("rad_exact") ||
@@ -298,6 +300,9 @@ func (m *Model) triggerZone(id string) (tea.Model, tea.Cmd) {
 		m.focusActiveField()
 	case "pool_id":
 		m.ActiveField = FieldPoolID
+		m.focusActiveField()
+	case "per_page":
+		m.ActiveField = FieldResultsPerPage
 		m.focusActiveField()
 	case "max_dl":
 		m.ActiveField = FieldMaxDownloads
@@ -446,6 +451,8 @@ func (m *Model) updateActiveField() {
 		m.ActiveField = FieldFavBy
 	case "pool_id":
 		m.ActiveField = FieldPoolID
+	case "per_page":
+		m.ActiveField = FieldResultsPerPage
 	case "max_dl":
 		m.ActiveField = FieldMaxDownloads
 	case "max_active":
@@ -605,6 +612,7 @@ func (m *Model) focusActiveField() {
 	m.ArtistName.Blur()
 	m.FavBy.Blur()
 	m.PoolID.Blur()
+	m.ResultsPerPage.Blur()
 	m.MaxDownloads.Blur()
 	m.MaxActive.Blur()
 	m.DownloadDir.Blur()
@@ -619,6 +627,8 @@ func (m *Model) focusActiveField() {
 		m.FavBy.Focus()
 	case FieldPoolID:
 		m.PoolID.Focus()
+	case FieldResultsPerPage:
+		m.ResultsPerPage.Focus()
 	case FieldMaxDownloads:
 		m.MaxDownloads.Focus()
 	case FieldMaxActive:

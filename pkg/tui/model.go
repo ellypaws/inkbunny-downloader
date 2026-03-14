@@ -21,12 +21,15 @@ const (
 	FieldArtistName
 	FieldFavBy
 	FieldPoolID
+	FieldResultsPerPage
 	FieldMaxDownloads
 	FieldMaxActive
 	FieldDownloadDirectory
 	FieldDownloadPattern
 	FieldNone
 )
+
+const defaultSearchPerPage = 30
 
 var FocusableZones = []string{
 	"btn_update_open", "btn_update_later", "btn_update_skip",
@@ -40,7 +43,7 @@ var FocusableZones = []string{
 	"rad_type_any", "chk_type_pic", "chk_type_sketch", "chk_type_picseries", "chk_type_comic",
 	"chk_type_port", "chk_type_swfanim", "chk_type_swfint", "chk_type_vidfeat", "chk_type_vidanim",
 	"chk_type_musicsing", "chk_type_musicalb", "chk_type_writing", "chk_type_char", "chk_type_photo",
-	"cycle_order", "max_dl", "max_active", "download_dir", "download_pattern", "chk_dl_caption",
+	"cycle_order", "per_page", "max_dl", "max_active", "download_dir", "download_pattern", "chk_dl_caption",
 	"btn_search_bottom", "btn_unread", "btn_logout",
 }
 
@@ -71,14 +74,15 @@ type Model struct {
 	ScrollOffset int
 	contentLines int
 
-	SearchWords  textinput.Model
-	ArtistName   textinput.Model
-	FavBy        textinput.Model
-	PoolID       textinput.Model
-	MaxDownloads textinput.Model
-	MaxActive    textinput.Model
-	DownloadDir  textinput.Model
-	DownloadPath textinput.Model
+	SearchWords    textinput.Model
+	ArtistName     textinput.Model
+	FavBy          textinput.Model
+	PoolID         textinput.Model
+	ResultsPerPage textinput.Model
+	MaxDownloads   textinput.Model
+	MaxActive      textinput.Model
+	DownloadDir    textinput.Model
+	DownloadPath   textinput.Model
 
 	ActiveField activeField
 	HoveredZone string
@@ -192,6 +196,23 @@ func NewModel(
 	}
 	poolID.Prompt = ""
 
+	resultsPerPage := textinput.New()
+	resultsPerPage.Placeholder = strconv.Itoa(defaultSearchPerPage)
+	resultsPerPage.Validate = func(s string) error {
+		if s == "" {
+			return nil
+		}
+		value, err := strconv.Atoi(s)
+		if err != nil {
+			return err
+		}
+		if value < 1 || value > 100 {
+			return strconv.ErrRange
+		}
+		return nil
+	}
+	resultsPerPage.Prompt = ""
+
 	maxDownloads := textinput.New()
 	maxDownloads.Placeholder = "Unlimited"
 	maxDownloads.Prompt = ""
@@ -235,6 +256,7 @@ func NewModel(
 		ArtistName:       artistName,
 		FavBy:            favBy,
 		PoolID:           poolID,
+		ResultsPerPage:   resultsPerPage,
 		MaxDownloads:     maxDownloads,
 		MaxActive:        maxActive,
 		DownloadDir:      downloadDir,
@@ -369,6 +391,21 @@ func (m *Model) MaxActiveValue() int {
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
 		return min(max(1, runtime.NumCPU()/6), 6)
+	}
+	return parsed
+}
+
+func (m *Model) ResultsPerPageValue() int {
+	value := strings.TrimSpace(m.ResultsPerPage.Value())
+	if value == "" {
+		return defaultSearchPerPage
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return defaultSearchPerPage
+	}
+	if parsed > 100 {
+		return 100
 	}
 	return parsed
 }

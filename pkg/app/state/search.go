@@ -182,7 +182,7 @@ func (a *App) Search(params types.SearchParams) (resp types.SearchResponse, err 
 	resp = types.SearchResponse{
 		SearchID:     searchID,
 		Page:         state.ClientPage,
-		PagesCount:   searchPageCount(state.ClientPage, hasMore),
+		PagesCount:   searchPageCount(state),
 		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
@@ -270,7 +270,7 @@ func (a *App) searchMultipleArtists(
 	return types.SearchResponse{
 		SearchID:     searchID,
 		Page:         1,
-		PagesCount:   searchPageCount(1, hasMore),
+		PagesCount:   searchPageCount(state),
 		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
@@ -337,7 +337,7 @@ func (a *App) RefreshSearch(searchID string, operationID string) (resp types.Sea
 		resp = types.SearchResponse{
 			SearchID:     searchID,
 			Page:         1,
-			PagesCount:   searchPageCount(1, hasMore),
+			PagesCount:   searchPageCount(state),
 			ResultsCount: searchResultsCount(state, hasMore),
 			Results:      cards,
 			Session:      a.GetSession(),
@@ -410,7 +410,7 @@ func (a *App) RefreshSearch(searchID string, operationID string) (resp types.Sea
 	resp = types.SearchResponse{
 		SearchID:     searchID,
 		Page:         1,
-		PagesCount:   searchPageCount(1, hasMore),
+		PagesCount:   searchPageCount(state),
 		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
@@ -524,7 +524,7 @@ func (a *App) LoadMoreResults(searchID string, page int, operationID string) (re
 		resp = types.SearchResponse{
 			SearchID:     searchID,
 			Page:         page,
-			PagesCount:   searchPageCount(page, hasMore),
+			PagesCount:   searchPageCount(state),
 			ResultsCount: searchResultsCount(state, hasMore),
 			Results:      cards,
 			Session:      a.GetSession(),
@@ -590,7 +590,7 @@ func (a *App) LoadMoreResults(searchID string, page int, operationID string) (re
 	resp = types.SearchResponse{
 		SearchID:     searchID,
 		Page:         page,
-		PagesCount:   searchPageCount(page, hasMore),
+		PagesCount:   searchPageCount(state),
 		ResultsCount: searchResultsCount(state, hasMore),
 		Results:      cards,
 		Session:      a.GetSession(),
@@ -1594,11 +1594,21 @@ func searchResultsCount(state *searchState, hasMore bool) int {
 	return max(count, state.DeliveredCount)
 }
 
-func searchPageCount(currentPage int, hasMore bool) int {
-	if !hasMore {
+func searchPageCount(state *searchState) int {
+	if state == nil {
+		return 1
+	}
+	currentPage := max(state.ClientPage, 1)
+	perPage := normalizeSearchPerPage(state.PerPage)
+	totalResults := limitedResultsCount(state.RawResultsCount, state.MaxDownloads)
+	if totalResults <= 0 {
 		return currentPage
 	}
-	return currentPage + 1
+	totalPages := (totalResults + perPage - 1) / perPage
+	if totalPages < currentPage {
+		return currentPage
+	}
+	return totalPages
 }
 
 func userRatingsMask(user *inkbunny.User) string {
