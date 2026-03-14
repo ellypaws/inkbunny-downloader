@@ -54,10 +54,12 @@ type SuggestUsernameMsg struct {
 }
 
 type Model struct {
-	ZoneManager   *zone.Manager
-	User          *inkbunny.User
-	Username      string
-	ReleaseStatus apptypes.ReleaseStatus
+	ZoneManager     *zone.Manager
+	User            *inkbunny.User
+	Username        string
+	ReleaseStatus   apptypes.ReleaseStatus
+	PersistSettings func(apptypes.AppSettings) error
+	SavedSettings   apptypes.AppSettings
 
 	NeedsLogin            bool
 	ShowUpdateNotice      bool
@@ -158,10 +160,13 @@ func NewModel(
 	showUpdateNotice bool,
 	defaultDownloadDir string,
 	defaultDownloadPattern string,
+	settings apptypes.AppSettings,
+	persistSettings func(apptypes.AppSettings) error,
 	keywordCache *flight.Cache[string, []inkbunny.KeywordAutocomplete],
 	usernameCache *flight.Cache[string, []inkbunny.Autocomplete],
 ) *Model {
 	zm := zone.New()
+	defaultMaxActive := min(max(1, runtime.NumCPU()/6), 6)
 
 	searchWords := textinput.New()
 	searchWords.Placeholder = "Separate words with spaces."
@@ -192,7 +197,7 @@ func NewModel(
 	maxDownloads.Prompt = ""
 
 	maxActive := textinput.New()
-	maxActive.Placeholder = strconv.Itoa(min(max(1, runtime.NumCPU()/6), 6))
+	maxActive.Placeholder = strconv.Itoa(defaultMaxActive)
 	maxActive.Validate = func(s string) error {
 		if s == "" {
 			return nil
@@ -201,20 +206,30 @@ func NewModel(
 		return err
 	}
 	maxActive.Prompt = ""
+	if settings.MaxActive > 0 && settings.MaxActive != defaultMaxActive {
+		maxActive.SetValue(strconv.Itoa(settings.MaxActive))
+	}
 
 	downloadDir := textinput.New()
 	downloadDir.Placeholder = defaultDownloadDir
 	downloadDir.Prompt = ""
+	if value := strings.TrimSpace(settings.DownloadDirectory); value != "" && value != strings.TrimSpace(defaultDownloadDir) {
+		downloadDir.SetValue(value)
+	}
 
 	downloadPattern := textinput.New()
 	downloadPattern.Placeholder = defaultDownloadPattern
 	downloadPattern.Prompt = ""
+	if value := strings.TrimSpace(settings.DownloadPattern); value != "" && value != strings.TrimSpace(defaultDownloadPattern) {
+		downloadPattern.SetValue(value)
+	}
 
-	return &Model{
+	model := &Model{
 		ZoneManager:      zm,
 		User:             user,
 		Username:         username,
 		ReleaseStatus:    releaseStatus,
+		PersistSettings:  persistSettings,
 		ShowUpdateNotice: showUpdateNotice,
 		SearchWords:      searchWords,
 		ArtistName:       artistName,
@@ -258,6 +273,9 @@ func NewModel(
 
 		TypeAny: true,
 	}
+
+	model.SavedSettings = model.PersistentSettings()
+	return model
 }
 
 func (m *Model) fetchKeywordSuggestions(query string) tea.Cmd {
@@ -341,6 +359,32 @@ func (m *Model) DownloadPatternValue() string {
 		return value
 	}
 	return strings.TrimSpace(m.DownloadPath.Placeholder)
+}
+
+func (m *Model) MaxActiveValue() int {
+	value := strings.TrimSpace(m.MaxActive.Value())
+	if value == "" {
+		value = strings.TrimSpace(m.MaxActive.Placeholder)
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return min(max(1, runtime.NumCPU()/6), 6)
+	}
+	return parsed
+}
+
+func (m *Model) PersistentSettings() apptypes.AppSettings {
+	return apptypes.AppSettings{
+		DownloadDirectory: m.DownloadDirectoryValue(),
+		DownloadPattern:   m.DownloadPatternValue(),
+		MaxActive:         m.MaxActiveValue(),
+	}
+}
+
+func samePersistentSettings(a, b apptypes.AppSettings) bool {
+	return strings.TrimSpace(a.DownloadDirectory) == strings.TrimSpace(b.DownloadDirectory) &&
+		strings.TrimSpace(a.DownloadPattern) == strings.TrimSpace(b.DownloadPattern) &&
+		a.MaxActive == b.MaxActive
 }
 
 func (m *Model) ArtistFilters() []string {

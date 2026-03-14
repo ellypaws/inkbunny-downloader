@@ -12,11 +12,13 @@ import (
 	"github.com/pkg/browser"
 
 	"github.com/ellypaws/inkbunny"
+	apptypes "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
 )
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
+	prevPersistentSettings := m.PersistentSettings()
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -136,26 +138,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		res, c := m.handleMouse(msg)
 		return res, c
 
-	case tea.PasteMsg:
-		var cmd tea.Cmd
-		if m.ActiveField == FieldSearchWords {
-			m.SearchWords, cmd = updateInput(m.SearchWords, msg)
-		} else if m.ActiveField == FieldArtistName && !m.UseWatchingArtist {
-			m.ArtistName, cmd = updateInput(m.ArtistName, msg)
-		} else if m.ActiveField == FieldFavBy {
-			m.FavBy, cmd = updateInput(m.FavBy, msg)
-		} else if m.ActiveField == FieldPoolID {
-			m.PoolID, cmd = updateInput(m.PoolID, msg)
-		} else if m.ActiveField == FieldMaxDownloads {
-			m.MaxDownloads, cmd = updateInput(m.MaxDownloads, msg)
-		} else if m.ActiveField == FieldMaxActive {
-			m.MaxActive, cmd = updateInput(m.MaxActive, msg)
-		} else if m.ActiveField == FieldDownloadDirectory {
-			m.DownloadDir, cmd = updateInput(m.DownloadDir, msg)
-		} else if m.ActiveField == FieldDownloadPattern {
-			m.DownloadPath, cmd = updateInput(m.DownloadPath, msg)
-		}
-		cmds = append(cmds, cmd)
 	}
 
 	prevSearch := m.SearchWords.Value()
@@ -207,8 +189,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Suggestions = nil
 		}
 	}
+	m.persistSettingsIfChanged(prevPersistentSettings)
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) persistSettingsIfChanged(previous apptypes.AppSettings) {
+	current := m.PersistentSettings()
+	if samePersistentSettings(current, previous) || samePersistentSettings(current, m.SavedSettings) {
+		return
+	}
+	if m.PersistSettings == nil {
+		m.SavedSettings = current
+		return
+	}
+	if err := m.PersistSettings(current); err != nil {
+		log.Warn("failed to persist tui settings", "err", err)
+		return
+	}
+	m.SavedSettings = current
 }
 
 func (m *Model) applySuggestion(value string) {
@@ -528,6 +527,8 @@ func toV1KeyMsg(msg tea.KeyPressMsg) teaV1.Msg {
 			v1.Type = teaV1.KeyCtrlA
 		case 'b':
 			v1.Type = teaV1.KeyCtrlB
+		case 'v':
+			v1.Type = teaV1.KeyCtrlV
 		case 'd':
 			v1.Type = teaV1.KeyCtrlD
 		case 'e':

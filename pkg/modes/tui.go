@@ -21,6 +21,7 @@ import (
 	appinfo "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/info"
 	appstorage "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/storage"
 	apptypes "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/types"
+	apputils "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/utils"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flags"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/flight"
 	uitui "github.com/ellypaws/inkbunny/cmd/downloader/pkg/tui"
@@ -42,7 +43,20 @@ func RunTUI(config flags.Config) {
 		downloadCaption bool
 		searches        []inkbunny.SubmissionSearchResponse
 		releaseStatus   apptypes.ReleaseStatus
+		store           *appstorage.StateStore
+		storedState     = appstorage.DefaultStoredState()
+		err             error
 	)
+
+	store, err = appstorage.NewStateStore()
+	if err != nil {
+		log.Warn("failed to open state store", "err", err)
+		store = nil
+	} else if loadedState, loadErr := store.Load(); loadErr != nil {
+		log.Warn("failed to load state store", "err", loadErr)
+	} else {
+		storedState = loadedState
+	}
 
 	skippedReleaseTag := loadSkippedReleaseTag()
 	if !config.NoTUI {
@@ -138,6 +152,34 @@ Login:
 		showSearchReleaseNotice,
 		appstorage.DefaultDownloadDirectory(),
 		appdownloads.DefaultPattern,
+		storedState.Settings,
+		func(settings apptypes.AppSettings) error {
+			if store == nil {
+				return nil
+			}
+			nextState := storedState
+			downloadDirectory := strings.TrimSpace(settings.DownloadDirectory)
+			if downloadDirectory == "" {
+				downloadDirectory = appstorage.DefaultDownloadDirectory()
+			}
+			nextState.Settings.DownloadDirectory = filepath.Clean(downloadDirectory)
+			nextState.Settings.DownloadPattern = appdownloads.NormalizePattern(settings.DownloadPattern)
+			if strings.TrimSpace(nextState.Settings.DownloadPattern) == "" {
+				nextState.Settings.DownloadPattern = appdownloads.DefaultPattern
+			}
+			nextState.Settings.MaxActive = apputils.NormalizeMaxActive(settings.MaxActive)
+			nextState.Session.Settings = nextState.Settings
+			if nextState.Settings.DarkMode {
+				nextState.Session.EffectiveTheme = "dark"
+			} else {
+				nextState.Session.EffectiveTheme = "light"
+			}
+			if err := store.Save(nextState); err != nil {
+				return err
+			}
+			storedState = nextState
+			return nil
+		},
 		&keywordSuggestionsCache,
 		&usernameCache,
 	)
@@ -156,6 +198,10 @@ Search:
 
 	p = tea.NewProgram(model)
 	rawModel, err = p.Run()
+	if errors.Is(err, tea.ErrInterrupted) {
+		log.Info("Search aborted by user")
+		return
+	}
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -199,7 +245,7 @@ Search:
 	request.OrderBy = finalModel.OrderBy()
 	request.UnreadSubmissions = inkbunny.No
 	maxDownloads = finalModel.MaxDownloads.Value()
-	maxActiveStr = finalModel.MaxActive.Value()
+	maxActiveStr = strconv.Itoa(finalModel.MaxActiveValue())
 	downloadDir = finalModel.DownloadDirectoryValue()
 	downloadPath = finalModel.DownloadPatternValue()
 	downloadCaption = finalModel.DownloadCaption
@@ -399,8 +445,18 @@ Process:
 		}
 		downloadModel := uitui.NewDownloadModel(user, items, maxActive, toDownload, downloadCaption)
 		p := tea.NewProgram(downloadModel)
-		if _, err := p.Run(); err != nil {
-			log.Error("Failed to run downloader TUI", "err", err)
+		rawDownloadModel, runErr := p.Run()
+		if errors.Is(runErr, tea.ErrInterrupted) {
+			log.Info("Download aborted by user")
+			return
+		}
+		if runErr != nil {
+			log.Error("Failed to run downloader TUI", "err", runErr)
+			return
+		}
+		if finalDownloadModel, ok := rawDownloadModel.(*uitui.DownloadModel); ok && finalDownloadModel.Aborted {
+			log.Info("Download aborted by user")
+			return
 		}
 	}
 
