@@ -42,7 +42,6 @@ func RunTUI(config flags.Config) {
 
 		toDownload      int
 		downloadCaption bool
-		searches        []inkbunny.SubmissionSearchResponse
 		releaseStatus   apptypes.ReleaseStatus
 		store           *appstorage.StateStore
 		storedState     = appstorage.DefaultStoredState()
@@ -302,6 +301,7 @@ Process:
 	downloadDir = filepath.Clean(downloadDir)
 	downloadPath = appdownloads.NormalizePattern(downloadPath)
 
+	request.SID = user.SID
 	request.GetRID = inkbunny.Yes
 	if finalModel == nil {
 		if trimmed := strings.TrimSpace(request.Username); trimmed != "" {
@@ -328,28 +328,7 @@ Process:
 		goto Search
 	}
 
-	spinner.New().
-		Title("Searching...").
-		Action(func() {
-			searches = searches[:0]
-			for _, req := range requests {
-				search, searchErr := user.SearchSubmissions(req)
-				if searchErr != nil {
-					err = searchErr
-					return
-				}
-				searches = append(searches, search)
-			}
-		}).Run()
-	if err != nil {
-		if err, ok := errors.AsType[inkbunny.ErrorResponse](err); ok && err.Code != nil && *err.Code == inkbunny.ErrInvalidSessionID {
-			invalidateAuthSource(&config, source)
-			log.Warn("Session expired, please login again")
-			goto Login
-		}
-		log.Fatal("failed to search submissions", "err", err)
-	}
-	log.Infof("Search requests executed: %d", len(searches))
+	log.Infof("Search requests prepared: %d", len(requests))
 	if toDownload > 0 {
 		log.Infof("To download: %d", toDownload)
 	} else {
@@ -367,65 +346,66 @@ Process:
 	gather.Action(func() {
 		seenSubmissions := make(map[string]struct{})
 		seenFiles := make(map[string]struct{})
-		for _, search := range searches {
-			for page, pageErr := range search.AllPages() {
-				if pageErr != nil {
-					log.Error("Failed to search pages", "err", pageErr)
-					break
+		processDetails := func(details inkbunny.SubmissionDetailsResponse) bool {
+			pageCount++
+			for _, d := range details.Submissions {
+				submissionID := d.SubmissionID.String()
+				if _, ok := seenSubmissions[submissionID]; !ok {
+					seenSubmissions[submissionID] = struct{}{}
+					submissionCount++
 				}
-				details, detailsErr := page.Details()
-				if detailsErr != nil {
-					log.Error("Failed to get submission details", "err", detailsErr)
-					continue
+				gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
+
+				var keywords strings.Builder
+				for i, keyword := range d.Keywords {
+					if i > 0 {
+						keywords.WriteString(", ")
+					}
+					keywords.WriteString(keyword.KeywordName)
 				}
-				pageCount++
 
-				for _, d := range details.Submissions {
-					submissionID := d.SubmissionID.String()
-					if _, ok := seenSubmissions[submissionID]; !ok {
-						seenSubmissions[submissionID] = struct{}{}
-						submissionCount++
-					}
-					gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
-
-					var keywords strings.Builder
-					for i, keyword := range d.Keywords {
-						if i > 0 {
-							keywords.WriteString(", ")
-						}
-						keywords.WriteString(keyword.KeywordName)
-					}
-
-					for _, file := range d.Files {
-						key := submissionID + ":" + file.FileID.String()
-						if _, ok := seenFiles[key]; ok {
-							continue
-						}
-						if toDownload > 0 && len(items) >= toDownload {
-							break
-						}
-						seenFiles[key] = struct{}{}
-						fileCount++
-						gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
-
-						items = append(items, &uitui.DownloadItem{
-							SubmissionID: submissionID,
-							Title:        d.Title,
-							URL:          file.FileURLFull.String(),
-							Username:     d.Username,
-							FileName:     filepath.Base(file.FileName),
-							FileMD5:      file.FullFileMD5,
-							IsPublic:     d.Public.Bool(),
-							Keywords:     keywords.String(),
-							DownloadRoot: downloadDir,
-							Destinations: appdownloads.ResolveDestinations(downloadDir, downloadPath, d, file),
-							Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
-							Status:       uitui.StatusQueued,
-						})
+				for _, file := range d.Files {
+					key := submissionID + ":" + file.FileID.String()
+					if _, ok := seenFiles[key]; ok {
+						continue
 					}
 					if toDownload > 0 && len(items) >= toDownload {
-						break
+						return false
 					}
+					seenFiles[key] = struct{}{}
+					fileCount++
+					gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
+
+					items = append(items, &uitui.DownloadItem{
+						SubmissionID: submissionID,
+						Title:        d.Title,
+						URL:          file.FileURLFull.String(),
+						Username:     d.Username,
+						FileName:     filepath.Base(file.FileName),
+						FileMD5:      file.FullFileMD5,
+						IsPublic:     d.Public.Bool(),
+						Keywords:     keywords.String(),
+						DownloadRoot: downloadDir,
+						Destinations: appdownloads.ResolveDestinations(downloadDir, downloadPath, d, file),
+						Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
+						Status:       uitui.StatusQueued,
+					})
+				}
+				if toDownload > 0 && len(items) >= toDownload {
+					return false
+				}
+			}
+			return true
+		}
+
+		for _, req := range requests {
+			for details, detailsErr := range req.AllDetails(inkbunny.SubmissionDetailsRequest{}) {
+				if detailsErr != nil {
+					err = detailsErr
+					return
+				}
+				if !processDetails(details) {
+					break
 				}
 				if toDownload > 0 && len(items) >= toDownload {
 					break
@@ -436,6 +416,14 @@ Process:
 			}
 		}
 	}).Run()
+	if err != nil {
+		if err, ok := errors.AsType[inkbunny.ErrorResponse](err); ok && err.Code != nil && *err.Code == inkbunny.ErrInvalidSessionID {
+			invalidateAuthSource(&config, source)
+			log.Warn("Session expired, please login again")
+			goto Login
+		}
+		log.Fatal("failed to gather submissions", "err", err)
+	}
 
 	if len(items) == 0 {
 		log.Info("No files to download.")

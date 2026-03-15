@@ -35,7 +35,7 @@ func RunHeadless(config flags.Config) {
 		toDownload      int
 		downloadCaption bool
 		downloaded      atomic.Int64
-		search          inkbunny.SubmissionSearchResponse
+		firstPage       inkbunny.SubmissionSearchResponse
 	)
 
 Login:
@@ -92,6 +92,7 @@ Login:
 		}
 	}
 
+	request.SID = user.SID
 	request.GetRID = inkbunny.Yes
 
 	if request.Username != "" {
@@ -107,7 +108,14 @@ Login:
 	spinner.New().
 		Title("Searching...").
 		Action(func() {
-			search, err = user.SearchSubmissions(request)
+			for page, pageErr := range request.AllPages() {
+				if pageErr != nil {
+					err = pageErr
+					return
+				}
+				firstPage = page
+				return
+			}
 		}).Run()
 	if err != nil {
 		if err, ok := errors.AsType[inkbunny.ErrorResponse](err); ok && err.Code != nil && *err.Code == inkbunny.ErrInvalidSessionID {
@@ -117,7 +125,7 @@ Login:
 		}
 		log.Fatal("failed to search submissions", "err", err)
 	}
-	log.Infof("Total number of submissions: %d", search.ResultsCountAll)
+	log.Infof("Total number of submissions: %d", firstPage.ResultsCountAll)
 	if toDownload > 0 {
 		log.Infof("To download: %d", toDownload)
 	} else {
@@ -210,13 +218,24 @@ Login:
 
 	go func() {
 		defer downloader.Close()
-		for page, err := range search.AllPages() {
-			if err != nil {
-				log.Error("Failed to search submissions", "err", err)
+		details, err := firstPage.Details()
+		if err != nil {
+			log.Error("Failed to get submission details", "err", err)
+		} else {
+			downloader.Add(details.Submissions...)
+			if toDownload > 0 && int(downloaded.Load()) >= toDownload {
+				return
 			}
-			details, err := page.Details()
-			if err != nil {
-				log.Error("Failed to get submission details", "err", err)
+		}
+
+		followUpRequest := request
+		followUpRequest.GetRID = inkbunny.No
+		followUpRequest.RID = firstPage.RID
+		followUpRequest.Page = firstPage.Page + 1
+
+		for details, detailsErr := range followUpRequest.AllDetails(inkbunny.SubmissionDetailsRequest{}) {
+			if detailsErr != nil {
+				log.Error("Failed to get submission details", "err", detailsErr)
 				continue
 			}
 			downloader.Add(details.Submissions...)
