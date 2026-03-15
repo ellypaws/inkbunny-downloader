@@ -187,6 +187,7 @@ func NewModel(
 
 	poolID := textinput.New()
 	poolID.Placeholder = "12345"
+	poolID.Width = 8
 	poolID.Validate = func(s string) error {
 		if s == "" {
 			return nil
@@ -198,6 +199,8 @@ func NewModel(
 
 	resultsPerPage := textinput.New()
 	resultsPerPage.Placeholder = strconv.Itoa(defaultSearchPerPage)
+	resultsPerPage.CharLimit = 3
+	resultsPerPage.Width = 3
 	resultsPerPage.Validate = func(s string) error {
 		if s == "" {
 			return nil
@@ -215,10 +218,12 @@ func NewModel(
 
 	maxDownloads := textinput.New()
 	maxDownloads.Placeholder = "Unlimited"
+	maxDownloads.Width = 10
 	maxDownloads.Prompt = ""
 
 	maxActive := textinput.New()
 	maxActive.Placeholder = strconv.Itoa(defaultMaxActive)
+	maxActive.Width = 3
 	maxActive.Validate = func(s string) error {
 		if s == "" {
 			return nil
@@ -401,8 +406,11 @@ func (m *Model) ResultsPerPageValue() int {
 		return defaultSearchPerPage
 	}
 	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed <= 0 {
+	if err != nil {
 		return defaultSearchPerPage
+	}
+	if parsed < 1 {
+		return 1
 	}
 	if parsed > 100 {
 		return 100
