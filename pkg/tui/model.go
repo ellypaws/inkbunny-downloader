@@ -171,6 +171,10 @@ func NewModel(
 ) *Model {
 	zm := zone.New()
 	defaultMaxActive := min(max(1, runtime.NumCPU()/6), 6)
+	userRatingsMask := normalizedRatingsMask("")
+	if user != nil {
+		userRatingsMask = normalizedRatingsMask(user.Ratings.String())
+	}
 
 	searchWords := textinput.New()
 	searchWords.Placeholder = "Separate words with spaces."
@@ -219,6 +223,19 @@ func NewModel(
 	maxDownloads := textinput.New()
 	maxDownloads.Placeholder = "Unlimited"
 	maxDownloads.Width = 10
+	maxDownloads.Validate = func(s string) error {
+		if s == "" {
+			return nil
+		}
+		value, err := strconv.Atoi(s)
+		if err != nil {
+			return err
+		}
+		if value < 0 {
+			return strconv.ErrRange
+		}
+		return nil
+	}
 	maxDownloads.Prompt = ""
 
 	maxActive := textinput.New()
@@ -292,11 +309,11 @@ func NewModel(
 		ActiveField:     FieldSearchWords,
 		FocusIndex:      0,
 
-		RatingGeneral:        true,
-		RatingNudity:         true,
-		RatingMildViolence:   true,
-		RatingSexual:         true,
-		RatingStrongViolence: true,
+		RatingGeneral:        userRatingsMask[0] == '1',
+		RatingNudity:         userRatingsMask[1] == '1',
+		RatingMildViolence:   userRatingsMask[2] == '1',
+		RatingSexual:         userRatingsMask[3] == '1',
+		RatingStrongViolence: userRatingsMask[4] == '1',
 
 		TypeAny: true,
 	}
@@ -416,6 +433,41 @@ func (m *Model) ResultsPerPageValue() int {
 		return 100
 	}
 	return parsed
+}
+
+func (m *Model) MaxDownloadsValue() int {
+	value := strings.TrimSpace(m.MaxDownloads.Value())
+	if value == "" {
+		return 0
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
+}
+
+func (m *Model) RatingsMaskValue() string {
+	mask := []byte("00000")
+	if m.RatingGeneral {
+		mask[0] = '1'
+	}
+	if m.RatingNudity {
+		mask[1] = '1'
+	}
+	if m.RatingMildViolence {
+		mask[2] = '1'
+	}
+	if m.RatingSexual {
+		mask[3] = '1'
+	}
+	if m.RatingStrongViolence {
+		mask[4] = '1'
+	}
+	if !strings.ContainsRune(string(mask), '1') {
+		mask[0] = '1'
+	}
+	return string(mask)
 }
 
 func (m *Model) PersistentSettings() apptypes.AppSettings {
@@ -575,6 +627,21 @@ func normalizeUserFilters(raw string) []string {
 		values = append(values, trimmed)
 	}
 	return values
+}
+
+func normalizedRatingsMask(mask string) string {
+	base := strings.TrimSpace(mask)
+	if base == "" {
+		return "10000"
+	}
+	if len(base) < 5 {
+		base += strings.Repeat("0", 5-len(base))
+	}
+	base = base[:5]
+	if !strings.ContainsRune(base, '1') {
+		return "10000"
+	}
+	return base
 }
 
 func currentUserToken(raw string) string {

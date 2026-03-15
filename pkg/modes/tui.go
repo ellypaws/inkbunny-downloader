@@ -45,6 +45,7 @@ func RunTUI(config flags.Config) {
 		releaseStatus   apptypes.ReleaseStatus
 		store           *appstorage.StateStore
 		storedState     = appstorage.DefaultStoredState()
+		ratingsChanged  bool
 		err             error
 	)
 
@@ -233,6 +234,18 @@ Search:
 		return
 	}
 
+	ratingsChanged, err = syncUserRatingsMask(user, finalModel.RatingsMaskValue())
+	if err != nil {
+		log.Error("failed to update ratings", "err", err)
+		goto Search
+	}
+	if ratingsChanged {
+		keywordSuggestionsCache = flight.NewCache(func(_ context.Context, query string) ([]inkbunny.KeywordAutocomplete, error) {
+			return keywordCache(user.Ratings)(query)
+		})
+		model.KeywordCache = &keywordSuggestionsCache
+	}
+
 	request.Text = finalModel.SearchWords.Value()
 	artistFilters = finalModel.ArtistFilters()
 	favoriteFilters = finalModel.FavoriteFilters()
@@ -244,7 +257,10 @@ Search:
 	request.Scraps = finalModel.Scraps()
 	request.OrderBy = finalModel.OrderBy()
 	request.UnreadSubmissions = inkbunny.No
-	maxDownloads = finalModel.MaxDownloads.Value()
+	maxDownloads = ""
+	if value := finalModel.MaxDownloadsValue(); value > 0 {
+		maxDownloads = strconv.Itoa(value)
+	}
 	maxActiveStr = strconv.Itoa(finalModel.MaxActiveValue())
 	downloadDir = finalModel.DownloadDirectoryValue()
 	downloadPath = finalModel.DownloadPatternValue()
@@ -289,9 +305,11 @@ Process:
 	}
 
 	if maxDownloads != "" {
-		toDownload, err = strconv.Atoi(maxDownloads)
-		if err != nil {
-			log.Fatal(err)
+		parsed, parseErr := strconv.Atoi(maxDownloads)
+		if parseErr != nil {
+			log.Warn("ignoring invalid max downloads value", "value", maxDownloads, "err", parseErr)
+		} else if parsed > 0 {
+			toDownload = parsed
 		}
 	}
 	downloadDir = strings.TrimSpace(downloadDir)

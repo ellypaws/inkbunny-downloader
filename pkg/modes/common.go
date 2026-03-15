@@ -56,6 +56,52 @@ func saveSession(user *inkbunny.User) error {
 	return os.WriteFile(sidFile, bin, 0o600)
 }
 
+func normalizedRatingsMask(mask string) string {
+	base := strings.TrimSpace(mask)
+	if base == "" {
+		return "10000"
+	}
+	if len(base) < 5 {
+		base += strings.Repeat("0", 5-len(base))
+	}
+	base = base[:5]
+	if !strings.Contains(base, "1") {
+		return "10000"
+	}
+	return base
+}
+
+func syncUserRatingsMask(user *inkbunny.User, mask string) (bool, error) {
+	if user == nil || user.SID == "" {
+		return false, nil
+	}
+
+	targetMask := normalizedRatingsMask(mask)
+	currentMask := normalizedRatingsMask(user.Ratings.String())
+	if targetMask == currentMask {
+		return false, nil
+	}
+
+	ratings := inkbunny.ParseMask(targetMask)
+	var err error
+	spinner.New().
+		Title("Updating ratings...").
+		Action(func() {
+			err = user.ChangeRatings(ratings)
+		}).Run()
+	if err != nil {
+		return false, err
+	}
+
+	user.Ratings = ratings
+	if shouldPersistSession(user) {
+		if err := saveSession(user); err != nil {
+			log.Warn("failed to save session after ratings update", "err", err)
+		}
+	}
+	return true, nil
+}
+
 func digitCount(i int) int {
 	if i == 0 {
 		return 1
