@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   collectUnknownDownloadTokens,
@@ -18,11 +18,6 @@ type DownloadPatternInputProps = {
   onCommit: (value: string) => void;
 };
 
-type DraftState = {
-  value: string;
-  syncedValue: string;
-};
-
 const MIN_EDITOR_HEIGHT = 44;
 const MAX_EDITOR_HEIGHT = 144;
 
@@ -31,30 +26,13 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mirrorRef = useRef<HTMLDivElement | null>(null);
   const nextSelectionRef = useRef<number | null>(null);
-  const [draftState, setDraftState] = useState<DraftState>(() => ({
-    value: externalValue,
-    syncedValue: externalValue,
-  }));
+  const [draftValue, setDraftValue] = useState<string | null>(null);
   const [tokensExpanded, setTokensExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const draft = draftState.value;
-
-  useEffect(() => {
-    setDraftState((current) => {
-      const isDirty = current.value !== current.syncedValue;
-      const nextValue = isDirty ? current.value : externalValue;
-      if (
-        current.value === nextValue &&
-        current.syncedValue === externalValue
-      ) {
-        return current;
-      }
-      return {
-        value: nextValue,
-        syncedValue: externalValue,
-      };
-    });
-  }, [externalValue]);
+  const draft =
+    draftValue !== null && draftValue !== externalValue
+      ? draftValue
+      : externalValue;
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -98,33 +76,24 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     [draft],
   );
   const isModified = useMemo(
-    () => normalizePatternDraft(draft) !== normalizePatternDraft(props.value),
-    [draft, props.value],
+    () => normalizePatternDraft(draft) !== normalizePatternDraft(externalValue),
+    [draft, externalValue],
   );
 
   function handleChange(value: string) {
-    setDraftState((current) => ({
-      value: normalizeEditorText(value),
-      syncedValue: current.syncedValue,
-    }));
+    setDraftValue(normalizeEditorText(value));
   }
 
   function handleSave() {
     const nextValue = normalizePatternDraft(draft);
-    setDraftState({
-      value: nextValue,
-      syncedValue: nextValue,
-    });
+    setDraftValue(nextValue === externalValue ? null : nextValue);
     if (nextValue !== normalizePatternDraft(props.value)) {
       props.onCommit(nextValue);
     }
   }
 
   function handleUndo() {
-    setDraftState({
-      value: externalValue,
-      syncedValue: externalValue,
-    });
+    setDraftValue(null);
     const nextValue = externalValue;
     nextSelectionRef.current = nextValue.length;
   }
@@ -133,12 +102,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     const textarea = textareaRef.current;
     const tokenText = `{${tokenName}}`;
     if (!textarea) {
-      setDraftState((current) => {
-        return {
-          value: `${current.value}${tokenText}`,
-          syncedValue: current.syncedValue,
-        };
-      });
+      setDraftValue(`${draft}${tokenText}`);
       return;
     }
 
@@ -146,10 +110,7 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
     const end = textarea.selectionEnd ?? draft.length;
     const nextValue = `${draft.slice(0, start)}${tokenText}${draft.slice(end)}`;
     nextSelectionRef.current = start + tokenText.length;
-    setDraftState((current) => ({
-      value: nextValue,
-      syncedValue: current.syncedValue,
-    }));
+    setDraftValue(nextValue);
   }
 
   return (

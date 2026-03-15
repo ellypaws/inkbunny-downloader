@@ -3,7 +3,7 @@
 import { Brush, Image, Video } from "lucide-react";
 import { gsap } from "gsap";
 import { motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 
 import { resolveMediaURL } from "../lib/wails";
 
@@ -195,7 +195,7 @@ export default function FolderPopout({
                   ? `${card.sources[0] ?? "image"}-${index}`
                   : `${card.placeholder}-${index}`
               }
-              ref={(node) => {
+              ref={(node: HTMLDivElement | null) => {
                 cardRefs.current[index] = node;
               }}
               className="absolute left-1/2 top-0.5 origin-bottom overflow-hidden rounded-[4px] border border-black/10 bg-white shadow-sm shadow-black/10 ring-1 ring-black/8 dark:border-white/10 dark:bg-neutral-900 dark:shadow-white/8 dark:ring-white/8"
@@ -231,7 +231,7 @@ export default function FolderPopout({
                   current === index ? null : current,
                 );
               }}
-              onPointerDown={(event) => {
+              onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
                 if (event.pointerType === "mouse") {
                   return;
                 }
@@ -239,7 +239,7 @@ export default function FolderPopout({
               }}
             >
               <div
-                ref={(node) => {
+                ref={(node: HTMLDivElement | null) => {
                   cardInnerRefs.current[index] = node;
                 }}
                 className="h-full w-full"

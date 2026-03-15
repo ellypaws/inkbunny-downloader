@@ -44,7 +44,7 @@ export default function ElasticSlider({
     }
   }, [defaultValue, value]);
 
-  useMotionValueEvent(clientX, "change", (latest) => {
+  useMotionValueEvent(clientX, "change", (latest: number) => {
     if (!sliderRef.current) {
       return;
     }

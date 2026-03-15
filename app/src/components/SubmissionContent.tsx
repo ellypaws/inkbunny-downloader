@@ -22,6 +22,18 @@ type SubmissionBodySelection = {
   text?: string;
 };
 
+type SubmissionContentState = {
+  requestKey: string;
+  description: SubmissionDescriptionPayload | null;
+  loading: boolean;
+  loadError: string;
+};
+
+type ResolvedHtmlState = {
+  htmlKey: string;
+  value?: string;
+};
+
 const ALLOWED_TAGS = new Set([
   "a",
   "b",
@@ -38,6 +50,7 @@ const ALLOWED_TAGS = new Set([
   "p",
   "pre",
   "s",
+  "source",
   "span",
   "strike",
   "strong",
@@ -45,6 +58,7 @@ const ALLOWED_TAGS = new Set([
   "sup",
   "u",
   "ul",
+  "video",
 ]);
 
 const BLOCKED_TAGS = new Set([
@@ -63,87 +77,114 @@ const BLOCKED_TAGS = new Set([
   "object",
   "script",
   "select",
-  "source",
   "style",
   "svg",
   "textarea",
   "title",
-  "video",
 ]);
 
 export const SubmissionContent = memo(function SubmissionContent(
   props: SubmissionContentProps,
 ) {
-  const [description, setDescription] =
-    useState<SubmissionDescriptionPayload | null>(null);
-  const [resolvedHtml, setResolvedHtml] = useState<string>();
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const {
+    submissionId,
+    mode,
+    className,
+    style,
+    loadingLabel,
+    emptyLabel,
+    interactive,
+    onDescriptionChange,
+  } = props;
+  const requestKey = `${submissionId}:${mode}`;
+  const [contentState, setContentState] = useState<SubmissionContentState>(() => ({
+    requestKey,
+    description: null,
+    loading: true,
+    loadError: "",
+  }));
+  const [resolvedHtmlState, setResolvedHtmlState] = useState<ResolvedHtmlState>({
+    htmlKey: "",
+  });
+  const description =
+    contentState.requestKey === requestKey ? contentState.description : null;
+  const loading =
+    contentState.requestKey === requestKey ? contentState.loading : true;
+  const loadError =
+    contentState.requestKey === requestKey ? contentState.loadError : "";
 
   useEffect(() => {
     let cancelled = false;
 
-    setDescription(null);
-    setResolvedHtml(undefined);
-    setLoading(true);
-    setLoadError("");
-
     void backend
-      .getSubmissionDescription(props.submissionId)
+      .getSubmissionDescription(submissionId)
       .then((nextDescription) => {
         if (cancelled) {
           return;
         }
-        setDescription(nextDescription);
-        setLoading(false);
+        setContentState({
+          requestKey,
+          description: nextDescription,
+          loading: false,
+          loadError: "",
+        });
       })
       .catch((error: unknown) => {
         if (cancelled) {
           return;
         }
-        setDescription(null);
-        setResolvedHtml(undefined);
-        setLoading(false);
-        setLoadError(
-          error instanceof Error && error.message.trim()
-            ? error.message.trim()
-            : `Could not load ${props.mode}.`,
-        );
+        setContentState({
+          requestKey,
+          description: null,
+          loading: false,
+          loadError:
+            error instanceof Error && error.message.trim()
+              ? error.message.trim()
+              : `Could not load ${mode}.`,
+        });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [props.mode, props.submissionId]);
+  }, [mode, requestKey, submissionId]);
 
   useEffect(() => {
-    props.onDescriptionChange?.(description);
-  }, [description, props.onDescriptionChange]);
+    onDescriptionChange?.(description);
+  }, [description, onDescriptionChange]);
 
-  const selection = selectSubmissionBody(description, props.mode);
+  const selection = selectSubmissionBody(description, mode);
+  const htmlKey = selection.html ? `${requestKey}:${selection.html}` : "";
+  const resolvedHtml =
+    htmlKey && resolvedHtmlState.htmlKey === htmlKey
+      ? resolvedHtmlState.value
+      : undefined;
 
   useEffect(() => {
     let cancelled = false;
     const html = selection.html;
 
     if (!html) {
-      setResolvedHtml(undefined);
       return;
     }
 
     const documentFragment = new DOMParser().parseFromString(html, "text/html");
     const mediaNodes = Array.from(
-      documentFragment.querySelectorAll("img, source"),
+      documentFragment.querySelectorAll("img, source, video"),
     );
 
     for (const node of mediaNodes) {
       const src = node.getAttribute("src");
       const srcSet = node.getAttribute("srcset");
+      const poster = node.getAttribute("poster");
       if (src) {
         node.setAttribute("src", resolveMediaURL(src) ?? src);
       }
       if (srcSet) {
         node.setAttribute("srcset", resolveMediaSrcSet(srcSet) ?? srcSet);
+      }
+      if (poster) {
+        node.setAttribute("poster", resolveMediaURL(poster) ?? poster);
       }
     }
 
@@ -159,7 +200,10 @@ export const SubmissionContent = memo(function SubmissionContent(
         return;
       }
       sanitizeSubmissionHTML(documentFragment.body);
-      setResolvedHtml(documentFragment.body.innerHTML);
+      setResolvedHtmlState({
+        htmlKey,
+        value: documentFragment.body.innerHTML,
+      });
     };
 
     if (userIconImages.length === 0) {
@@ -181,12 +225,12 @@ export const SubmissionContent = memo(function SubmissionContent(
     return () => {
       cancelled = true;
     };
-  }, [selection.html]);
+  }, [htmlKey, selection.html]);
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
 
-    if (!props.interactive) {
+    if (!interactive) {
       return;
     }
 
@@ -200,22 +244,25 @@ export const SubmissionContent = memo(function SubmissionContent(
   };
 
   return (
-    <div className={props.className} style={props.style} onClick={handleClick}>
+    <div className={className} style={style} onClick={handleClick}>
       {loading ? (
         <div className="inline-flex items-center gap-2 text-[var(--theme-subtle)]">
           <LoaderCircle size={14} className="animate-spin" />
-          <span>{props.loadingLabel ?? `Loading ${props.mode}`}</span>
+          <span>{loadingLabel ?? `Loading ${mode}`}</span>
         </div>
       ) : resolvedHtml ? (
-        <div dangerouslySetInnerHTML={{ __html: resolvedHtml }} />
+        <div
+          className="[&_img]:h-auto [&_img]:max-w-full [&_video]:h-auto [&_video]:max-w-full"
+          dangerouslySetInnerHTML={{ __html: resolvedHtml }}
+        />
       ) : selection.text ? (
         <p className="whitespace-pre-wrap">{selection.text}</p>
       ) : loadError ? (
         <p className="theme-subtle">{loadError}</p>
       ) : (
         <p className="theme-subtle">
-          {props.emptyLabel ??
-            (props.mode === "writing"
+          {emptyLabel ??
+            (mode === "writing"
               ? "No writing available."
               : "No description available.")}
         </p>
@@ -292,6 +339,24 @@ function sanitizeNode(node: Node) {
   if (tag === "img" && !element.getAttribute("src")) {
     element.remove();
   }
+
+  if (tag === "source") {
+    if (element.parentElement?.tagName.toLowerCase() !== "video") {
+      element.remove();
+      return;
+    }
+    if (!element.getAttribute("src")) {
+      element.remove();
+    }
+  }
+
+  if (
+    tag === "video" &&
+    !element.getAttribute("src") &&
+    !element.querySelector("source[src]")
+  ) {
+    element.remove();
+  }
 }
 
 function sanitizeElementAttributes(element: HTMLElement, tag: string) {
@@ -339,6 +404,53 @@ function sanitizeElementAttributes(element: HTMLElement, tag: string) {
         continue;
       }
       if (key === "alt" || key === "title") {
+        continue;
+      }
+      element.removeAttribute(attribute.name);
+      continue;
+    }
+
+    if (tag === "video") {
+      if (key === "src" || key === "poster") {
+        if (isAllowedAssetURL(value)) {
+          element.setAttribute(key, value);
+        } else {
+          element.removeAttribute(attribute.name);
+        }
+        continue;
+      }
+      if (
+        key === "controls" ||
+        key === "autoplay" ||
+        key === "loop" ||
+        key === "muted" ||
+        key === "playsinline"
+      ) {
+        element.setAttribute(attribute.name, "");
+        continue;
+      }
+      if (key === "preload") {
+        if (value === "none" || value === "metadata" || value === "auto") {
+          element.setAttribute(attribute.name, value);
+        } else {
+          element.removeAttribute(attribute.name);
+        }
+        continue;
+      }
+      element.removeAttribute(attribute.name);
+      continue;
+    }
+
+    if (tag === "source") {
+      if (key === "src") {
+        if (isAllowedAssetURL(value)) {
+          element.setAttribute("src", value);
+        } else {
+          element.removeAttribute(attribute.name);
+        }
+        continue;
+      }
+      if (key === "type") {
         continue;
       }
       element.removeAttribute(attribute.name);

@@ -13,6 +13,7 @@ import {
   Search as SearchIcon,
   Square,
   Star,
+  Video,
 } from "lucide-react";
 import {
   useEffect,
@@ -23,9 +24,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type MouseEventHandler,
   type PointerEvent as ReactPointerEvent,
-  type TouchEvent as ReactTouchEvent,
   type UIEvent as ReactUIEvent,
-  type WheelEvent as ReactWheelEvent,
 } from "react";
 
 import {
@@ -34,7 +33,10 @@ import {
 } from "./ContextMenu";
 import ElasticSlider from "./ElasticSlider";
 import { LoadMoreControl, type LoadMoreControlState } from "./LoadMoreControl";
-import { SubmissionImageModal } from "./SubmissionImageModal";
+import {
+  SubmissionImageModal,
+  type SubmissionModalMediaItem,
+} from "./SubmissionImageModal";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import { accentClass } from "../lib/format";
 import {
@@ -164,6 +166,7 @@ const IDLE_DOWNLOAD_SUMMARY: SubmissionDownloadSummary = {
 };
 
 export function ResultsShowcase(props: ResultsShowcaseProps) {
+  const { onPanelPreviewImagesChange } = props;
   const panelAnimationRef = useRef<number | null>(null);
   const resultsScrollRef = useRef<HTMLDivElement | null>(null);
   const resultsGridMeasureRef = useRef<HTMLDivElement | null>(null);
@@ -456,8 +459,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       return;
     }
     reportedPanelPreviewImagesKeyRef.current = panelPreviewImagesKey;
-    props.onPanelPreviewImagesChange(panelPreviewImages);
-  }, [panelPreviewImages, panelPreviewImagesKey, props.onPanelPreviewImagesChange]);
+    onPanelPreviewImagesChange(panelPreviewImages);
+  }, [onPanelPreviewImagesChange, panelPreviewImages, panelPreviewImagesKey]);
 
   useEffect(() => {
     if (!activeModal) {
@@ -1290,12 +1293,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             ref={resultsScrollRef}
             onContextMenu={openGalleryContextMenu}
             onScroll={handleResultsScroll}
-            onWheelCapture={(_event: ReactWheelEvent<HTMLDivElement>) =>
-              markUserScrollIntent()
-            }
-            onTouchMoveCapture={(_event: ReactTouchEvent<HTMLDivElement>) =>
-              markUserScrollIntent()
-            }
+            onWheelCapture={() => markUserScrollIntent()}
+            onTouchMoveCapture={() => markUserScrollIntent()}
             onPointerDownCapture={handleResultsPointerDown}
             onKeyDownCapture={handleResultsKeyDown}
             className="h-[68vh] overflow-x-hidden overflow-y-auto sm:h-[75vh]"
@@ -1596,6 +1595,27 @@ function SubmissionPreview(props: {
     props.preferCustomThumbnails,
     props.preferredWidth,
   );
+  const videoSources =
+    props.variant === "full"
+      ? getSubmissionPrimaryVideoSources(props.submission)
+      : [];
+
+  if (videoSources.length > 0) {
+    return (
+      <SubmissionPreviewVideo
+        key={getSubmissionPreviewKey(
+          props.submission,
+          props.refreshToken,
+          props.preferCustomThumbnails,
+        )}
+        submission={props.submission}
+        sources={videoSources}
+        poster={sources[0] ?? null}
+        className={props.className}
+        refreshToken={props.refreshToken}
+      />
+    );
+  }
 
   if (sources.length === 0) {
     return (
@@ -1722,6 +1742,72 @@ function SubmissionDetails(props: {
   );
 }
 
+function SubmissionPreviewVideo(props: {
+  submission: SubmissionCard;
+  sources: PreviewSource[];
+  poster: PreviewSource | null;
+  className: string;
+  refreshToken: number;
+}) {
+  const sourcesKey = useMemo(
+    () =>
+      props.sources
+        .map((item) => `${item.src}|${item.srcSet ?? ""}`)
+        .join("||"),
+    [props.sources],
+  );
+  const previewKey = `${props.submission.submissionId}:${props.refreshToken}:${sourcesKey}`;
+
+  return <SubmissionPreviewVideoInner key={previewKey} {...props} />;
+}
+
+function SubmissionPreviewVideoInner(props: {
+  submission: SubmissionCard;
+  sources: PreviewSource[];
+  poster: PreviewSource | null;
+  className: string;
+  refreshToken: number;
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const source = props.sources[sourceIndex];
+
+  if (!source?.src) {
+    return props.poster?.src ? (
+      <SubmissionPreviewImage
+        submission={props.submission}
+        sources={[props.poster]}
+        alt={props.submission.title}
+        className={props.className}
+        sizes="100vw"
+        refreshToken={props.refreshToken}
+      />
+    ) : (
+      <PreviewFallback
+        submission={props.submission}
+        className={props.className}
+      />
+    );
+  }
+
+  return (
+    <video
+      key={`${props.submission.submissionId}-${props.refreshToken}-${sourceIndex}`}
+      src={source.src}
+      poster={props.poster?.src}
+      muted
+      loop
+      autoPlay
+      playsInline
+      preload="metadata"
+      aria-hidden="true"
+      onError={() => {
+        setSourceIndex((current) => current + 1);
+      }}
+      className={props.className}
+    />
+  );
+}
+
 function SubmissionPreviewImage(props: {
   submission: SubmissionCard;
   sources: PreviewSource[];
@@ -1763,14 +1849,15 @@ function SubmissionPreviewImage(props: {
 function getSubmissionModalMediaItems(
   submission: SubmissionCard,
   preferCustomThumbnails: boolean,
-) {
+): SubmissionModalMediaItem[] {
   const mediaFiles = submission.mediaFiles ?? [];
   if (mediaFiles.length > 0) {
     return mediaFiles.map((file, index) => {
       const thumbnailSources = dedupePreviewSources([
         ...getThumbnailFallbackSources(file, preferCustomThumbnails),
-        toPreviewSource(file.fullUrl),
+        toPreviewSourceIfImage(file.fullUrl),
       ]);
+      const kind = isVideoAsset(file) ? "video" : "image";
 
       return {
         key: file.fileId || `${submission.submissionId}-${index}`,
@@ -1778,7 +1865,11 @@ function getSubmissionModalMediaItems(
         label: `Page ${index + 1}`,
         fileName: file.fileName,
         mimeType: file.mimeType,
-        sources: getMediaFilePreviewSources(file, preferCustomThumbnails),
+        kind,
+        sources:
+          kind === "video"
+            ? getVideoPlaybackSources(file)
+            : getMediaFilePreviewSources(file, preferCustomThumbnails),
         thumbnailSources,
         thumbnail: thumbnailSources[0] ?? null,
       };
@@ -1787,8 +1878,9 @@ function getSubmissionModalMediaItems(
 
   const thumbnailSources = dedupePreviewSources([
     ...getThumbnailFallbackSources(submission, preferCustomThumbnails),
-    toPreviewSource(submission.fullUrl),
+    toPreviewSourceIfImage(submission.fullUrl),
   ]);
+  const kind = isVideoAsset(submission) ? "video" : "image";
 
   return [
     {
@@ -1797,10 +1889,14 @@ function getSubmissionModalMediaItems(
       label: "Page 1",
       fileName: submission.fileName,
       mimeType: submission.mimeType,
-      sources: getSubmissionModalPreviewSources(
-        submission,
-        preferCustomThumbnails,
-      ),
+      kind,
+      sources:
+        kind === "video"
+          ? getVideoPlaybackSources(submission)
+          : getSubmissionModalPreviewSources(
+              submission,
+              preferCustomThumbnails,
+            ),
       thumbnailSources,
       thumbnail: thumbnailSources[0] ?? null,
     },
@@ -1812,12 +1908,12 @@ function getSubmissionModalPreviewSources(
   preferCustomThumbnails: boolean,
 ) {
   return dedupePreviewSources([
-    toPreviewSource(submission.fullUrl),
-    toPreviewSource(submission.screenUrl),
-    toPreviewSource(submission.previewUrl),
+    toPreviewSourceIfImage(submission.fullUrl),
+    toPreviewSourceIfImage(submission.screenUrl),
+    toPreviewSourceIfImage(submission.previewUrl),
     getThumbnailPreviewSource(submission, preferCustomThumbnails),
-    toPreviewSource(submission.latestPreviewUrl),
-    toPreviewSource(submission.latestThumbnailUrl),
+    toPreviewSourceIfImage(submission.latestPreviewUrl),
+    toPreviewSourceIfImage(submission.latestThumbnailUrl),
   ]);
 }
 
@@ -1826,11 +1922,11 @@ function getMediaFilePreviewSources(
   preferCustomThumbnails: boolean,
 ) {
   return dedupePreviewSources([
-    toPreviewSource(file.fullUrl),
-    toPreviewSource(file.screenUrl),
-    toPreviewSource(file.previewUrl),
+    toPreviewSourceIfImage(file.fullUrl),
+    toPreviewSourceIfImage(file.screenUrl),
+    toPreviewSourceIfImage(file.previewUrl),
     getThumbnailPreviewSource(file, preferCustomThumbnails),
-    toPreviewSource(file.thumbnailUrl),
+    toPreviewSourceIfImage(file.thumbnailUrl),
   ]);
 }
 
@@ -1847,9 +1943,9 @@ function getPreviewSources(
       variant === "full",
       preferredWidth,
     ),
-    toPreviewSource(submission.latestPreviewUrl),
-    toPreviewSource(submission.latestThumbnailUrl),
-    toPreviewSource(submission.fullUrl),
+    toPreviewSourceIfImage(submission.latestPreviewUrl),
+    toPreviewSourceIfImage(submission.latestThumbnailUrl),
+    toPreviewSourceIfImage(submission.fullUrl),
   ]);
 }
 
@@ -1887,6 +1983,15 @@ type ThumbnailVariant = {
   width: number;
 };
 
+type VideoAssetLike = {
+  fileName?: string;
+  mimeType?: string;
+  latestMimeType?: string;
+  fullUrl?: string;
+  screenUrl?: string;
+  previewUrl?: string;
+};
+
 function getThumbnailPreviewSource(
   item: ThumbnailSourceInput,
   preferCustomThumbnails: boolean,
@@ -1905,7 +2010,7 @@ function getThumbnailPreviewSource(
     Math.ceil(preferredWidth),
   );
   if (!primary) {
-    return toPreviewSource(item.thumbnailUrl);
+    return toPreviewSourceIfImage(item.thumbnailUrl);
   }
 
   const srcSetVariants = variants
@@ -1920,7 +2025,7 @@ function getThumbnailPreviewSource(
       (variant) =>
         `${resolveMediaURL(variant.src) ?? variant.src} ${variant.width}w`,
     ),
-    includeFullFileURL && item.fullUrl
+    includeFullFileURL && item.fullUrl && !isVideoURL(item.fullUrl)
       ? `${resolveMediaURL(item.fullUrl) ?? item.fullUrl} ${Math.max(fullWidth + 1, 4096)}w`
       : null,
   ]
@@ -1945,8 +2050,8 @@ function getThumbnailFallbackSources(
       includeFullFileURL,
       preferredWidth,
     ),
-    toPreviewSource(item.screenUrl),
-    toPreviewSource(item.previewUrl),
+    toPreviewSourceIfImage(item.screenUrl),
+    toPreviewSourceIfImage(item.previewUrl),
   ]);
 }
 
@@ -2024,6 +2129,13 @@ function toPreviewSource(src?: string): PreviewSource | null {
   return { src: resolveMediaURL(src) ?? src };
 }
 
+function toPreviewSourceIfImage(src?: string): PreviewSource | null {
+  if (!src || isVideoURL(src)) {
+    return null;
+  }
+  return toPreviewSource(src);
+}
+
 function dedupePreviewSources(
   sources: Array<PreviewSource | null>,
 ) {
@@ -2094,6 +2206,22 @@ function SubmissionAuthorButton(props: {
   compact?: boolean;
   onContextMenu?: MouseEventHandler<HTMLButtonElement>;
 }) {
+  const avatarKey = [
+    props.submission.submissionId,
+    props.submission.userIconUrlLarge,
+    props.submission.userIconUrlMedium,
+    props.submission.userIconUrlSmall,
+  ].join("|");
+
+  return <SubmissionAuthorButtonInner key={avatarKey} {...props} />;
+}
+
+function SubmissionAuthorButtonInner(props: {
+  submission: SubmissionCard;
+  className?: string;
+  compact?: boolean;
+  onContextMenu?: MouseEventHandler<HTMLButtonElement>;
+}) {
   const preferredAvatarSrc =
     props.submission.userIconUrlMedium ||
     props.submission.userIconUrlSmall ||
@@ -2101,15 +2229,6 @@ function SubmissionAuthorButton(props: {
     DEFAULT_AVATAR_URL;
   const preferredAvatarSrcSet = buildAvatarSrcSet(props.submission);
   const [avatarErrored, setAvatarErrored] = useState(false);
-
-  useEffect(() => {
-    setAvatarErrored(false);
-  }, [
-    props.submission.submissionId,
-    props.submission.userIconUrlLarge,
-    props.submission.userIconUrlMedium,
-    props.submission.userIconUrlSmall,
-  ]);
 
   return (
     <button
@@ -2233,6 +2352,13 @@ function getPreviewFallbackContent(submission: SubmissionCard) {
     };
   }
 
+  if (isVideoAsset(submission)) {
+    return {
+      icon: <Video size={30} />,
+      label: "Video",
+    };
+  }
+
   return {
     icon: <File size={30} />,
     label: "File",
@@ -2315,6 +2441,84 @@ function getPanelItems(results: SubmissionCard[], startIndex: number) {
     Math.min(startIndex, results.length - PANEL_WINDOW_SIZE),
   );
   return results.slice(safeStart, safeStart + PANEL_WINDOW_SIZE);
+}
+
+function getSubmissionPrimaryVideoSources(submission: SubmissionCard) {
+  const primaryFile = submission.mediaFiles?.[0];
+  if (primaryFile && isVideoAsset(primaryFile)) {
+    return getVideoPlaybackSources(primaryFile);
+  }
+  if (isVideoAsset(submission)) {
+    return getVideoPlaybackSources(submission);
+  }
+  return [];
+}
+
+function getVideoPlaybackSources(
+  item: VideoAssetLike,
+) {
+  const treatPrimaryURLsAsVideo =
+    isVideoMimeType(item.mimeType || item.latestMimeType) ||
+    hasVideoExtension(item.fileName);
+
+  return dedupePreviewSources([
+    treatPrimaryURLsAsVideo
+      ? toPreviewSource(item.fullUrl)
+      : toPreviewSourceIfVideo(item.fullUrl),
+    treatPrimaryURLsAsVideo
+      ? toPreviewSource(item.screenUrl)
+      : toPreviewSourceIfVideo(item.screenUrl),
+    toPreviewSourceIfVideo(item.previewUrl),
+  ]);
+}
+
+function toPreviewSourceIfVideo(src?: string): PreviewSource | null {
+  if (!src || !isVideoURL(src)) {
+    return null;
+  }
+  return toPreviewSource(src);
+}
+
+function isVideoAsset(
+  item: VideoAssetLike,
+) {
+  return (
+    isVideoMimeType(item.mimeType || item.latestMimeType) ||
+    hasVideoExtension(item.fileName) ||
+    isVideoURL(item.fullUrl) ||
+    isVideoURL(item.screenUrl) ||
+    isVideoURL(item.previewUrl)
+  );
+}
+
+function isVideoMimeType(mimeType?: string) {
+  return (mimeType || "").toLowerCase().startsWith("video/");
+}
+
+function hasVideoExtension(value?: string) {
+  return /\.(mp4|webm|ogg|mov)(?:$|[?#])/i.test(value || "");
+}
+
+function isVideoURL(value?: string) {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value, window.location.origin);
+    if (hasVideoExtension(parsed.pathname)) {
+      return true;
+    }
+
+    const proxiedTarget = parsed.searchParams.get("url");
+    if (proxiedTarget) {
+      return isVideoURL(proxiedTarget);
+    }
+
+    return hasVideoExtension(parsed.href);
+  } catch {
+    return hasVideoExtension(value);
+  }
 }
 
 function selectPanelPreviewImages(

@@ -7,7 +7,7 @@ import {
   Shuffle,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   DEFAULT_AVATAR_URL,
@@ -84,12 +84,6 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
     !props.session.isGuest &&
     props.session.username !== "";
   const anyTypeSelected = props.searchParams.submissionTypes.length === 0;
-
-  useEffect(() => {
-    if (focusedField === null) {
-      setPinnedField(null);
-    }
-  }, [focusedField]);
 
   const ratingRows = useMemo(
     () =>

@@ -18,9 +18,7 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent,
-  type TouchEvent,
   type UIEvent,
-  type WheelEvent,
 } from "react";
 
 import ElasticSlider from "./ElasticSlider";
@@ -449,12 +447,8 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           <div
             ref={parentRef}
             onScroll={handleQueueScroll}
-            onWheelCapture={(_event: WheelEvent<HTMLDivElement>) =>
-              markUserScrollIntent()
-            }
-            onTouchMoveCapture={(_event: TouchEvent<HTMLDivElement>) =>
-              markUserScrollIntent()
-            }
+            onWheelCapture={() => markUserScrollIntent()}
+            onTouchMoveCapture={() => markUserScrollIntent()}
             onPointerDownCapture={handleQueuePointerDown}
             onKeyDownCapture={handleQueueKeyDown}
             className="theme-panel-muted h-[68vh] min-h-[22rem] overflow-y-auto rounded-toy-sm border p-1.5 backdrop-blur-md sm:h-[75vh] sm:min-h-[26rem] sm:p-2"

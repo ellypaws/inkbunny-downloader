@@ -68,7 +68,7 @@ export default function BubbleMenu({
   animationDuration = 0.5,
   staggerDelay = 0.12,
 }: BubbleMenuProps) {
-  const [showOverlay, setShowOverlay] = useState(open);
+  const [showOverlay, setShowOverlay] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   const bubblesRef = useRef<(HTMLButtonElement | null)[]>([]);
   const labelRefs = useRef<(HTMLSpanElement | null)[]>([]);
@@ -100,11 +100,16 @@ export default function BubbleMenu({
     [items],
   );
   const useCenteredLayout = menuItems.length <= 3;
+  const isOverlayVisible = open || showOverlay;
 
   useEffect(() => {
-    if (open) {
-      setShowOverlay(true);
+    if (!open) {
+      return;
     }
+    const frame = window.requestAnimationFrame(() => {
+      setShowOverlay(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
   useEffect(() => {
@@ -206,7 +211,7 @@ export default function BubbleMenu({
     const previousIds = previousItemIdsRef.current;
     previousItemIdsRef.current = items.map((item) => item.id);
 
-    if (!open || !showOverlay) {
+    if (!open || !isOverlayVisible) {
       return;
     }
 
@@ -261,9 +266,9 @@ export default function BubbleMenu({
           0.1,
         );
     }
-  }, [items, menuItems, open, showOverlay]);
+  }, [isOverlayVisible, items, menuItems, open]);
 
-  if (!showOverlay) {
+  if (!isOverlayVisible) {
     return null;
   }
 

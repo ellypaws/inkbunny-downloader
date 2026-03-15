@@ -143,6 +143,10 @@ const fontFamilyOptions: Record<
 };
 
 export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
+  return <SubmissionWritingReaderInner key={props.submissionId} {...props} />;
+}
+
+function SubmissionWritingReaderInner(props: SubmissionWritingReaderProps) {
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
   const [readerWidth, setReaderWidth] = useState(DEFAULT_READER_WIDTH);
   const [background, setBackground] = useState<ReaderBackground>("white");
@@ -154,14 +158,6 @@ export function SubmissionWritingReader(props: SubmissionWritingReaderProps) {
     null,
   );
   const readerFrameRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setFontSize(DEFAULT_FONT_SIZE);
-    setReaderWidth(DEFAULT_READER_WIDTH);
-    setBackground("white");
-    setFontFamily("georgia");
-    setOpenFontGroup(null);
-  }, [props.submissionId]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {

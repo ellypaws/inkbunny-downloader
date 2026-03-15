@@ -15,9 +15,9 @@ export function StarBackground(props: StarBackgroundProps) {
     () =>
       Array.from({ length: 40 }, (_, index) => ({
         id: index,
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        size: 6 + Math.random() * 10,
+        left: `${seededUnit(index, 1) * 100}%`,
+        top: `${seededUnit(index, 2) * 100}%`,
+        size: 6 + seededUnit(index, 3) * 10,
         reverse: index % 2 === 0,
       })),
     [],
@@ -93,4 +93,9 @@ export function StarBackground(props: StarBackgroundProps) {
       </div>
     </>
   );
+}
+
+function seededUnit(index: number, salt: number) {
+  const value = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+  return value - Math.floor(value);
 }

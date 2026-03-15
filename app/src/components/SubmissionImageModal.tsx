@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Square,
   Star,
+  Video,
   X,
 } from "lucide-react";
 import { gsap } from "gsap";
@@ -42,6 +43,7 @@ export type SubmissionModalMediaItem = {
   label: string;
   fileName?: string;
   mimeType?: string;
+  kind: "image" | "video";
   sources: SubmissionModalPreviewSource[];
   thumbnailSources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
@@ -63,6 +65,7 @@ type SubmissionImageModalProps = {
 
 export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const keywordListRef = useRef<HTMLDivElement | null>(null);
+  const submissionKey = props.submission.submissionId;
   const hasMultipleItems = props.items.length > 1;
   const modalRootRef = useRef<HTMLDivElement | null>(null);
   const panelShellRef = useRef<HTMLDivElement | null>(null);
@@ -85,36 +88,64 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     () => buildAvatarSrcSet(props.submission),
     [props.submission],
   );
-  const [avatarIndex, setAvatarIndex] = useState(0);
-  const [submissionDescription, setSubmissionDescription] =
-    useState<SubmissionDescription | null>(null);
-  const [keywordsExpanded, setKeywordsExpanded] = useState(false);
-  const [keywordsOverflowing, setKeywordsOverflowing] = useState(false);
+  const [avatarState, setAvatarState] = useState(() => ({
+    submissionKey,
+    index: 0,
+  }));
+  const [descriptionState, setDescriptionState] = useState(() => ({
+    submissionKey,
+    value: null as SubmissionDescription | null,
+  }));
+  const [keywordsExpandedState, setKeywordsExpandedState] = useState(() => ({
+    submissionKey,
+    value: false,
+  }));
+  const [keywordsOverflowState, setKeywordsOverflowState] = useState(() => ({
+    key: "",
+    value: false,
+  }));
+  const avatarIndex =
+    avatarState.submissionKey === submissionKey ? avatarState.index : 0;
+  const submissionDescription =
+    descriptionState.submissionKey === submissionKey
+      ? descriptionState.value
+      : null;
+  const keywordsExpanded =
+    keywordsExpandedState.submissionKey === submissionKey
+      ? keywordsExpandedState.value
+      : false;
   const avatarSrc = avatarCandidates[avatarIndex] ?? DEFAULT_AVATAR_URL;
   const isSidebarRendered = sidebarMode !== "closed";
-  const submissionKeywords = submissionDescription?.keywords ?? [];
-
-  useEffect(() => {
-    setAvatarIndex(0);
-    setSubmissionDescription(null);
-    setKeywordsExpanded(false);
-    setKeywordsOverflowing(false);
-  }, [props.submission.submissionId]);
+  const submissionKeywords = useMemo(
+    () => submissionDescription?.keywords ?? [],
+    [submissionDescription],
+  );
+  const keywordsOverflowKey = useMemo(
+    () =>
+      `${submissionKey}:${sidebarMode}:${submissionKeywords
+        .map((keyword) => `${keyword.keywordId}:${keyword.keywordName}`)
+        .join("|")}`,
+    [sidebarMode, submissionKey, submissionKeywords],
+  );
+  const keywordsOverflowing =
+    keywordsOverflowState.key === keywordsOverflowKey
+      ? keywordsOverflowState.value
+      : false;
 
   useEffect(() => {
     const keywordList = keywordListRef.current;
     if (!keywordList) {
-      setKeywordsOverflowing(false);
       return;
     }
 
     const updateOverflow = () => {
-      setKeywordsOverflowing(
-        keywordList.scrollHeight > KEYWORD_COLLAPSED_MAX_HEIGHT_PX + 1,
-      );
+      setKeywordsOverflowState({
+        key: keywordsOverflowKey,
+        value: keywordList.scrollHeight > KEYWORD_COLLAPSED_MAX_HEIGHT_PX + 1,
+      });
     };
 
-    updateOverflow();
+    const frame = window.requestAnimationFrame(updateOverflow);
 
     const resizeObserver = new ResizeObserver(() => {
       updateOverflow();
@@ -122,9 +153,10 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     resizeObserver.observe(keywordList);
 
     return () => {
+      window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
     };
-  }, [submissionKeywords, sidebarMode]);
+  }, [keywordsOverflowKey]);
 
   useEffect(() => {
     const navigationPill = document.querySelector<HTMLElement>(
@@ -480,7 +512,10 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     if (sidebarMode !== "closing") {
       return;
     }
-    runSidebarCloseAnimation();
+    const frame = window.requestAnimationFrame(() => {
+      runSidebarCloseAnimation();
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [runSidebarCloseAnimation, sidebarMode]);
 
   return (
@@ -491,7 +526,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       onClick={props.onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`${props.submission.title} image viewer`}
+      aria-label={`${props.submission.title} media viewer`}
     >
       <div className="flex h-full w-full flex-col md:flex-row">
         <div
@@ -541,14 +576,15 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                 decoding="sync"
                 fetchPriority="high"
                 onError={(event) => {
-                  setAvatarIndex((current) => {
-                    if (current < avatarCandidates.length - 1) {
-                      return current + 1;
-                    }
-                    event.currentTarget.src = DEFAULT_AVATAR_URL;
-                    event.currentTarget.srcset = "";
-                    return current;
-                  });
+                  if (avatarIndex < avatarCandidates.length - 1) {
+                    setAvatarState({
+                      submissionKey,
+                      index: avatarIndex + 1,
+                    });
+                    return;
+                  }
+                  event.currentTarget.src = DEFAULT_AVATAR_URL;
+                  event.currentTarget.srcset = "";
                 }}
                 className="h-12 w-12 shrink-0 rounded-full border border-[var(--theme-border-soft)] bg-white object-cover"
               />
@@ -602,7 +638,12 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               submissionId={props.submission.submissionId}
               mode="description"
               interactive
-              onDescriptionChange={setSubmissionDescription}
+              onDescriptionChange={(description) => {
+                setDescriptionState({
+                  submissionKey,
+                  value: description,
+                });
+              }}
             />
             {submissionKeywords.length > 0 ? (
               <div className="sim-panel-item mt-auto pt-4">
@@ -652,7 +693,10 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setKeywordsExpanded((current) => !current);
+                      setKeywordsExpandedState({
+                        submissionKey,
+                        value: !keywordsExpanded,
+                      });
                     }}
                     className="mt-2 text-[10px] font-medium text-[var(--theme-info)] transition-colors hover:text-[var(--theme-info-strong)]"
                   >
@@ -765,6 +809,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
 
             <SubmissionModalImage
               submission={props.submission}
+              kind={props.item.kind}
               sources={props.item.sources}
               thumbnail={props.item.thumbnail}
               alt={props.item.alt}
@@ -777,7 +822,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                   event.stopPropagation();
                   props.onNavigate(props.activeIndex + 1);
                 }}
-                aria-label="Next image"
+                aria-label="Next media"
                 className="theme-panel-strong theme-hover absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border text-[var(--theme-title)] shadow-sm transition-colors md:right-5"
               >
                 <ChevronRight size={22} />
@@ -812,7 +857,11 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                         />
                       ) : (
                         <div className="theme-panel-muted theme-subtle flex h-full w-full items-center justify-center border">
-                          <FileImage size={18} />
+                          {item.kind === "video" ? (
+                            <Video size={18} />
+                          ) : (
+                            <FileImage size={18} />
+                          )}
                         </div>
                       )}
                     </button>
@@ -829,6 +878,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
 
 function SubmissionModalImage(props: {
   submission: SubmissionCard;
+  kind: SubmissionModalMediaItem["kind"];
   sources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
@@ -839,7 +889,25 @@ function SubmissionModalImage(props: {
     );
   }
 
-  return <SubmissionModalVisual {...props} />;
+  if (props.kind === "video") {
+    return (
+      <SubmissionModalVideo
+        submission={props.submission}
+        sources={props.sources}
+        thumbnail={props.thumbnail}
+        alt={props.alt}
+      />
+    );
+  }
+
+  return (
+    <SubmissionModalVisual
+      submission={props.submission}
+      sources={props.sources}
+      thumbnail={props.thumbnail}
+      alt={props.alt}
+    />
+  );
 }
 
 function SubmissionModalVisual(props: {
@@ -848,10 +916,6 @@ function SubmissionModalVisual(props: {
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
 }) {
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const [sourceIndex, setSourceIndex] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-  const source = props.sources[sourceIndex];
   const sourcesKey = useMemo(
     () =>
       props.sources
@@ -860,17 +924,20 @@ function SubmissionModalVisual(props: {
     [props.sources],
   );
 
-  useEffect(() => {
-    setSourceIndex(0);
-    setLoaded(false);
-  }, [sourcesKey]);
+  return <SubmissionModalVisualInner key={sourcesKey} {...props} />;
+}
 
-  useEffect(() => {
-    setLoaded(false);
-    if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) {
-      setLoaded(true);
-    }
-  }, [source?.src, source?.srcSet]);
+function SubmissionModalVisualInner(props: {
+  submission: SubmissionCard;
+  sources: SubmissionModalPreviewSource[];
+  thumbnail: SubmissionModalPreviewSource | null;
+  alt: string;
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [loadedSourceKey, setLoadedSourceKey] = useState("");
+  const source = props.sources[sourceIndex];
+  const sourceKey = source ? `${source.src}|${source.srcSet ?? ""}` : "";
+  const loaded = sourceKey !== "" && loadedSourceKey === sourceKey;
 
   if (!source?.src) {
     return (
@@ -906,17 +973,105 @@ function SubmissionModalVisual(props: {
           </div>
         ) : null}
         <img
-          ref={imageRef}
           key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
           src={resolveMediaURL(source.src) ?? source.src}
           srcSet={resolveMediaSrcSet(source.srcSet)}
           alt={props.alt}
           referrerPolicy="no-referrer"
           onLoad={() => {
-            setLoaded(true);
+            setLoadedSourceKey(sourceKey);
           }}
           onError={() => {
-            setLoaded(false);
+            setLoadedSourceKey("");
+            setSourceIndex((current) => current + 1);
+          }}
+          className={`relative z-[1] max-h-[min(90vh,80rem)] max-w-full min-w-0 object-contain transition-opacity duration-[250ms] ${
+            loaded ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SubmissionModalVideo(props: {
+  submission: SubmissionCard;
+  sources: SubmissionModalPreviewSource[];
+  thumbnail: SubmissionModalPreviewSource | null;
+  alt: string;
+}) {
+  const sourcesKey = useMemo(
+    () =>
+      props.sources
+        .map((item) => `${item.src}|${item.srcSet ?? ""}`)
+        .join("||"),
+    [props.sources],
+  );
+
+  return <SubmissionModalVideoInner key={sourcesKey} {...props} />;
+}
+
+function SubmissionModalVideoInner(props: {
+  submission: SubmissionCard;
+  sources: SubmissionModalPreviewSource[];
+  thumbnail: SubmissionModalPreviewSource | null;
+  alt: string;
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [loadedSourceKey, setLoadedSourceKey] = useState("");
+  const source = props.sources[sourceIndex];
+  const sourceKey = source ? `${source.src}|${source.srcSet ?? ""}` : "";
+  const loaded = sourceKey !== "" && loadedSourceKey === sourceKey;
+
+  if (!source?.src) {
+    return (
+      <ModalPreviewFallback
+        submission={props.submission}
+        className="max-h-[min(86vh,72rem)] w-[min(92vw,72rem)] max-w-full"
+      />
+    );
+  }
+
+  return (
+    <div className="relative flex max-h-[min(90vh,80rem)] max-w-full items-center justify-center">
+      <div
+        className="relative inline-flex max-h-[min(90vh,80rem)] max-w-full min-w-0 items-center justify-center"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {props.thumbnail?.src ? (
+          <img
+            src={resolveMediaURL(props.thumbnail.src) ?? props.thumbnail.src}
+            srcSet={resolveMediaSrcSet(props.thumbnail.srcSet)}
+            alt={props.alt}
+            aria-hidden={loaded}
+            referrerPolicy="no-referrer"
+            className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
+              loaded ? "opacity-0" : "opacity-100"
+            }`}
+          />
+        ) : null}
+        {!loaded ? (
+          <div className="theme-panel-strong absolute z-10 inline-flex flex-nowrap items-center gap-3 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold text-[var(--theme-title)] shadow-sm">
+            <LoaderCircle size={18} className="shrink-0 animate-spin" />
+            <span className="whitespace-nowrap">Loading video</span>
+          </div>
+        ) : null}
+        <video
+          key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
+          src={resolveMediaURL(source.src) ?? source.src}
+          poster={
+            props.thumbnail?.src
+              ? resolveMediaURL(props.thumbnail.src) ?? props.thumbnail.src
+              : undefined
+          }
+          controls
+          playsInline
+          preload="metadata"
+          onLoadedData={() => {
+            setLoadedSourceKey(sourceKey);
+          }}
+          onError={() => {
+            setLoadedSourceKey("");
             setSourceIndex((current) => current + 1);
           }}
           className={`relative z-[1] max-h-[min(90vh,80rem)] max-w-full min-w-0 object-contain transition-opacity duration-[250ms] ${
@@ -933,7 +1088,6 @@ function ModalThumbnailImage(props: {
   alt: string;
   className: string;
 }) {
-  const [sourceIndex, setSourceIndex] = useState(0);
   const sourcesKey = useMemo(
     () =>
       props.sources
@@ -941,11 +1095,17 @@ function ModalThumbnailImage(props: {
         .join("||"),
     [props.sources],
   );
-  const source = props.sources[sourceIndex];
 
-  useEffect(() => {
-    setSourceIndex(0);
-  }, [sourcesKey]);
+  return <ModalThumbnailImageInner key={sourcesKey} {...props} />;
+}
+
+function ModalThumbnailImageInner(props: {
+  sources: SubmissionModalPreviewSource[];
+  alt: string;
+  className: string;
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const source = props.sources[sourceIndex];
 
   if (!source?.src) {
     return null;
@@ -1006,6 +1166,13 @@ function getPreviewFallbackContent(submission: SubmissionCard) {
     return {
       icon: <FileImage size={30} />,
       label: "Image",
+    };
+  }
+
+  if (primaryMime.startsWith("video/")) {
+    return {
+      icon: <Video size={30} />,
+      label: "Video",
     };
   }
 

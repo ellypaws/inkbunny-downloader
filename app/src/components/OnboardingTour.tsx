@@ -43,13 +43,25 @@ type TourLayout = {
   };
 };
 
+type TourLayoutState = {
+  key: string;
+  value: TourLayout | null;
+};
+
 const VIEWPORT_MARGIN = 16;
 const POPOVER_GAP = 24;
 const CUTOUT_PADDING = 10;
 
 export function OnboardingTour(props: OnboardingTourProps) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [layout, setLayout] = useState<TourLayout | null>(null);
+  const layoutKey = props.open
+    ? `${props.anchorRefreshKey}:${props.step.anchor}`
+    : "";
+  const [layoutState, setLayoutState] = useState<TourLayoutState>({
+    key: "",
+    value: null,
+  });
+  const layout = layoutState.key === layoutKey ? layoutState.value : null;
 
   useEffect(() => {
     if (!props.open) {
@@ -99,7 +111,6 @@ export function OnboardingTour(props: OnboardingTourProps) {
 
   useEffect(() => {
     if (!props.open) {
-      setLayout(null);
       return;
     }
 
@@ -109,7 +120,10 @@ export function OnboardingTour(props: OnboardingTourProps) {
       );
       const popover = popoverRef.current;
       if (!anchor || !popover) {
-        setLayout(null);
+        setLayoutState({
+          key: layoutKey,
+          value: null,
+        });
         return;
       }
 
@@ -155,18 +169,21 @@ export function OnboardingTour(props: OnboardingTourProps) {
       const dx = targetX - popoverAnchorX;
       const dy = targetY - popoverAnchorY;
 
-      setLayout({
-        cutout,
-        popover: {
-          left: popoverLeft,
-          top: popoverTop,
-          width: popoverWidth,
-        },
-        line: {
-          left: popoverAnchorX,
-          top: popoverAnchorY,
-          width: Math.max(0, Math.sqrt(dx * dx + dy * dy)),
-          rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
+      setLayoutState({
+        key: layoutKey,
+        value: {
+          cutout,
+          popover: {
+            left: popoverLeft,
+            top: popoverTop,
+            width: popoverWidth,
+          },
+          line: {
+            left: popoverAnchorX,
+            top: popoverAnchorY,
+            width: Math.max(0, Math.sqrt(dx * dx + dy * dy)),
+            rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
+          },
         },
       });
     };
@@ -190,7 +207,7 @@ export function OnboardingTour(props: OnboardingTourProps) {
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
-  }, [props.anchorRefreshKey, props.motionEnabled, props.open, props.step.anchor]);
+  }, [layoutKey, props.motionEnabled, props.open, props.step.anchor]);
 
   if (!props.open) {
     return null;
