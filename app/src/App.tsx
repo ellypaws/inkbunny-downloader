@@ -2637,6 +2637,17 @@ export default function App() {
     }));
   }
 
+  async function openSearchTab(nextTab: SearchTabState) {
+    const nextTabs = [...tabsRef.current, nextTab];
+
+    tabsRef.current = nextTabs;
+    activeTabIdRef.current = nextTab.id;
+    setTabs(nextTabs);
+    setActiveTabId(nextTab.id);
+
+    await handleSearchAction(nextTab.id);
+  }
+
   async function handleKeywordSearch(
     keywordId: string,
     keywordName: string,
@@ -2647,7 +2658,7 @@ export default function App() {
       return;
     }
 
-    const nextTab: SearchTabState = {
+    await openSearchTab({
       ...createSearchTab(sessionRef.current, settingsRef.current),
       searchParams: normalizeSearchParamsForMode(
         {
@@ -2661,15 +2672,60 @@ export default function App() {
         sessionRef.current,
         settingsRef.current,
       ),
-    };
-    const nextTabs = [...tabsRef.current, nextTab];
+    });
+  }
 
-    tabsRef.current = nextTabs;
-    activeTabIdRef.current = nextTab.id;
-    setTabs(nextTabs);
-    setActiveTabId(nextTab.id);
+  async function handleArtistSearch(
+    username: string,
+    avatarUrl = "",
+  ) {
+    const normalizedUsername = normalizeArtistToken(username);
+    if (!normalizedUsername) {
+      return;
+    }
 
-    await handleSearchAction(nextTab.id);
+    const nextTab = commitArtistSelection(
+      createSearchTab(sessionRef.current, settingsRef.current),
+      username.trim(),
+      {
+        avatarUrl,
+        validation: "valid",
+      },
+    );
+
+    await openSearchTab({
+      ...nextTab,
+      searchParams: normalizeSearchParamsForMode(
+        {
+          ...nextTab.searchParams,
+          page: 1,
+        },
+        "default",
+        sessionRef.current,
+        settingsRef.current,
+      ),
+    });
+  }
+
+  async function handleFavoritesSearch(username: string) {
+    const normalizedUsername = username.trim();
+    if (!normalizedUsername) {
+      return;
+    }
+
+    await openSearchTab({
+      ...createSearchTab(sessionRef.current, settingsRef.current),
+      searchParams: normalizeSearchParamsForMode(
+        {
+          ...buildDefaultSearch(sessionRef.current, settingsRef.current),
+          favoritesBy: normalizedUsername,
+          page: 1,
+        },
+        "default",
+        sessionRef.current,
+        settingsRef.current,
+      ),
+    });
   }
 
   async function handleDownloadSubmissions(
@@ -2956,6 +3012,39 @@ export default function App() {
     }, 350);
   }
 
+  function handleUpdateSelection(
+    mode: "all" | "none" | "invert",
+    targetTabId?: string,
+  ) {
+    const resolvedTabId =
+      typeof targetTabId === "string" ? targetTabId : activeTabIdRef.current;
+    const tab = tabsRef.current.find((item) => item.id === resolvedTabId);
+    if (!tab || tab.results.length === 0) {
+      return;
+    }
+    const selectableResultIds = tab.results
+      .map((item) => item.submissionId)
+      .filter((submissionId) => !downloadedSubmissionIds.has(submissionId));
+    const allSelected =
+      selectableResultIds.length > 0 &&
+      selectableResultIds.every((submissionId) => tab.selectedSubmissionIds.includes(submissionId));
+
+    const nextSelectedSubmissionIds =
+      mode === "all"
+        ? selectableResultIds
+        : mode === "none"
+          ? []
+          : selectableResultIds.filter(
+              (submissionId) => !tab.selectedSubmissionIds.includes(submissionId),
+            );
+
+    updateTab(resolvedTabId, (currentTab) => ({
+      ...currentTab,
+      selectedSubmissionIds:
+        mode === "all" && allSelected ? currentTab.selectedSubmissionIds : nextSelectedSubmissionIds,
+    }));
+  }
+
   function handleToggleSelectAll(targetTabId?: string) {
     const resolvedTabId =
       typeof targetTabId === "string" ? targetTabId : activeTabIdRef.current;
@@ -2969,10 +3058,8 @@ export default function App() {
     const allSelected =
       selectableResultIds.length > 0 &&
       selectableResultIds.every((submissionId) => tab.selectedSubmissionIds.includes(submissionId));
-    updateTab(resolvedTabId, (currentTab) => ({
-      ...currentTab,
-      selectedSubmissionIds: allSelected ? [] : selectableResultIds,
-    }));
+
+    handleUpdateSelection(allSelected ? "none" : "all", resolvedTabId);
   }
 
   return (
@@ -3245,7 +3332,9 @@ export default function App() {
                   activeSubmissionId: submissionId,
                 }));
               }}
-              onToggleSelectAll={handleToggleSelectAll}
+              onSelectAll={() => handleUpdateSelection("all")}
+              onDeselectAll={() => handleUpdateSelection("none")}
+              onInvertSelection={() => handleUpdateSelection("invert")}
               onToggleSelection={(submissionId) => {
                 if (!activeTab) {
                   return;
@@ -3287,6 +3376,12 @@ export default function App() {
               onLoadMore={() => void handleLoadMore("more")}
               onLoadAll={() => void handleLoadMore("all")}
               onStopLoadMore={() => void handleStopLoadMore()}
+              onSearchArtist={(username, avatarUrl) =>
+                void handleArtistSearch(username, avatarUrl)
+              }
+              onSearchFavoritesBy={(username) =>
+                void handleFavoritesSearch(username)
+              }
               onSearchKeyword={(keywordId, keywordName) =>
                 void handleKeywordSearch(keywordId, keywordName)
               }

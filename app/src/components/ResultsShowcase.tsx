@@ -20,6 +20,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type MouseEventHandler,
   type PointerEvent as ReactPointerEvent,
   type TouchEvent as ReactTouchEvent,
@@ -27,6 +28,10 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 
+import {
+  ContextMenu,
+  type ContextMenuSection,
+} from "./ContextMenu";
 import ElasticSlider from "./ElasticSlider";
 import { LoadMoreControl, type LoadMoreControlState } from "./LoadMoreControl";
 import { SubmissionImageModal } from "./SubmissionImageModal";
@@ -67,7 +72,9 @@ type ResultsShowcaseProps = {
   downloadButtonDisabled: boolean;
   onPanelPreviewImagesChange: (images: string[][]) => void;
   onSelectActive: (submissionId: string) => void;
-  onToggleSelectAll: () => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+  onInvertSelection: () => void;
   onToggleSelection: (submissionId: string) => void;
   onShowCustomThumbnailsChange: (enabled: boolean) => void;
   onShowSubmissionDetailsChange: (enabled: boolean) => void;
@@ -81,6 +88,8 @@ type ResultsShowcaseProps = {
   onLoadMore: () => void;
   onLoadAll: () => void;
   onStopLoadMore: () => void;
+  onSearchArtist: (username: string, avatarUrl?: string) => void;
+  onSearchFavoritesBy: (username: string) => void;
   onSearchKeyword: (keywordId: string, keywordName: string) => void;
 };
 
@@ -100,6 +109,19 @@ type ActiveModalState = {
   submissionId: string;
   fileIndex: number;
 };
+
+type ContextMenuState =
+  | {
+      kind: "gallery";
+      x: number;
+      y: number;
+    }
+  | {
+      kind: "submission";
+      submissionId: string;
+      x: number;
+      y: number;
+    };
 
 type ThumbnailSourceInput = {
   thumbnailUrl?: string;
@@ -165,6 +187,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const [resultsGridWidth, setResultsGridWidth] = useState(0);
   const [activeModal, setActiveModal] = useState<ActiveModalState | null>(null);
   const [followLatestResults, setFollowLatestResults] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const panelItems = useMemo(
     () => getPanelItems(props.results, panelStart),
@@ -214,6 +237,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       : props.allSelected
         ? "Deselect all"
         : "Select all";
+  const hasSelectedResults = selectedCount > 0;
+  const canSelectAll = selectableCount > 0 && !props.allSelected;
+  const canDeselectAll = hasSelectedResults;
+  const canInvertSelection = selectableCount > 0;
   const resultColumnCount = useMemo(
     () => getVirtualGridColumnCount(resultsGridWidth, gridCardWidth),
     [gridCardWidth, resultsGridWidth],
@@ -292,6 +319,28 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   );
   const activeModalRetryable = isSubmissionRetryable(
     activeModalDownloadSummary?.state ?? "idle",
+  );
+  const contextSubmission =
+    contextMenu?.kind === "submission"
+      ? props.results.find(
+          (item) => item.submissionId === contextMenu.submissionId,
+        ) ?? null
+      : null;
+  const contextDownloadSummary =
+    contextSubmission
+      ? (downloadSummaries.get(contextSubmission.submissionId) ??
+        IDLE_DOWNLOAD_SUMMARY)
+      : null;
+  const contextSubmissionSelected = contextSubmission
+    ? props.selectedSubmissionIds.includes(contextSubmission.submissionId)
+    : false;
+  const contextSubmissionDownloaded =
+    contextDownloadSummary?.state === "downloaded";
+  const contextSubmissionCancellable = isSubmissionCancellable(
+    contextDownloadSummary?.state ?? "idle",
+  );
+  const contextSubmissionRetryable = isSubmissionRetryable(
+    contextDownloadSummary?.state ?? "idle",
   );
 
   useEffect(() => {
@@ -443,6 +492,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   }, [activeModal]);
 
   useEffect(() => {
+    if (contextMenu?.kind === "submission" && !contextSubmission) {
+      setContextMenu(null);
+    }
+  }, [contextMenu, contextSubmission]);
+
+  useEffect(() => {
     if (!activeModal) {
       return;
     }
@@ -563,6 +618,267 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     setFollowLatestResults(false);
   }
 
+  function closeContextMenu() {
+    setContextMenu(null);
+  }
+
+  function openGalleryContextMenu(event: ReactMouseEvent<HTMLElement>) {
+    event.preventDefault();
+    setContextMenu({
+      kind: "gallery",
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
+  function openSubmissionContextMenu(
+    event: ReactMouseEvent<HTMLElement>,
+    submissionId: string,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      kind: "submission",
+      submissionId,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
+  function handleSubmissionDownloadAction(
+    submissionId: string,
+    summary: SubmissionDownloadSummary,
+  ) {
+    if (summary.state === "downloaded") {
+      return;
+    }
+    if (isSubmissionCancellable(summary.state)) {
+      props.onCancelSubmission(submissionId);
+      return;
+    }
+    if (isSubmissionRetryable(summary.state)) {
+      props.onRetrySubmission(submissionId);
+      return;
+    }
+    props.onDownloadSubmission(submissionId);
+  }
+
+  const galleryContextSections: ContextMenuSection[] = [
+    {
+      id: "selection",
+      label: "Selection",
+      items: [
+        {
+          id: "select-all",
+          label: "Select all",
+          leftSection: <Check size={14} />,
+          disabled: !canSelectAll,
+          onClick: props.onSelectAll,
+        },
+        {
+          id: "deselect-all",
+          label: "Deselect all",
+          leftSection: <Square size={14} />,
+          disabled: !canDeselectAll,
+          onClick: props.onDeselectAll,
+        },
+        {
+          id: "invert-selection",
+          label: "Invert selection",
+          leftSection: <RefreshCw size={14} />,
+          disabled: !canInvertSelection,
+          onClick: props.onInvertSelection,
+        },
+        {
+          id: "download-selected",
+          label: "Download now",
+          leftSection: <Download size={14} />,
+          disabled: props.downloadButtonDisabled,
+          onClick: props.onDownloadAction,
+        },
+      ],
+    },
+    {
+      id: "search",
+      label: "Search",
+      items: [
+        {
+          id: "refresh-results",
+          label: refreshButtonState.stoppable ? "Stop search" : "Refresh results",
+          leftSection: refreshButtonState.stoppable ? (
+            <Square size={14} />
+          ) : refreshButtonState.busy ? (
+            <LoaderCircle size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          ),
+          disabled: refreshButtonState.disabled,
+          onClick: refreshButtonState.stoppable ? props.onStopSearch : props.onRefresh,
+        },
+        {
+          id: "stop-all",
+          label: "Stop all downloads",
+          leftSection: <Square size={14} />,
+          disabled: !props.canStopAll,
+          color: "red",
+          onClick: props.onStopAll,
+        },
+      ],
+    },
+    {
+      id: "view",
+      label: "View",
+      items: [
+        {
+          id: "toggle-details",
+          label: props.showSubmissionDetails ? "Hide details" : "Show details",
+          leftSection: <Eye size={14} />,
+          onClick: () =>
+            props.onShowSubmissionDetailsChange(!props.showSubmissionDetails),
+        },
+        {
+          id: "toggle-thumbnails",
+          label: props.showCustomThumbnails
+            ? "Use standard thumbnails"
+            : "Use custom thumbnails",
+          leftSection: <ChevronsDown size={14} />,
+          onClick: () =>
+            props.onShowCustomThumbnailsChange(!props.showCustomThumbnails),
+        },
+      ],
+    },
+  ];
+
+  const submissionContextSections: ContextMenuSection[] = contextSubmission
+    ? [
+        {
+          id: "submission-actions",
+          label: "Submission",
+          items: [
+            {
+              id: "open-preview",
+              label: "Open preview",
+              leftSection: <Eye size={14} />,
+              onClick: () => openSubmissionModal(contextSubmission.submissionId),
+            },
+            {
+              id: "focus-submission",
+              label: "Focus submission",
+              leftSection: <Check size={14} />,
+              disabled: contextSubmission.submissionId === props.activeSubmissionId,
+              onClick: () => props.onSelectActive(contextSubmission.submissionId),
+            },
+            {
+              id: "toggle-selection",
+              label: contextSubmissionDownloaded
+                ? "Selection unavailable"
+                : contextSubmissionSelected
+                  ? "Deselect submission"
+                  : "Select submission",
+              leftSection: contextSubmissionSelected ? (
+                <Check size={14} />
+              ) : (
+                <Plus size={14} />
+              ),
+              disabled: contextSubmissionDownloaded,
+              onClick: () => props.onToggleSelection(contextSubmission.submissionId),
+            },
+            {
+              id: "download-submission",
+              label:
+                contextDownloadSummary?.state === "downloaded"
+                  ? "Already downloaded"
+                  : contextSubmissionCancellable
+                    ? "Cancel download"
+                    : contextSubmissionRetryable
+                      ? "Retry download"
+                      : "Download now",
+              leftSection: contextSubmissionCancellable ? (
+                <Square size={14} />
+              ) : contextSubmissionRetryable ? (
+                <RefreshCw size={14} />
+              ) : (
+                <Download size={14} />
+              ),
+              disabled: contextSubmissionDownloaded,
+              onClick: () =>
+                handleSubmissionDownloadAction(
+                  contextSubmission.submissionId,
+                  contextDownloadSummary ?? IDLE_DOWNLOAD_SUMMARY,
+                ),
+            },
+          ],
+        },
+        {
+          id: "artist-actions",
+          label: (
+            <span className="flex items-center gap-2">
+              <img
+                src={
+                  resolveMediaURL(
+                    contextSubmission.userIconUrlSmall ||
+                      contextSubmission.userIconUrlMedium ||
+                      contextSubmission.userIconUrlLarge ||
+                      DEFAULT_AVATAR_URL,
+                  ) ?? DEFAULT_AVATAR_URL
+                }
+                alt={contextSubmission.username}
+                className="h-5 w-5 rounded-full border border-white/70 bg-white object-cover"
+                onError={(event) => {
+                  event.currentTarget.src = DEFAULT_AVATAR_URL;
+                }}
+              />
+              <span>{contextSubmission.username}</span>
+            </span>
+          ),
+          items: [
+            {
+              id: "search-artist",
+              label: "Search for artist",
+              leftSection: <SearchIcon size={14} />,
+              disabled: !contextSubmission.username.trim(),
+              onClick: () =>
+                props.onSearchArtist(
+                  contextSubmission.username,
+                  contextSubmission.userIconUrlMedium ||
+                    contextSubmission.userIconUrlSmall ||
+                    contextSubmission.userIconUrlLarge ||
+                    "",
+                ),
+            },
+            {
+              id: "search-favorites",
+              label: "Search favorites",
+              leftSection: <Star size={14} />,
+              disabled: !contextSubmission.username.trim(),
+              onClick: () =>
+                props.onSearchFavoritesBy(contextSubmission.username),
+            },
+          ],
+        },
+        {
+          id: "links",
+          label: "Links",
+          items: [
+            {
+              id: "open-submission-page",
+              label: "Open submission page",
+              leftSection: <Eye size={14} />,
+              disabled: !contextSubmission.submissionUrl,
+              onClick: () => openExternal(contextSubmission.submissionUrl),
+            },
+            {
+              id: "open-artist-page",
+              label: "Open artist page",
+              leftSection: <SearchIcon size={14} />,
+              disabled: !contextSubmission.userUrl,
+              onClick: () => openExternal(contextSubmission.userUrl),
+            },
+          ],
+        },
+      ]
+    : [];
+
   return (
     <section className="relative mt-4">
       <h1 className="pointer-events-none relative z-20 -mb-12 -translate-y-10 block w-full max-w-[945px] break-words text-left font-teko text-[68px] leading-[0.82] font-bold text-white drop-shadow-sm antialiased sm:-mb-16 sm:translate-y-0 sm:text-[92px] lg:-mb-[130px] lg:text-[144px] lg:leading-[118.8px] -rotate-2 lg:tracking-[-0.02em] lg:origin-left">
@@ -576,7 +892,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           </div>
           <button
             type="button"
-            onClick={props.onToggleSelectAll}
+            onClick={props.allSelected ? props.onDeselectAll : props.onSelectAll}
             disabled={selectAllDisabled}
             className="theme-button-secondary rounded-2xl border px-3.5 py-2 text-xs font-black shadow-sm backdrop-blur-md transition-all disabled:opacity-50 sm:px-5 sm:py-3 sm:text-sm"
           >
@@ -658,6 +974,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             return (
               <div
                 key={item.submissionId}
+                onContextMenu={(event) =>
+                  openSubmissionContextMenu(event, item.submissionId)
+                }
                 onClick={() => {
                   props.onSelectActive(item.submissionId);
                   if (!downloaded) {
@@ -711,15 +1030,10 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (cancellable) {
-                        props.onCancelSubmission(item.submissionId);
-                        return;
-                      }
-                      if (retryable) {
-                        props.onRetrySubmission(item.submissionId);
-                        return;
-                      }
-                      props.onDownloadSubmission(item.submissionId);
+                      handleSubmissionDownloadAction(
+                        item.submissionId,
+                        downloadSummary,
+                      );
                     }}
                     aria-label={
                       cancellable
@@ -823,7 +1137,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  onClick={props.onToggleSelectAll}
+                  onClick={props.allSelected ? props.onDeselectAll : props.onSelectAll}
                   disabled={selectAllDisabled}
                   className="theme-button-secondary rounded-2xl border px-4 py-2 text-xs font-black backdrop-blur-md transition-colors disabled:opacity-50"
                 >
@@ -974,6 +1288,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           </div>
           <div
             ref={resultsScrollRef}
+            onContextMenu={openGalleryContextMenu}
             onScroll={handleResultsScroll}
             onWheelCapture={(_event: ReactWheelEvent<HTMLDivElement>) =>
               markUserScrollIntent()
@@ -1037,6 +1352,12 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                           return (
                             <article
                               key={item.submissionId}
+                              onContextMenu={(event) =>
+                                openSubmissionContextMenu(
+                                  event,
+                                  item.submissionId,
+                                )
+                              }
                               onClick={() => {
                                 props.onSelectActive(item.submissionId);
                                 if (!downloaded) {
@@ -1098,24 +1419,21 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
                                 }
                                 onDownload={(event) => {
                                   event.stopPropagation();
-                                  if (cancellable) {
-                                    props.onCancelSubmission(
-                                      item.submissionId,
-                                    );
-                                    return;
-                                  }
-                                  if (retryable) {
-                                    props.onRetrySubmission(
-                                      item.submissionId,
-                                    );
-                                    return;
-                                  }
-                                  props.onDownloadSubmission(item.submissionId);
+                                  handleSubmissionDownloadAction(
+                                    item.submissionId,
+                                    downloadSummary,
+                                  );
                                 }}
                                 onToggleSelection={(event) => {
                                   event.stopPropagation();
                                   props.onToggleSelection(item.submissionId);
                                 }}
+                                onAuthorContextMenu={(event) =>
+                                  openSubmissionContextMenu(
+                                    event,
+                                    item.submissionId,
+                                  )
+                                }
                               />
                             </article>
                           );
@@ -1147,6 +1465,24 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           onSearchKeyword={props.onSearchKeyword}
         />
       ) : null}
+
+      <ContextMenu
+        opened={contextMenu !== null}
+        position={
+          contextMenu
+            ? {
+                x: contextMenu.x,
+                y: contextMenu.y,
+              }
+            : null
+        }
+        sections={
+          contextMenu?.kind === "submission"
+            ? submissionContextSections
+            : galleryContextSections
+        }
+        onClose={closeContextMenu}
+      />
 
       <LoadMoreControl
         canLoadMore={canLoadMore}
@@ -1304,6 +1640,7 @@ function SubmissionDetails(props: {
   isFirstSelectable: boolean;
   onDownload: MouseEventHandler<HTMLButtonElement>;
   onToggleSelection: MouseEventHandler<HTMLButtonElement>;
+  onAuthorContextMenu: MouseEventHandler<HTMLButtonElement>;
 }) {
   return (
     <div className="p-3">
@@ -1319,6 +1656,7 @@ function SubmissionDetails(props: {
             submission={props.submission}
             compact
             className="theme-muted min-w-0 flex-1 text-[10px] font-bold"
+            onContextMenu={props.onAuthorContextMenu}
           />
           <div className="theme-subtle shrink-0 text-[10px] font-semibold">
             {props.submission.ratingName || "Unrated"}
@@ -1754,6 +2092,7 @@ function SubmissionAuthorButton(props: {
   submission: SubmissionCard;
   className?: string;
   compact?: boolean;
+  onContextMenu?: MouseEventHandler<HTMLButtonElement>;
 }) {
   const preferredAvatarSrc =
     props.submission.userIconUrlMedium ||
@@ -1775,6 +2114,7 @@ function SubmissionAuthorButton(props: {
   return (
     <button
       type="button"
+      onContextMenu={props.onContextMenu}
       onClick={(event) => {
         event.stopPropagation();
         openExternal(props.submission.userUrl);

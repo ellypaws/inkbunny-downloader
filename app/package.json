@@ -9,6 +9,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@mantine/core": "^8.3.17",
+    "@mantine/hooks": "^8.3.17",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-virtual": "^3.13.12",
     "gsap": "^3.14.2",
