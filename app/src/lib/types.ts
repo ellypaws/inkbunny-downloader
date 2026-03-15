@@ -34,10 +34,17 @@ export type KeywordSuggestion = {
   submissionsCount: number
 }
 
+export type SubmissionKeyword = {
+  keywordId: string
+  keywordName: string
+  submissionsCount: number
+}
+
 export type ArtistValidationState = 'pending' | 'valid' | 'invalid'
 
 export type SearchParams = {
   query: string
+  keywordId?: string
   joinType: string
   searchInKeywords: boolean
   searchInTitle: boolean
@@ -113,6 +120,7 @@ export type SubmissionDescription = {
   descriptionHtml?: string
   writing?: string
   writingHtml?: string
+  keywords?: SubmissionKeyword[]
 }
 
 export type SubmissionMediaFile = {

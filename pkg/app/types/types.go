@@ -25,6 +25,12 @@ type KeywordSuggestion struct {
 	SubmissionsCount int    `json:"submissionsCount"`
 }
 
+type SubmissionKeyword struct {
+	KeywordID        string `json:"keywordId"`
+	KeywordName      string `json:"keywordName"`
+	SubmissionsCount int    `json:"submissionsCount"`
+}
+
 type AppSettings struct {
 	DownloadDirectory  string `json:"downloadDirectory"`
 	DownloadPattern    string `json:"downloadPattern"`
@@ -38,6 +44,7 @@ type AppSettings struct {
 
 type SearchParams struct {
 	Query               string   `json:"query"`
+	KeywordID           string   `json:"keywordId,omitempty"`
 	JoinType            string   `json:"joinType"`
 	SearchInKeywords    bool     `json:"searchInKeywords"`
 	SearchInTitle       bool     `json:"searchInTitle"`
@@ -153,11 +160,12 @@ type SubmissionCard struct {
 }
 
 type SubmissionDescription struct {
-	SubmissionID    string `json:"submissionId"`
-	Description     string `json:"description,omitempty"`
-	DescriptionHTML string `json:"descriptionHtml,omitempty"`
-	Writing         string `json:"writing,omitempty"`
-	WritingHTML     string `json:"writingHtml,omitempty"`
+	SubmissionID    string              `json:"submissionId"`
+	Description     string              `json:"description,omitempty"`
+	DescriptionHTML string              `json:"descriptionHtml,omitempty"`
+	Writing         string              `json:"writing,omitempty"`
+	WritingHTML     string              `json:"writingHtml,omitempty"`
+	Keywords        []SubmissionKeyword `json:"keywords,omitempty"`
 }
 
 type SubmissionMediaFile struct {

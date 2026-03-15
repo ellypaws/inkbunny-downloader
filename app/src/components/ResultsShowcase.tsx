@@ -81,6 +81,7 @@ type ResultsShowcaseProps = {
   onLoadMore: () => void;
   onLoadAll: () => void;
   onStopLoadMore: () => void;
+  onSearchKeyword: (keywordId: string, keywordName: string) => void;
 };
 
 type SubmissionDownloadState =
@@ -1143,6 +1144,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           onClose={() => setActiveModal(null)}
           onNavigate={setActiveModalIndex}
           onDownload={handleActiveModalDownload}
+          onSearchKeyword={props.onSearchKeyword}
         />
       ) : null}
 

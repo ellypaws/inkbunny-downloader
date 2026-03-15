@@ -786,6 +786,14 @@ func (a *App) buildSearchRequest(
 		SubmissionsPerPage: inkbunny.IntString(perPage),
 		Scraps:             normalizeScrapsMode(params.Scraps),
 	}
+	if keywordID := strings.TrimSpace(params.KeywordID); keywordID != "" {
+		parsedKeywordID, parseErr := strconv.Atoi(keywordID)
+		if parseErr != nil || parsedKeywordID <= 0 {
+			return inkbunny.SubmissionSearchRequest{}, fmt.Errorf("invalid keyword id: %q", keywordID)
+		}
+		req.KeywordID = inkbunny.IntString(parsedKeywordID)
+		req.Text = ""
+	}
 	if params.Randomize {
 		req.Random = inkbunny.Yes
 	}
@@ -1332,6 +1340,15 @@ func mapSubmissionDescription(
 	sid string,
 	isPublic bool,
 ) types.SubmissionDescription {
+	keywords := make([]types.SubmissionKeyword, 0, len(detail.Keywords))
+	for _, keyword := range detail.Keywords {
+		keywords = append(keywords, types.SubmissionKeyword{
+			KeywordID:        keyword.KeywordID.String(),
+			KeywordName:      strings.TrimSpace(keyword.KeywordName),
+			SubmissionsCount: keyword.Count.Int(),
+		})
+	}
+
 	return types.SubmissionDescription{
 		SubmissionID: submissionID,
 		Description: firstNonEmpty(
@@ -1353,6 +1370,7 @@ func mapSubmissionDescription(
 				isPublic,
 			),
 		),
+		Keywords: keywords,
 	}
 }
 

@@ -2637,6 +2637,41 @@ export default function App() {
     }));
   }
 
+  async function handleKeywordSearch(
+    keywordId: string,
+    keywordName: string,
+  ) {
+    const normalizedKeywordId = keywordId.trim();
+    const normalizedKeywordName = keywordName.trim();
+    if (!normalizedKeywordId) {
+      return;
+    }
+
+    const nextTab: SearchTabState = {
+      ...createSearchTab(sessionRef.current, settingsRef.current),
+      searchParams: normalizeSearchParamsForMode(
+        {
+          ...buildDefaultSearch(sessionRef.current, settingsRef.current),
+          query: normalizedKeywordName,
+          keywordId: normalizedKeywordId,
+          searchInKeywords: true,
+          page: 1,
+        },
+        "default",
+        sessionRef.current,
+        settingsRef.current,
+      ),
+    };
+    const nextTabs = [...tabsRef.current, nextTab];
+
+    tabsRef.current = nextTabs;
+    activeTabIdRef.current = nextTab.id;
+    setTabs(nextTabs);
+    setActiveTabId(nextTab.id);
+
+    await handleSearchAction(nextTab.id);
+  }
+
   async function handleDownloadSubmissions(
     submissionIds: string[],
     targetTabId = activeTabIdRef.current,
@@ -3025,7 +3060,10 @@ export default function App() {
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   searchParams: normalizeSearchParamsForMode(
-                    updater(currentTab.searchParams),
+                    clearKeywordSearchSelectionOnQueryChange(
+                      currentTab.searchParams,
+                      updater(currentTab.searchParams),
+                    ),
                     currentTab.mode,
                     sessionRef.current,
                     settingsRef.current,
@@ -3249,6 +3287,9 @@ export default function App() {
               onLoadMore={() => void handleLoadMore("more")}
               onLoadAll={() => void handleLoadMore("all")}
               onStopLoadMore={() => void handleStopLoadMore()}
+              onSearchKeyword={(keywordId, keywordName) =>
+                void handleKeywordSearch(keywordId, keywordName)
+              }
             />
           </div>
           <DownloadQueuePanel
@@ -3798,6 +3839,19 @@ function finalizeArtistDraft(searchParams: SearchParams, artistDraft: string) {
   };
 }
 
+function clearKeywordSearchSelectionOnQueryChange(
+  previous: SearchParams,
+  next: SearchParams,
+) {
+  if (previous.query === next.query) {
+    return next;
+  }
+  return {
+    ...next,
+    keywordId: "",
+  };
+}
+
 function formatArtistFilterLabel(artistNames: string[]) {
   if (artistNames.length === 0) {
     return "";
@@ -4330,6 +4384,7 @@ function normalizeSavedSearchParams(
   const base = {
     ...buildDefaultSearch(session, settings),
     ...value,
+    keywordId: typeof value.keywordId === "string" ? value.keywordId : "",
     randomize: getBoolean(value.randomize, buildDefaultSearch(session, settings).randomize),
     artistNames: getStringArray(value.artistNames),
     submissionTypes: Array.isArray(value.submissionTypes)
@@ -4782,6 +4837,7 @@ function isSearchTabUntouched(
 function areSearchParamsEqual(left: SearchParams, right: SearchParams) {
   return (
     left.query === right.query &&
+    (left.keywordId ?? "") === (right.keywordId ?? "") &&
     left.joinType === right.joinType &&
     left.searchInKeywords === right.searchInKeywords &&
     left.searchInTitle === right.searchInTitle &&

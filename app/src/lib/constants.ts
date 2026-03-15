@@ -62,6 +62,7 @@ export const RATING_OPTIONS = [
 
 export const DEFAULT_SEARCH: SearchParams = {
   query: '',
+  keywordId: '',
   joinType: 'and',
   searchInKeywords: true,
   searchInTitle: true,

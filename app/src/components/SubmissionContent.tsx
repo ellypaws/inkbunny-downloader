@@ -12,6 +12,9 @@ type SubmissionContentProps = {
   loadingLabel?: string;
   emptyLabel?: string;
   interactive?: boolean;
+  onDescriptionChange?: (
+    description: SubmissionDescriptionPayload | null,
+  ) => void;
 };
 
 type SubmissionBodySelection = {
@@ -112,6 +115,10 @@ export const SubmissionContent = memo(function SubmissionContent(
       cancelled = true;
     };
   }, [props.mode, props.submissionId]);
+
+  useEffect(() => {
+    props.onDescriptionChange?.(description);
+  }, [description, props.onDescriptionChange]);
 
   const selection = selectSubmissionBody(description, props.mode);
 

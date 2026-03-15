@@ -28,12 +28,8 @@ import {
 import { SubmissionContent } from "./SubmissionContent";
 import { SubmissionWritingReader } from "./SubmissionWritingReader";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
-import type { SubmissionCard } from "../lib/types";
-import {
-  backend,
-  resolveMediaSrcSet,
-  resolveMediaURL,
-} from "../lib/wails";
+import type { SubmissionCard, SubmissionDescription } from "../lib/types";
+import { backend, resolveMediaSrcSet, resolveMediaURL } from "../lib/wails";
 
 export type SubmissionModalPreviewSource = {
   src: string;
@@ -62,9 +58,11 @@ type SubmissionImageModalProps = {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onDownload: () => void;
+  onSearchKeyword: (keywordId: string, keywordName: string) => void;
 };
 
 export function SubmissionImageModal(props: SubmissionImageModalProps) {
+  const keywordListRef = useRef<HTMLDivElement | null>(null);
   const hasMultipleItems = props.items.length > 1;
   const modalRootRef = useRef<HTMLDivElement | null>(null);
   const panelShellRef = useRef<HTMLDivElement | null>(null);
@@ -88,12 +86,45 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     [props.submission],
   );
   const [avatarIndex, setAvatarIndex] = useState(0);
+  const [submissionDescription, setSubmissionDescription] =
+    useState<SubmissionDescription | null>(null);
+  const [keywordsExpanded, setKeywordsExpanded] = useState(false);
+  const [keywordsOverflowing, setKeywordsOverflowing] = useState(false);
   const avatarSrc = avatarCandidates[avatarIndex] ?? DEFAULT_AVATAR_URL;
   const isSidebarRendered = sidebarMode !== "closed";
+  const submissionKeywords = submissionDescription?.keywords ?? [];
 
   useEffect(() => {
     setAvatarIndex(0);
+    setSubmissionDescription(null);
+    setKeywordsExpanded(false);
+    setKeywordsOverflowing(false);
   }, [props.submission.submissionId]);
+
+  useEffect(() => {
+    const keywordList = keywordListRef.current;
+    if (!keywordList) {
+      setKeywordsOverflowing(false);
+      return;
+    }
+
+    const updateOverflow = () => {
+      setKeywordsOverflowing(
+        keywordList.scrollHeight > KEYWORD_COLLAPSED_MAX_HEIGHT_PX + 1,
+      );
+    };
+
+    updateOverflow();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateOverflow();
+    });
+    resizeObserver.observe(keywordList);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [submissionKeywords, sidebarMode]);
 
   useEffect(() => {
     const navigationPill = document.querySelector<HTMLElement>(
@@ -310,9 +341,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       );
     });
 
-    const lastLayerTime = preLayers.length
-      ? (preLayers.length - 1) * 0.07
-      : 0;
+    const lastLayerTime = preLayers.length ? (preLayers.length - 1) * 0.07 : 0;
     const panelInsertTime = lastLayerTime + (preLayers.length ? 0.08 : 0);
     const panelDuration = 0.65;
 
@@ -573,8 +602,70 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               submissionId={props.submission.submissionId}
               mode="description"
               interactive
+              onDescriptionChange={setSubmissionDescription}
             />
-            <div className="sim-panel-item mt-auto flex justify-end pt-4">
+            {submissionKeywords.length > 0 ? (
+              <div className="sim-panel-item mt-auto pt-4">
+                <div className="theme-title text-[12px] font-semibold">
+                  Keywords
+                </div>
+                <div className="relative mt-2">
+                  <div
+                    ref={keywordListRef}
+                    className={`flex flex-wrap content-start gap-x-2 gap-y-1 overflow-hidden text-[11px] leading-4 transition-[max-height] duration-300 ease-out ${
+                      keywordsExpanded ? "max-h-[24rem]" : "max-h-[4.75rem]"
+                    }`}
+                  >
+                    {submissionKeywords.map((keyword) => (
+                      <div
+                        key={`${keyword.keywordId}-${keyword.keywordName}`}
+                        className="contents"
+                      >
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            props.onSearchKeyword(
+                              keyword.keywordId,
+                              keyword.keywordName,
+                            );
+                            props.onClose();
+                          }}
+                          className="group inline-flex cursor-pointer items-baseline gap-1 text-left text-[var(--theme-muted)] transition-colors hover:text-[var(--theme-title)]"
+                        >
+                          <div className="underline decoration-dotted underline-offset-2">
+                            {keyword.keywordName}
+                          </div>
+                          <div className="text-[10px] text-[var(--theme-subtle)]">
+                            {formatKeywordCount(keyword.submissionsCount)}
+                          </div>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {keywordsOverflowing && !keywordsExpanded ? (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-[linear-gradient(180deg,rgba(0,0,0,0),var(--theme-surface-strong))]" />
+                  ) : null}
+                </div>
+                {keywordsOverflowing ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setKeywordsExpanded((current) => !current);
+                    }}
+                    className="mt-2 text-[10px] font-medium text-[var(--theme-info)] transition-colors hover:text-[var(--theme-info-strong)]"
+                  >
+                    {keywordsExpanded ? "Show less" : "Show more"}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            <div
+              className={`sim-panel-item flex justify-end ${
+                submissionKeywords.length > 0 ? "pt-3" : "mt-auto pt-4"
+              }`}
+            >
               <button
                 type="button"
                 onClick={(event) => {
@@ -743,7 +834,9 @@ function SubmissionModalImage(props: {
   alt: string;
 }) {
   if (isWritingSubmission(props.submission)) {
-    return <SubmissionWritingReader submissionId={props.submission.submissionId} />;
+    return (
+      <SubmissionWritingReader submissionId={props.submission.submissionId} />
+    );
   }
 
   return <SubmissionModalVisual {...props} />;
@@ -958,6 +1051,12 @@ function formatCompactCount(value?: number) {
     maximumFractionDigits: value && value >= 1000 ? 1 : 0,
   }).format(Math.max(0, value ?? 0));
 }
+
+function formatKeywordCount(value?: number) {
+  return new Intl.NumberFormat("en-US").format(Math.max(0, value ?? 0));
+}
+
+const KEYWORD_COLLAPSED_MAX_HEIGHT_PX = 76;
 
 function getAvatarCandidates(submission: SubmissionCard) {
   const seen = new Set<string>();

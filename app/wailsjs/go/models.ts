@@ -334,6 +334,7 @@ export namespace types {
 	}
 	export class SearchParams {
 	    query: string;
+	    keywordId?: string;
 	    joinType: string;
 	    searchInKeywords: boolean;
 	    searchInTitle: boolean;
@@ -363,6 +364,7 @@ export namespace types {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.query = source["query"];
+	        this.keywordId = source["keywordId"];
 	        this.joinType = source["joinType"];
 	        this.searchInKeywords = source["searchInKeywords"];
 	        this.searchInTitle = source["searchInTitle"];
@@ -736,12 +738,29 @@ export namespace types {
 		}
 	}
 	
+	export class SubmissionKeyword {
+	    keywordId: string;
+	    keywordName: string;
+	    submissionsCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubmissionKeyword(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.keywordId = source["keywordId"];
+	        this.keywordName = source["keywordName"];
+	        this.submissionsCount = source["submissionsCount"];
+	    }
+	}
 	export class SubmissionDescription {
 	    submissionId: string;
 	    description?: string;
 	    descriptionHtml?: string;
 	    writing?: string;
 	    writingHtml?: string;
+	    keywords?: SubmissionKeyword[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SubmissionDescription(source);
@@ -754,8 +773,28 @@ export namespace types {
 	        this.descriptionHtml = source["descriptionHtml"];
 	        this.writing = source["writing"];
 	        this.writingHtml = source["writingHtml"];
+	        this.keywords = this.convertValues(source["keywords"], SubmissionKeyword);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
+	
 	
 	export class UsernameSuggestion {
 	    userId: string;
