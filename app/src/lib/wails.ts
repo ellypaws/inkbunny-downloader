@@ -34,6 +34,7 @@ type BackendApi = {
   Logout(): Promise<SessionInfo>
   UpdateRatings(mask: string): Promise<SessionInfo>
   OpenDownloadDirectory(): Promise<void>
+  OpenJobInFolder(jobId: string): Promise<void>
   OpenExternalURL(url: string): Promise<void>
   ProxyAvatarImageURL(url: string): Promise<string>
   Search(params: SearchParams): Promise<SearchResponse>
@@ -60,14 +61,18 @@ type BackendApi = {
   GetWorkspaceState(): Promise<WorkspaceState>
   SaveWorkspaceState(state: WorkspaceState): Promise<void>
   CancelDownload(jobId: string): Promise<QueueSnapshot>
+  RedownloadJob(jobId: string): Promise<QueueSnapshot>
   CancelSubmission(submissionId: string): Promise<QueueSnapshot>
   RetryDownload(jobId: string): Promise<QueueSnapshot>
   RetrySubmission(submissionId: string): Promise<QueueSnapshot>
+  RedownloadSubmission(submissionId: string): Promise<QueueSnapshot>
   RetryAllDownloads(): Promise<QueueSnapshot>
   PauseAllDownloads(): Promise<QueueSnapshot>
   ResumeAllDownloads(): Promise<QueueSnapshot>
   StopAllDownloads(): Promise<QueueSnapshot>
   ClearQueue(): Promise<QueueSnapshot>
+  DeleteJob(jobId: string): Promise<QueueSnapshot>
+  DeleteSubmissionJobs(submissionId: string): Promise<QueueSnapshot>
   ClearCompletedDownloads(): Promise<QueueSnapshot>
   ClearCompletedSubmissions(submissionIds: string[]): Promise<QueueSnapshot>
   PickDownloadDirectory(): Promise<string>
@@ -114,6 +119,7 @@ const backendMethodNames = [
   'Logout',
   'UpdateRatings',
   'OpenDownloadDirectory',
+  'OpenJobInFolder',
   'OpenExternalURL',
   'ProxyAvatarImageURL',
   'Search',
@@ -136,14 +142,18 @@ const backendMethodNames = [
   'GetWorkspaceState',
   'SaveWorkspaceState',
   'CancelDownload',
+  'RedownloadJob',
   'CancelSubmission',
   'RetryDownload',
   'RetrySubmission',
+  'RedownloadSubmission',
   'RetryAllDownloads',
   'PauseAllDownloads',
   'ResumeAllDownloads',
   'StopAllDownloads',
   'ClearQueue',
+  'DeleteJob',
+  'DeleteSubmissionJobs',
   'ClearCompletedDownloads',
   'ClearCompletedSubmissions',
   'PickDownloadDirectory',
@@ -484,6 +494,9 @@ const browserBackend: BackendApi = {
   async OpenDownloadDirectory() {
     throw new Error('Opening the local download folder is only available on desktop.')
   },
+  async OpenJobInFolder() {
+    throw new Error('Opening a local file in its folder is only available on desktop.')
+  },
   async OpenExternalURL(url: string) {
     window.open(buildRemoteOpenURL(url), '_blank', 'noopener,noreferrer')
   },
@@ -582,6 +595,9 @@ const browserBackend: BackendApi = {
       jobId,
     })
   },
+  async RedownloadJob() {
+    throw new Error('Redownloading queue jobs is only available on desktop.')
+  },
   async CancelSubmission(submissionId: string) {
     return requestJSON<QueueSnapshot>('POST', '/api/queue/cancel-submission', {
       submissionId,
@@ -597,6 +613,9 @@ const browserBackend: BackendApi = {
       submissionId,
     })
   },
+  async RedownloadSubmission() {
+    throw new Error('Redownloading submission jobs is only available on desktop.')
+  },
   async RetryAllDownloads() {
     return requestJSON<QueueSnapshot>('POST', '/api/queue/retry-all')
   },
@@ -611,6 +630,12 @@ const browserBackend: BackendApi = {
   },
   async ClearQueue() {
     return requestJSON<QueueSnapshot>('POST', '/api/queue/clear')
+  },
+  async DeleteJob() {
+    throw new Error('Deleting queue jobs is only available on desktop.')
+  },
+  async DeleteSubmissionJobs() {
+    throw new Error('Deleting submission jobs is only available on desktop.')
   },
   async ClearCompletedDownloads() {
     return requestJSON<QueueSnapshot>('POST', '/api/queue/clear-completed')
@@ -678,6 +703,9 @@ export const backend = {
   },
   async openDownloadDirectory(): Promise<void> {
     return getBackend().OpenDownloadDirectory()
+  },
+  async openJobInFolder(jobId: string): Promise<void> {
+    return getBackend().OpenJobInFolder(jobId)
   },
   async openExternalURL(url: string): Promise<void> {
     return getBackend().OpenExternalURL(url)
@@ -753,6 +781,9 @@ export const backend = {
   async cancelDownload(jobId: string): Promise<QueueSnapshot> {
     return getBackend().CancelDownload(jobId)
   },
+  async redownloadJob(jobId: string): Promise<QueueSnapshot> {
+    return getBackend().RedownloadJob(jobId)
+  },
   async cancelSubmission(submissionId: string): Promise<QueueSnapshot> {
     return getBackend().CancelSubmission(submissionId)
   },
@@ -761,6 +792,9 @@ export const backend = {
   },
   async retrySubmission(submissionId: string): Promise<QueueSnapshot> {
     return getBackend().RetrySubmission(submissionId)
+  },
+  async redownloadSubmission(submissionId: string): Promise<QueueSnapshot> {
+    return getBackend().RedownloadSubmission(submissionId)
   },
   async retryAllDownloads(): Promise<QueueSnapshot> {
     return getBackend().RetryAllDownloads()
@@ -776,6 +810,12 @@ export const backend = {
   },
   async clearQueue(): Promise<QueueSnapshot> {
     return getBackend().ClearQueue()
+  },
+  async deleteJob(jobId: string): Promise<QueueSnapshot> {
+    return getBackend().DeleteJob(jobId)
+  },
+  async deleteSubmissionJobs(submissionId: string): Promise<QueueSnapshot> {
+    return getBackend().DeleteSubmissionJobs(submissionId)
   },
   async clearCompletedDownloads(): Promise<QueueSnapshot> {
     return getBackend().ClearCompletedDownloads()

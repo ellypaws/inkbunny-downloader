@@ -37,6 +37,13 @@ func (a *App) OpenDownloadDirectory() error {
 	return apputils.OpenPathInFileManager(target)
 }
 
+func (a *App) OpenJobInFolder(jobID string) error {
+	if a.downloadManager == nil {
+		return errors.New("download manager unavailable")
+	}
+	return a.downloadManager.OpenInFolder(strings.TrimSpace(jobID))
+}
+
 func (a *App) OpenExternalURL(target string) error {
 	parsed, err := url.Parse(strings.TrimSpace(target))
 	if err != nil {

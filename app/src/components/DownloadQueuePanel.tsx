@@ -7,7 +7,9 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Search as SearchIcon,
   Square,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -17,10 +19,15 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent,
   type UIEvent,
 } from "react";
 
+import {
+  ContextMenu,
+  type ContextMenuSection,
+} from "./ContextMenu";
 import ElasticSlider from "./ElasticSlider";
 import FolderPopout from "./FolderPopout";
 import {
@@ -28,7 +35,7 @@ import {
   MIN_CONCURRENT_DOWNLOADS,
 } from "../lib/constants";
 import { formatBytes } from "../lib/format";
-import { resolveExternalLinkURL, resolveMediaURL } from "../lib/wails";
+import { backend, resolveExternalLinkURL, resolveMediaURL } from "../lib/wails";
 import type { QueueSnapshot } from "../lib/types";
 
 const FILTERABLE_QUEUE_STATUSES = [
@@ -67,6 +74,7 @@ type DownloadQueuePanelProps = {
   allSelected: boolean;
   autoClearCompleted: boolean;
   canOpenDownloadFolder: boolean;
+  canManageQueueJobs: boolean;
   folderPreviewImages: string[][];
   onOpenDownloadFolder: () => void;
   onClearQueue: () => void;
@@ -79,10 +87,30 @@ type DownloadQueuePanelProps = {
   onToggleSelectAll: () => void;
   onToggleAutoClearCompleted: (enabled: boolean) => void;
   onMaxActiveChange: (value: number) => void;
+  onOpenJobInFolder: (jobId: string) => void;
   onCancel: (jobId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
   onRetry: (jobId: string) => void;
+  onRedownloadJob: (jobId: string) => void;
+  onRedownloadSubmission: (submissionId: string) => void;
+  onDeleteJob: (jobId: string) => void;
+  onDeleteSubmission: (submissionId: string) => void;
+  onSearchArtist: (username: string) => void;
+  onSearchFavoritesBy: (username: string) => void;
 };
+
+type QueueContextMenuState =
+  | {
+      kind: "panel";
+      x: number;
+      y: number;
+    }
+  | {
+      kind: "job";
+      jobId: string;
+      x: number;
+      y: number;
+    };
 
 export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
@@ -96,6 +124,9 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   );
   const [showThumbnails, setShowThumbnails] = useState(
     loadSavedQueueThumbnailVisibility,
+  );
+  const [contextMenu, setContextMenu] = useState<QueueContextMenuState | null>(
+    null,
   );
   const selectedStatusSet = useMemo(
     () => new Set<QueueFilterStatus>(selectedStatuses),
@@ -130,6 +161,16 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
     }
     return counts;
   }, [props.queue.jobs]);
+  const submissionActionableJobCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const job of props.queue.jobs) {
+      if (job.status !== "queued" && job.status !== "active") {
+        continue;
+      }
+      counts.set(job.submissionId, (counts.get(job.submissionId) ?? 0) + 1);
+    }
+    return counts;
+  }, [props.queue.jobs]);
   const rowVirtualizer = useVirtualizer({
     count: visibleJobs.length,
     getScrollElement: () => parentRef.current,
@@ -140,6 +181,10 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
     (job) => job.status === "active",
   );
   const hasActiveDownload = firstActiveIndex >= 0;
+  const contextJob =
+    contextMenu?.kind === "job"
+      ? props.queue.jobs.find((job) => job.id === contextMenu.jobId) ?? null
+      : null;
 
   useEffect(() => {
     if (!hasActiveDownload && followActiveDownload) {
@@ -171,6 +216,12 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
   useEffect(() => {
     lastObservedScrollTopRef.current = parentRef.current?.scrollTop ?? 0;
   }, [followActiveDownload, visibleJobs.length]);
+
+  useEffect(() => {
+    if (contextMenu?.kind === "job" && !contextJob) {
+      setContextMenu(null);
+    }
+  }, [contextJob, contextMenu]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -242,8 +293,289 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
     props.onOpenDownloadFolder();
   }
 
+  function closeContextMenu() {
+    setContextMenu(null);
+  }
+
+  function openPanelContextMenu(event: ReactMouseEvent<HTMLElement>) {
+    event.preventDefault();
+    setContextMenu({
+      kind: "panel",
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
+  function openJobContextMenu(
+    event: ReactMouseEvent<HTMLElement>,
+    jobId: string,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      kind: "job",
+      jobId,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
+  const panelContextSections: ContextMenuSection[] = [
+    {
+      id: "queue",
+      label: "Queue",
+      items: [
+        {
+          id: "open-download-folder",
+          label: "Open download folder",
+          leftSection: <ArrowUpRight size={14} />,
+          disabled: !props.canOpenDownloadFolder,
+          onClick: props.onOpenDownloadFolder,
+        },
+        {
+          id: "queue-selected",
+          label: "Download selection",
+          leftSection: <Download size={14} />,
+          disabled: !props.canQueueDownloads,
+          onClick: props.onQueueDownloads,
+        },
+        {
+          id: "clear-completed",
+          label: "Clear completed",
+          leftSection: <Trash2 size={14} />,
+          disabled: props.queue.completedCount === 0,
+          onClick: props.onClearCompleted,
+        },
+        {
+          id: "clear-queue",
+          label: "Clear queue",
+          leftSection: <Trash2 size={14} />,
+          disabled: props.queue.jobs.length === 0,
+          onClick: props.onClearQueue,
+        },
+      ],
+    },
+    {
+      id: "transfers",
+      label: "Transfers",
+      items: [
+        {
+          id: "retry-all",
+          label: "Retry all failed",
+          leftSection: <RefreshCw size={14} />,
+          disabled: !props.canRetryAll,
+          onClick: props.onRetryAll,
+        },
+        {
+          id: "pause-resume-all",
+          label: props.queue.paused ? "Resume downloads" : "Pause downloads",
+          leftSection: props.queue.paused ? (
+            <Play size={14} />
+          ) : (
+            <Pause size={14} />
+          ),
+          disabled: props.queue.paused ? !props.canResumeAll : !props.canPauseAll,
+          onClick: props.queue.paused ? props.onResumeAll : props.onPauseAll,
+        },
+        {
+          id: "stop-all",
+          label: "Stop all downloads",
+          leftSection: <Square size={14} />,
+          disabled: !props.canStopAll,
+          color: "red",
+          onClick: props.onStopAll,
+        },
+      ],
+    },
+    {
+      id: "view",
+      label: "View",
+      items: [
+        {
+          id: "toggle-thumbnails",
+          label: showThumbnails ? "Hide thumbnails" : "Show thumbnails",
+          leftSection: <FileImage size={14} />,
+          onClick: () => setShowThumbnails((current) => !current),
+        },
+        {
+          id: "toggle-auto-clear",
+          label: props.autoClearCompleted
+            ? "Disable auto-clear"
+            : "Enable auto-clear",
+          leftSection: <Trash2 size={14} />,
+          onClick: () =>
+            props.onToggleAutoClearCompleted(!props.autoClearCompleted),
+        },
+        {
+          id: "toggle-follow-active",
+          label: followActiveDownload ? "Stop following active" : "Follow active",
+          leftSection: <ChevronsDown size={14} />,
+          disabled: !hasActiveDownload,
+          onClick: () =>
+            setFollowActiveDownload((current) =>
+              hasActiveDownload ? !current : false,
+            ),
+        },
+      ],
+    },
+  ];
+
+  const jobActionable =
+    contextJob?.status === "queued" || contextJob?.status === "active";
+  const jobRetryable = contextJob?.status === "failed";
+  const jobCanRetryOrRedownload =
+    !!contextJob &&
+    (jobRetryable ||
+      (props.canManageQueueJobs &&
+        contextJob.status !== "queued" &&
+        contextJob.status !== "active"));
+  const jobCanRedownload =
+    !!contextJob &&
+    props.canManageQueueJobs &&
+    contextJob.status !== "queued" &&
+    contextJob.status !== "active";
+  const submissionActionableCount = contextJob
+    ? submissionActionableJobCounts.get(contextJob.submissionId) ?? 0
+    : 0;
+  const submissionCanMutate =
+    !!contextJob && props.canManageQueueJobs && submissionActionableCount === 0;
+  const jobContextSections: ContextMenuSection[] = contextJob
+    ? [
+        {
+          id: "file",
+          label: "File",
+          items: [
+            {
+              id: "open-job-folder",
+              label: "Open file in folder",
+              leftSection: <ArrowUpRight size={14} />,
+              disabled: !props.canOpenDownloadFolder || !contextJob.fileExists,
+              onClick: () => props.onOpenJobInFolder(contextJob.id),
+            },
+            {
+              id: "redownload-job",
+              label: jobRetryable ? "Retry file" : "Redownload file",
+              leftSection: jobRetryable ? (
+                <RefreshCw size={14} />
+              ) : (
+                <Download size={14} />
+              ),
+              disabled: !jobCanRetryOrRedownload,
+              onClick: jobRetryable
+                ? () => props.onRetry(contextJob.id)
+                : () => props.onRedownloadJob(contextJob.id),
+            },
+            {
+              id: "stop-job",
+              label: "Stop file",
+              leftSection: <Square size={14} />,
+              disabled: !jobActionable,
+              color: "red",
+              onClick: () => props.onCancel(contextJob.id),
+            },
+            {
+              id: "delete-job",
+              label: "Delete file",
+              leftSection: <Trash2 size={14} />,
+              disabled: !jobCanRedownload,
+              color: "red",
+              onClick: () => props.onDeleteJob(contextJob.id),
+            },
+          ],
+        },
+        {
+          id: "submission",
+          label: "Submission",
+          items: [
+            {
+              id: "open-submission",
+              label: "Open submission page",
+              leftSection: <ArrowUpRight size={14} />,
+              onClick: () =>
+                void backend.openExternalURL(
+                  `https://inkbunny.net/s/${contextJob.submissionId}`,
+                ),
+            },
+            {
+              id: "redownload-submission",
+              label: "Redownload submission",
+              leftSection: <Download size={14} />,
+              disabled: !submissionCanMutate,
+              onClick: () =>
+                props.onRedownloadSubmission(contextJob.submissionId),
+            },
+            {
+              id: "stop-submission",
+              label: "Stop submission",
+              leftSection: <Square size={14} />,
+              disabled: submissionActionableCount === 0,
+              color: "red",
+              onClick: () =>
+                props.onCancelSubmission(contextJob.submissionId),
+            },
+            {
+              id: "delete-submission",
+              label: "Delete submission",
+              leftSection: <Trash2 size={14} />,
+              disabled: !submissionCanMutate,
+              color: "red",
+              onClick: () =>
+                props.onDeleteSubmission(contextJob.submissionId),
+            },
+          ],
+        },
+        {
+          id: "artist",
+          label: `@${contextJob.username}`,
+          items: [
+            {
+              id: "search-artist",
+              label: "Search for artist",
+              leftSection: <SearchIcon size={14} />,
+              disabled: !contextJob.username.trim(),
+              onClick: () => props.onSearchArtist(contextJob.username),
+            },
+            {
+              id: "search-favorites",
+              label: "Search favorites",
+              leftSection: <Star size={14} />,
+              disabled: !contextJob.username.trim(),
+              onClick: () =>
+                props.onSearchFavoritesBy(contextJob.username),
+            },
+          ],
+        },
+        {
+          id: "queue-controls",
+          label: "Queue",
+          items: [
+            {
+              id: "pause-resume-queue",
+              label: props.queue.paused ? "Resume downloads" : "Pause downloads",
+              leftSection: props.queue.paused ? (
+                <Play size={14} />
+              ) : (
+                <Pause size={14} />
+              ),
+              disabled: props.queue.paused ? !props.canResumeAll : !props.canPauseAll,
+              onClick: props.queue.paused ? props.onResumeAll : props.onPauseAll,
+            },
+            {
+              id: "stop-all-queue",
+              label: "Stop all downloads",
+              leftSection: <Square size={14} />,
+              disabled: !props.canStopAll,
+              color: "red",
+              onClick: props.onStopAll,
+            },
+          ],
+        },
+      ]
+    : [];
+
   return (
     <section
+      onContextMenu={openPanelContextMenu}
       className="theme-panel relative overflow-visible rounded-toy-sm border p-3.5 shadow-pop backdrop-blur-2xl sm:p-5 md:min-h-[95vh] md:p-6"
       data-tour-anchor="queue-panel"
     >
@@ -482,6 +814,9 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
                         highlightedSubmissionId === job.submissionId
                       }
                       onSubmissionHighlightChange={setHighlightedSubmissionId}
+                      onContextMenu={(event) =>
+                        openJobContextMenu(event, job.id)
+                      }
                       onCancel={props.onCancel}
                       onCancelSubmission={props.onCancelSubmission}
                       onRetry={props.onRetry}
@@ -493,6 +828,24 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
           </div>
         )}
       </div>
+
+      <ContextMenu
+        opened={contextMenu !== null}
+        position={
+          contextMenu
+            ? {
+                x: contextMenu.x,
+                y: contextMenu.y,
+              }
+            : null
+        }
+        sections={
+          contextMenu?.kind === "job"
+            ? jobContextSections
+            : panelContextSections
+        }
+        onClose={closeContextMenu}
+      />
     </section>
   );
 }
@@ -503,6 +856,7 @@ function QueueRow(props: {
   submissionJobCount: number;
   submissionHighlighted: boolean;
   onSubmissionHighlightChange: (submissionId: string) => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onCancel: (jobId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
   onRetry: (jobId: string) => void;
@@ -523,6 +877,7 @@ function QueueRow(props: {
   return (
     <div
       tabIndex={0}
+      onContextMenu={props.onContextMenu}
       className={`theme-panel-strong group relative overflow-hidden rounded-[1.15rem] border px-2.5 py-2 shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 motion-safe:focus-within:-translate-y-0.5 hover:shadow-lg focus-within:shadow-lg sm:rounded-[1.3rem] sm:px-3 sm:py-2.5 ${
         props.submissionHighlighted
           ? "border-[#CC5E00] ring-2 ring-[#CC5E00]/55"

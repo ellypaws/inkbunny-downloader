@@ -34,6 +34,14 @@ export function DebugResetState(arg1) {
   return window['go']['state']['App']['DebugResetState'](arg1);
 }
 
+export function DeleteJob(arg1) {
+  return window['go']['state']['App']['DeleteJob'](arg1);
+}
+
+export function DeleteSubmissionJobs(arg1) {
+  return window['go']['state']['App']['DeleteSubmissionJobs'](arg1);
+}
+
 export function DiagnosticState() {
   return window['go']['state']['App']['DiagnosticState']();
 }
@@ -118,6 +126,10 @@ export function OpenExternalURL(arg1) {
   return window['go']['state']['App']['OpenExternalURL'](arg1);
 }
 
+export function OpenJobInFolder(arg1) {
+  return window['go']['state']['App']['OpenJobInFolder'](arg1);
+}
+
 export function PauseAllDownloads() {
   return window['go']['state']['App']['PauseAllDownloads']();
 }
@@ -128,6 +140,14 @@ export function PickDownloadDirectory() {
 
 export function ProxyAvatarImageURL(arg1) {
   return window['go']['state']['App']['ProxyAvatarImageURL'](arg1);
+}
+
+export function RedownloadJob(arg1) {
+  return window['go']['state']['App']['RedownloadJob'](arg1);
+}
+
+export function RedownloadSubmission(arg1) {
+  return window['go']['state']['App']['RedownloadSubmission'](arg1);
 }
 
 export function RefreshSearch(arg1, arg2) {

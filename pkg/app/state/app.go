@@ -408,11 +408,25 @@ func (a *App) RetryDownload(jobID string) types.QueueSnapshot {
 	return a.downloadManager.Retry(jobID)
 }
 
+func (a *App) RedownloadJob(jobID string) (types.QueueSnapshot, error) {
+	if a.downloadManager == nil {
+		return types.EmptyQueueSnapshot(), errors.New("download manager unavailable")
+	}
+	return a.downloadManager.Redownload(jobID)
+}
+
 func (a *App) RetrySubmission(submissionID string) types.QueueSnapshot {
 	if a.downloadManager == nil {
 		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.RetrySubmission(submissionID)
+}
+
+func (a *App) RedownloadSubmission(submissionID string) (types.QueueSnapshot, error) {
+	if a.downloadManager == nil {
+		return types.EmptyQueueSnapshot(), errors.New("download manager unavailable")
+	}
+	return a.downloadManager.RedownloadSubmission(submissionID)
 }
 
 func (a *App) RetryAllDownloads() types.QueueSnapshot {
@@ -448,6 +462,20 @@ func (a *App) ClearQueue() types.QueueSnapshot {
 		return types.EmptyQueueSnapshot()
 	}
 	return a.downloadManager.Clear()
+}
+
+func (a *App) DeleteJob(jobID string) (types.QueueSnapshot, error) {
+	if a.downloadManager == nil {
+		return types.EmptyQueueSnapshot(), errors.New("download manager unavailable")
+	}
+	return a.downloadManager.Delete(jobID)
+}
+
+func (a *App) DeleteSubmissionJobs(submissionID string) (types.QueueSnapshot, error) {
+	if a.downloadManager == nil {
+		return types.EmptyQueueSnapshot(), errors.New("download manager unavailable")
+	}
+	return a.downloadManager.DeleteSubmission(submissionID)
 }
 
 func (a *App) ClearCompletedDownloads() types.QueueSnapshot {

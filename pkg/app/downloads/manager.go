@@ -123,6 +123,23 @@ func (m *Manager) Snapshot() types.QueueSnapshot {
 	return m.snapshotLocked()
 }
 
+func (m *Manager) OpenInFolder(jobID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job := m.jobs[jobID]
+	if job == nil {
+		return errors.New("download job not found")
+	}
+
+	target := existingJobPath(job)
+	if target == "" {
+		return errors.New("downloaded file not found")
+	}
+
+	return apputils.RevealPathInFileManager(target)
+}
+
 func (m *Manager) Cancel(jobID string) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -197,6 +214,28 @@ func (m *Manager) Retry(jobID string) types.QueueSnapshot {
 	return snapshot
 }
 
+func (m *Manager) Redownload(jobID string) (types.QueueSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job := m.jobs[jobID]
+	if job == nil {
+		return m.snapshotLocked(), errors.New("download job not found")
+	}
+	if job.snapshot.Status == "queued" || job.snapshot.Status == "active" {
+		return m.snapshotLocked(), errors.New("stop this download before redownloading it")
+	}
+	if err := deleteJobArtifacts(job); err != nil {
+		return m.snapshotLocked(), err
+	}
+
+	m.requeueJobLocked(jobID, job)
+	m.maybeStartLocked()
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, job.snapshot)
+	return snapshot, nil
+}
+
 func (m *Manager) RetrySubmission(submissionID string) types.QueueSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -227,6 +266,45 @@ func (m *Manager) RetrySubmission(submissionID string) types.QueueSnapshot {
 	snapshot := m.snapshotLocked()
 	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
+}
+
+func (m *Manager) RedownloadSubmission(submissionID string) (types.QueueSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if submissionID == "" {
+		return m.snapshotLocked(), errors.New("submission id is required")
+	}
+
+	targetJobIDs := make([]string, 0)
+	for jobID, job := range m.jobs {
+		if job == nil || job.snapshot.SubmissionID != submissionID {
+			continue
+		}
+		if job.snapshot.Status == "queued" || job.snapshot.Status == "active" {
+			return m.snapshotLocked(), errors.New("stop this submission before redownloading it")
+		}
+		targetJobIDs = append(targetJobIDs, jobID)
+	}
+	if len(targetJobIDs) == 0 {
+		return m.snapshotLocked(), errors.New("submission jobs not found")
+	}
+
+	for _, jobID := range targetJobIDs {
+		job := m.jobs[jobID]
+		if job == nil {
+			continue
+		}
+		if err := deleteJobArtifacts(job); err != nil {
+			return m.snapshotLocked(), err
+		}
+		m.requeueJobLocked(jobID, job)
+	}
+
+	m.maybeStartLocked()
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
+	return snapshot, nil
 }
 
 func (m *Manager) RetryAll() types.QueueSnapshot {
@@ -338,6 +416,65 @@ func (m *Manager) Clear() types.QueueSnapshot {
 	snapshot := m.snapshotLocked()
 	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
 	return snapshot
+}
+
+func (m *Manager) Delete(jobID string) (types.QueueSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job := m.jobs[jobID]
+	if job == nil {
+		return m.snapshotLocked(), errors.New("download job not found")
+	}
+	if job.snapshot.Status == "queued" || job.snapshot.Status == "active" {
+		return m.snapshotLocked(), errors.New("stop this download before deleting it")
+	}
+	if err := deleteJobArtifacts(job); err != nil {
+		return m.snapshotLocked(), err
+	}
+
+	delete(m.jobs, jobID)
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
+	return snapshot, nil
+}
+
+func (m *Manager) DeleteSubmission(submissionID string) (types.QueueSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if submissionID == "" {
+		return m.snapshotLocked(), errors.New("submission id is required")
+	}
+
+	targetJobIDs := make([]string, 0)
+	for jobID, job := range m.jobs {
+		if job == nil || job.snapshot.SubmissionID != submissionID {
+			continue
+		}
+		if job.snapshot.Status == "queued" || job.snapshot.Status == "active" {
+			return m.snapshotLocked(), errors.New("stop this submission before deleting it")
+		}
+		targetJobIDs = append(targetJobIDs, jobID)
+	}
+	if len(targetJobIDs) == 0 {
+		return m.snapshotLocked(), errors.New("submission jobs not found")
+	}
+
+	for _, jobID := range targetJobIDs {
+		job := m.jobs[jobID]
+		if job == nil {
+			continue
+		}
+		if err := deleteJobArtifacts(job); err != nil {
+			return m.snapshotLocked(), err
+		}
+		delete(m.jobs, jobID)
+	}
+
+	snapshot := m.snapshotLocked()
+	m.emitLocked(snapshot, types.DownloadJobSnapshot{})
+	return snapshot, nil
 }
 
 func (m *Manager) Reset() types.QueueSnapshot {
@@ -800,6 +937,51 @@ func jobFileExists(job *downloadJob) bool {
 		return false
 	}
 	return matches
+}
+
+func existingJobPath(job *downloadJob) string {
+	if job == nil {
+		return ""
+	}
+
+	for _, destination := range jobDestinations(job) {
+		info, err := os.Stat(destination)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		return destination
+	}
+
+	return ""
+}
+
+func jobDestinations(job *downloadJob) []string {
+	if job == nil {
+		return nil
+	}
+
+	destinations := uniqueNonEmptyPaths(job.task.Destinations)
+	if len(destinations) > 0 {
+		return destinations
+	}
+
+	return uniqueNonEmptyPaths([]string{
+		filepath.Join(job.task.DownloadRoot, job.task.Username, job.task.FileName),
+	})
+}
+
+func deleteJobArtifacts(job *downloadJob) error {
+	for _, destination := range jobDestinations(job) {
+		if err := os.Remove(destination); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		sidecar := stringsTrimExt(destination) + ".txt"
+		if err := os.Remove(sidecar); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func max64(a, b int64) int64 {

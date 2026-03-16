@@ -20,6 +20,10 @@ export function ConfigureRemoteStarter(arg1:state.RemoteStarter):Promise<void>;
 
 export function DebugResetState(arg1:string):Promise<types.DebugResetResult>;
 
+export function DeleteJob(arg1:string):Promise<types.QueueSnapshot>;
+
+export function DeleteSubmissionJobs(arg1:string):Promise<types.QueueSnapshot>;
+
 export function DiagnosticState():Promise<string>;
 
 export function DisableRemoteAccess():Promise<types.RemoteAccessInfo>;
@@ -62,11 +66,17 @@ export function OpenDownloadDirectory():Promise<void>;
 
 export function OpenExternalURL(arg1:string):Promise<void>;
 
+export function OpenJobInFolder(arg1:string):Promise<void>;
+
 export function PauseAllDownloads():Promise<types.QueueSnapshot>;
 
 export function PickDownloadDirectory():Promise<string>;
 
 export function ProxyAvatarImageURL(arg1:string):Promise<string>;
+
+export function RedownloadJob(arg1:string):Promise<types.QueueSnapshot>;
+
+export function RedownloadSubmission(arg1:string):Promise<types.QueueSnapshot>;
 
 export function RefreshSearch(arg1:string,arg2:string):Promise<types.SearchResponse>;
 

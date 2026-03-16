@@ -2885,6 +2885,83 @@ export default function App() {
     }
   }
 
+  async function handleOpenQueuedJobInFolder(jobId: string) {
+    if (!jobId) {
+      return;
+    }
+    try {
+      await backend.openJobInFolder(jobId);
+    } catch (error) {
+      const message = getErrorMessage(error, "Could not open the downloaded file.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "open-queued-job-folder-error");
+    }
+  }
+
+  async function handleRedownloadJob(jobId: string) {
+    if (!jobId) {
+      return;
+    }
+    try {
+      applyQueueSnapshot(await backend.redownloadJob(jobId));
+      updateQueueMessage("Redownloading file.", "success", "redownload-job-success");
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to redownload the file.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "redownload-job-error");
+    }
+  }
+
+  async function handleRedownloadSubmission(submissionId: string) {
+    if (!submissionId) {
+      return;
+    }
+    try {
+      applyQueueSnapshot(await backend.redownloadSubmission(submissionId));
+      updateQueueMessage(
+        "Redownloading submission files.",
+        "success",
+        "redownload-submission-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to redownload the submission.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "redownload-submission-error");
+    }
+  }
+
+  async function handleDeleteQueuedJob(jobId: string) {
+    if (!jobId) {
+      return;
+    }
+    try {
+      applyQueueSnapshot(await backend.deleteJob(jobId));
+      updateQueueMessage("Deleted queue item.", "success", "delete-queue-job-success");
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to delete the queue item.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "delete-queue-job-error");
+    }
+  }
+
+  async function handleDeleteQueuedSubmission(submissionId: string) {
+    if (!submissionId) {
+      return;
+    }
+    try {
+      applyQueueSnapshot(await backend.deleteSubmissionJobs(submissionId));
+      updateQueueMessage(
+        "Deleted submission jobs.",
+        "success",
+        "delete-queue-submission-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to delete the submission jobs.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "delete-queue-submission-error");
+    }
+  }
+
   async function handleRetryAllDownloads() {
     if (!canRetryAllDownloads) {
       return;
@@ -3400,6 +3477,7 @@ export default function App() {
             allSelected={allResultsSelected}
             autoClearCompleted={settings.autoClearCompleted}
             canOpenDownloadFolder={backend.capabilities.openLocalPaths}
+            canManageQueueJobs={backend.isDesktopRuntime}
             folderPreviewImages={folderPreviewImages}
             onOpenDownloadFolder={() => {
               backend.openDownloadDirectory().catch((error: unknown) => {
@@ -3433,11 +3511,24 @@ export default function App() {
               void persistSettings({ autoClearCompleted: enabled })
             }
             onMaxActiveChange={handleMaxActiveChange}
+            onOpenJobInFolder={(jobId) => void handleOpenQueuedJobInFolder(jobId)}
             onCancel={(jobId) => {
               backend.cancelDownload(jobId).then(applyQueueSnapshot).catch(() => undefined);
             }}
             onCancelSubmission={(submissionId) => void handleCancelSubmission(submissionId)}
             onRetry={(jobId) => void handleRetryDownload(jobId)}
+            onRedownloadJob={(jobId) => void handleRedownloadJob(jobId)}
+            onRedownloadSubmission={(submissionId) =>
+              void handleRedownloadSubmission(submissionId)
+            }
+            onDeleteJob={(jobId) => void handleDeleteQueuedJob(jobId)}
+            onDeleteSubmission={(submissionId) =>
+              void handleDeleteQueuedSubmission(submissionId)
+            }
+            onSearchArtist={(username) => void handleArtistSearch(username)}
+            onSearchFavoritesBy={(username) =>
+              void handleFavoritesSearch(username)
+            }
           />
         </main>
       </div>
