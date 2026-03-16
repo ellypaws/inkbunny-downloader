@@ -188,6 +188,7 @@ export const SubmissionContent = memo(function SubmissionContent(
       const src = node.getAttribute("src");
       const srcSet = node.getAttribute("srcset");
       const poster = node.getAttribute("poster");
+      node.setAttribute("referrerpolicy", "no-referrer");
       if (src) {
         node.setAttribute("src", resolveMediaURL(src) ?? src);
       }
@@ -414,7 +415,11 @@ function sanitizeElementAttributes(element: HTMLElement, tag: string) {
         }
         continue;
       }
-      if (key === "alt" || key === "title") {
+      if (
+        key === "alt" ||
+        key === "title" ||
+        key === "referrerpolicy"
+      ) {
         continue;
       }
       element.removeAttribute(attribute.name);
@@ -448,6 +453,9 @@ function sanitizeElementAttributes(element: HTMLElement, tag: string) {
         }
         continue;
       }
+      if (key === "referrerpolicy") {
+        continue;
+      }
       element.removeAttribute(attribute.name);
       continue;
     }
@@ -462,6 +470,9 @@ function sanitizeElementAttributes(element: HTMLElement, tag: string) {
         continue;
       }
       if (key === "type") {
+        continue;
+      }
+      if (key === "referrerpolicy") {
         continue;
       }
       element.removeAttribute(attribute.name);

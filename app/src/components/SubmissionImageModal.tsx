@@ -1085,6 +1085,9 @@ function SubmissionModalVideoInner(props: {
           controls
           playsInline
           preload="metadata"
+          ref={(element) => {
+            element?.setAttribute("referrerpolicy", "no-referrer");
+          }}
           onLoadedData={() => {
             setLoadedSourceKey(sourceKey);
           }}

@@ -1799,6 +1799,9 @@ function SubmissionPreviewVideoInner(props: {
       autoPlay
       playsInline
       preload="metadata"
+      ref={(element) => {
+        element?.setAttribute("referrerpolicy", "no-referrer");
+      }}
       aria-hidden="true"
       onError={() => {
         setSourceIndex((current) => current + 1);

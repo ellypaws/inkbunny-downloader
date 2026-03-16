@@ -774,15 +774,16 @@ func queuePreviewURL(
 	sid string,
 	hasSearchResult bool,
 ) string {
-	if hasSearchResult {
-		if previewURL := queueSubmissionPreviewURL(searchResult.SubmissionBasic, sid); previewURL != "" {
-			return previewURL
-		}
-	}
 	if previewURL := submissionResourceURL(file.FileURLPreview.String(), sid, submission.Public.Bool()); previewURL != "" {
 		return previewURL
 	}
-	return queueSubmissionPreviewURL(submission.SubmissionBasic, sid)
+	if previewURL := queueSubmissionPreviewURL(submission.SubmissionBasic, sid); previewURL != "" {
+		return previewURL
+	}
+	if hasSearchResult {
+		return queueSubmissionPreviewURL(searchResult.SubmissionBasic, sid)
+	}
+	return ""
 }
 
 func queueSubmissionPreviewURL(submission inkbunny.SubmissionBasic, sid string) string {
