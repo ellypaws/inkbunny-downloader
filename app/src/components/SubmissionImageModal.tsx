@@ -114,11 +114,32 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     keywordsExpandedState.submissionKey === submissionKey
       ? keywordsExpandedState.value
       : false;
-  const avatarSrc = avatarCandidates[avatarIndex] ?? DEFAULT_AVATAR_URL;
+  const usingAvatarFallback = avatarIndex >= avatarCandidates.length;
+  const avatarSrc = usingAvatarFallback
+    ? DEFAULT_AVATAR_URL
+    : (avatarCandidates[avatarIndex] ?? DEFAULT_AVATAR_URL);
+  const effectiveAvatarSrcSet = usingAvatarFallback ? "" : avatarSrcSet;
   const isSidebarRendered = sidebarMode !== "closed";
   const submissionKeywords = useMemo(
     () => submissionDescription?.keywords ?? [],
     [submissionDescription],
+  );
+  const handleDescriptionChange = useCallback(
+    (description: SubmissionDescription | null) => {
+      setDescriptionState((current) => {
+        if (
+          current.submissionKey === submissionKey &&
+          current.value === description
+        ) {
+          return current;
+        }
+        return {
+          submissionKey,
+          value: description,
+        };
+      });
+    },
+    [submissionKey],
   );
   const keywordsOverflowKey = useMemo(
     () =>
@@ -569,13 +590,13 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
             <div className="sim-panel-item flex items-start gap-3">
               <img
                 src={resolveMediaURL(avatarSrc) ?? avatarSrc}
-                srcSet={resolveMediaSrcSet(avatarSrcSet || undefined)}
+                srcSet={resolveMediaSrcSet(effectiveAvatarSrcSet || undefined)}
                 sizes="48px"
                 alt={props.submission.username}
                 referrerPolicy="no-referrer"
                 decoding="sync"
                 fetchPriority="high"
-                onError={(event) => {
+                onError={() => {
                   if (avatarIndex < avatarCandidates.length - 1) {
                     setAvatarState({
                       submissionKey,
@@ -583,8 +604,10 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                     });
                     return;
                   }
-                  event.currentTarget.src = DEFAULT_AVATAR_URL;
-                  event.currentTarget.srcset = "";
+                  setAvatarState({
+                    submissionKey,
+                    index: avatarCandidates.length,
+                  });
                 }}
                 className="h-12 w-12 shrink-0 rounded-full border border-[var(--theme-border-soft)] bg-white object-cover"
               />
@@ -638,12 +661,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               submissionId={props.submission.submissionId}
               mode="description"
               interactive
-              onDescriptionChange={(description) => {
-                setDescriptionState({
-                  submissionKey,
-                  value: description,
-                });
-              }}
+              onDescriptionChange={handleDescriptionChange}
             />
             {submissionKeywords.length > 0 ? (
               <div className="sim-panel-item mt-auto pt-4">
@@ -1027,7 +1045,7 @@ function SubmissionModalVideoInner(props: {
     return (
       <ModalPreviewFallback
         submission={props.submission}
-        className="max-h-[min(86vh,72rem)] w-[min(92vw,72rem)] max-w-full"
+        className="max-h-[min(86vh,72rem)] h-96 w-[min(50vw,72rem)] max-w-full"
       />
     );
   }

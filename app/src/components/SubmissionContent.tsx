@@ -1,5 +1,11 @@
 import { LoaderCircle } from "lucide-react";
-import { memo, useEffect, useState, type CSSProperties } from "react";
+import {
+  memo,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import type { SubmissionDescription as SubmissionDescriptionPayload } from "../lib/types";
 import { backend, resolveMediaSrcSet, resolveMediaURL } from "../lib/wails";
@@ -112,6 +118,11 @@ export const SubmissionContent = memo(function SubmissionContent(
     contentState.requestKey === requestKey ? contentState.loading : true;
   const loadError =
     contentState.requestKey === requestKey ? contentState.loadError : "";
+  const emitDescriptionChange = useEffectEvent(
+    (nextDescription: SubmissionDescriptionPayload | null) => {
+      onDescriptionChange?.(nextDescription);
+    },
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -150,8 +161,8 @@ export const SubmissionContent = memo(function SubmissionContent(
   }, [mode, requestKey, submissionId]);
 
   useEffect(() => {
-    onDescriptionChange?.(description);
-  }, [description, onDescriptionChange]);
+    emitDescriptionChange(description);
+  }, [description]);
 
   const selection = selectSubmissionBody(description, mode);
   const htmlKey = selection.html ? `${requestKey}:${selection.html}` : "";
