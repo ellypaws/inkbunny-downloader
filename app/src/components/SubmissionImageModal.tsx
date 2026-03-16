@@ -872,7 +872,14 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                           : "border-[var(--theme-border-soft)] opacity-75 hover:border-[var(--theme-border)] hover:opacity-100"
                       }`}
                     >
-                      {item.thumbnailSources.length > 0 ? (
+                      {item.kind === "video" && item.sources.length > 0 ? (
+                        <ModalThumbnailVideo
+                          sources={item.sources}
+                          poster={item.thumbnail}
+                          alt={item.alt}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : item.thumbnailSources.length > 0 ? (
                         <ModalThumbnailImage
                           sources={item.thumbnailSources}
                           alt={item.alt}
@@ -1088,6 +1095,9 @@ function SubmissionModalVideoInner(props: {
               : undefined
           }
           controls
+          autoPlay
+          muted
+          loop
           playsInline
           preload="metadata"
           ref={(element) => {
@@ -1145,6 +1155,62 @@ function ModalThumbnailImageInner(props: {
       alt={props.alt}
       loading="lazy"
       referrerPolicy={MEDIA_REFERRER_POLICY}
+      onError={() => {
+        setSourceIndex((current) => current + 1);
+      }}
+      className={props.className}
+    />
+  );
+}
+
+function ModalThumbnailVideo(props: {
+  sources: SubmissionModalPreviewSource[];
+  poster: SubmissionModalPreviewSource | null;
+  alt: string;
+  className: string;
+}) {
+  const sourcesKey = useMemo(
+    () =>
+      props.sources
+        .map((item) => `${item.src}|${item.srcSet ?? ""}`)
+        .join("||"),
+    [props.sources],
+  );
+
+  return <ModalThumbnailVideoInner key={sourcesKey} {...props} />;
+}
+
+function ModalThumbnailVideoInner(props: {
+  sources: SubmissionModalPreviewSource[];
+  poster: SubmissionModalPreviewSource | null;
+  alt: string;
+  className: string;
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const source = props.sources[sourceIndex];
+
+  if (!source?.src) {
+    return null;
+  }
+
+  return (
+    <video
+      key={`${source.src}-${source.srcSet ?? ""}-${sourceIndex}`}
+      src={resolveMediaURL(source.src) ?? source.src}
+      poster={
+        props.poster?.src
+          ? resolveMediaURL(props.poster.src) ?? props.poster.src
+          : undefined
+      }
+      aria-label={props.alt}
+      muted
+      loop
+      autoPlay
+      playsInline
+      preload="metadata"
+      ref={(element) => {
+        element?.setAttribute("referrerpolicy", MEDIA_REFERRER_POLICY);
+      }}
       onError={() => {
         setSourceIndex((current) => current + 1);
       }}
