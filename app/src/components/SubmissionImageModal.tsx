@@ -30,7 +30,12 @@ import { SubmissionContent } from "./SubmissionContent";
 import { SubmissionWritingReader } from "./SubmissionWritingReader";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import type { SubmissionCard, SubmissionDescription } from "../lib/types";
-import { backend, resolveMediaSrcSet, resolveMediaURL } from "../lib/wails";
+import {
+  backend,
+  MEDIA_REFERRER_POLICY,
+  resolveMediaSrcSet,
+  resolveMediaURL,
+} from "../lib/wails";
 
 export type SubmissionModalPreviewSource = {
   src: string;
@@ -593,7 +598,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                 srcSet={resolveMediaSrcSet(effectiveAvatarSrcSet || undefined)}
                 sizes="48px"
                 alt={props.submission.username}
-                referrerPolicy="no-referrer"
+                referrerPolicy={MEDIA_REFERRER_POLICY}
                 decoding="sync"
                 fetchPriority="high"
                 onError={() => {
@@ -978,7 +983,7 @@ function SubmissionModalVisualInner(props: {
             srcSet={resolveMediaSrcSet(props.thumbnail.srcSet)}
             alt={props.alt}
             aria-hidden={loaded}
-            referrerPolicy="no-referrer"
+            referrerPolicy={MEDIA_REFERRER_POLICY}
             className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
               loaded ? "opacity-0" : "opacity-100"
             }`}
@@ -995,7 +1000,7 @@ function SubmissionModalVisualInner(props: {
           src={resolveMediaURL(source.src) ?? source.src}
           srcSet={resolveMediaSrcSet(source.srcSet)}
           alt={props.alt}
-          referrerPolicy="no-referrer"
+          referrerPolicy={MEDIA_REFERRER_POLICY}
           onLoad={() => {
             setLoadedSourceKey(sourceKey);
           }}
@@ -1062,7 +1067,7 @@ function SubmissionModalVideoInner(props: {
             srcSet={resolveMediaSrcSet(props.thumbnail.srcSet)}
             alt={props.alt}
             aria-hidden={loaded}
-            referrerPolicy="no-referrer"
+            referrerPolicy={MEDIA_REFERRER_POLICY}
             className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
               loaded ? "opacity-0" : "opacity-100"
             }`}
@@ -1086,7 +1091,7 @@ function SubmissionModalVideoInner(props: {
           playsInline
           preload="metadata"
           ref={(element) => {
-            element?.setAttribute("referrerpolicy", "no-referrer");
+            element?.setAttribute("referrerpolicy", MEDIA_REFERRER_POLICY);
           }}
           onLoadedData={() => {
             setLoadedSourceKey(sourceKey);
@@ -1139,7 +1144,7 @@ function ModalThumbnailImageInner(props: {
       srcSet={source.srcSet}
       alt={props.alt}
       loading="lazy"
-      referrerPolicy="no-referrer"
+      referrerPolicy={MEDIA_REFERRER_POLICY}
       onError={() => {
         setSourceIndex((current) => current + 1);
       }}

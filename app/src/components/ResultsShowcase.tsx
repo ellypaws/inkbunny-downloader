@@ -41,6 +41,7 @@ import { DEFAULT_AVATAR_URL } from "../lib/constants";
 import { accentClass } from "../lib/format";
 import {
   backend,
+  MEDIA_REFERRER_POLICY,
   resolveMediaSrcSet,
   resolveMediaURL,
 } from "../lib/wails";
@@ -1800,7 +1801,7 @@ function SubmissionPreviewVideoInner(props: {
       playsInline
       preload="metadata"
       ref={(element) => {
-        element?.setAttribute("referrerpolicy", "no-referrer");
+        element?.setAttribute("referrerpolicy", MEDIA_REFERRER_POLICY);
       }}
       aria-hidden="true"
       onError={() => {
@@ -1840,7 +1841,7 @@ function SubmissionPreviewImage(props: {
       alt={props.alt}
       loading="lazy"
       decoding="async"
-      referrerPolicy="no-referrer"
+      referrerPolicy={MEDIA_REFERRER_POLICY}
       onError={() => {
         setSourceIndex((current) => current + 1);
       }}
@@ -1856,11 +1857,11 @@ function getSubmissionModalMediaItems(
   const mediaFiles = submission.mediaFiles ?? [];
   if (mediaFiles.length > 0) {
     return mediaFiles.map((file, index) => {
-      const thumbnailSources = dedupePreviewSources([
-        ...getThumbnailFallbackSources(file, preferCustomThumbnails),
-        toPreviewSourceIfImage(file.fullUrl),
-      ]);
       const kind = isVideoAsset(file) ? "video" : "image";
+      const thumbnailSources =
+        kind === "video"
+          ? []
+          : getThumbnailFallbackSources(file, preferCustomThumbnails);
 
       return {
         key: file.fileId || `${submission.submissionId}-${index}`,
@@ -1879,11 +1880,11 @@ function getSubmissionModalMediaItems(
     });
   }
 
-  const thumbnailSources = dedupePreviewSources([
-    ...getThumbnailFallbackSources(submission, preferCustomThumbnails),
-    toPreviewSourceIfImage(submission.fullUrl),
-  ]);
   const kind = isVideoAsset(submission) ? "video" : "image";
+  const thumbnailSources =
+    kind === "video"
+      ? []
+      : getThumbnailFallbackSources(submission, preferCustomThumbnails);
 
   return [
     {
@@ -1912,10 +1913,7 @@ function getSubmissionModalPreviewSources(
 ) {
   return dedupePreviewSources([
     toPreviewSourceIfImage(submission.fullUrl),
-    toPreviewSourceIfImage(submission.screenUrl),
-    toPreviewSourceIfImage(submission.previewUrl),
     getThumbnailPreviewSource(submission, preferCustomThumbnails),
-    toPreviewSourceIfImage(submission.latestPreviewUrl),
     toPreviewSourceIfImage(submission.latestThumbnailUrl),
   ]);
 }
@@ -1926,10 +1924,7 @@ function getMediaFilePreviewSources(
 ) {
   return dedupePreviewSources([
     toPreviewSourceIfImage(file.fullUrl),
-    toPreviewSourceIfImage(file.screenUrl),
-    toPreviewSourceIfImage(file.previewUrl),
     getThumbnailPreviewSource(file, preferCustomThumbnails),
-    toPreviewSourceIfImage(file.thumbnailUrl),
   ]);
 }
 
@@ -1946,9 +1941,8 @@ function getPreviewSources(
       variant === "full",
       preferredWidth,
     ),
-    toPreviewSourceIfImage(submission.latestPreviewUrl),
     toPreviewSourceIfImage(submission.latestThumbnailUrl),
-    toPreviewSourceIfImage(submission.fullUrl),
+    variant === "full" ? toPreviewSourceIfImage(submission.fullUrl) : null,
   ]);
 }
 
@@ -1966,10 +1960,7 @@ function getSubmissionPreviewKey(
     submission.thumbnailUrlMediumNonCustom,
     submission.thumbnailUrlLargeNonCustom,
     submission.thumbnailUrlHugeNonCustom,
-    submission.previewUrl,
-    submission.screenUrl,
     submission.fullUrl,
-    submission.latestPreviewUrl,
     submission.latestThumbnailUrl,
     preferCustomThumbnails ? "custom" : "default",
     refreshToken,
@@ -2053,8 +2044,6 @@ function getThumbnailFallbackSources(
       includeFullFileURL,
       preferredWidth,
     ),
-    toPreviewSourceIfImage(item.screenUrl),
-    toPreviewSourceIfImage(item.previewUrl),
   ]);
 }
 
@@ -2260,7 +2249,7 @@ function SubmissionAuthorButtonInner(props: {
         alt={props.submission.username}
         loading="lazy"
         decoding="async"
-        referrerPolicy="no-referrer"
+        referrerPolicy={MEDIA_REFERRER_POLICY}
         onError={() => setAvatarErrored(true)}
         className={`shrink-0 rounded-full border border-white/70 bg-white object-cover ${
           props.compact ? "h-5 w-5" : "h-8 w-8"
@@ -2460,17 +2449,9 @@ function getSubmissionPrimaryVideoSources(submission: SubmissionCard) {
 function getVideoPlaybackSources(
   item: VideoAssetLike,
 ) {
-  const treatPrimaryURLsAsVideo =
-    isVideoMimeType(item.mimeType || item.latestMimeType) ||
-    hasVideoExtension(item.fileName);
-
   return dedupePreviewSources([
-    treatPrimaryURLsAsVideo
-      ? toPreviewSource(item.fullUrl)
-      : toPreviewSourceIfVideo(item.fullUrl),
-    treatPrimaryURLsAsVideo
-      ? toPreviewSource(item.screenUrl)
-      : toPreviewSourceIfVideo(item.screenUrl),
+    toPreviewSource(item.fullUrl),
+    toPreviewSourceIfVideo(item.screenUrl),
     toPreviewSourceIfVideo(item.previewUrl),
   ]);
 }

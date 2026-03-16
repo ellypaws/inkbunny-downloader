@@ -8,7 +8,12 @@ import {
 } from "react";
 
 import type { SubmissionDescription as SubmissionDescriptionPayload } from "../lib/types";
-import { backend, resolveMediaSrcSet, resolveMediaURL } from "../lib/wails";
+import {
+  backend,
+  MEDIA_REFERRER_POLICY,
+  resolveMediaSrcSet,
+  resolveMediaURL,
+} from "../lib/wails";
 
 type SubmissionContentProps = {
   submissionId: string;
@@ -188,7 +193,7 @@ export const SubmissionContent = memo(function SubmissionContent(
       const src = node.getAttribute("src");
       const srcSet = node.getAttribute("srcset");
       const poster = node.getAttribute("poster");
-      node.setAttribute("referrerpolicy", "no-referrer");
+      node.setAttribute("referrerpolicy", MEDIA_REFERRER_POLICY);
       if (src) {
         node.setAttribute("src", resolveMediaURL(src) ?? src);
       }

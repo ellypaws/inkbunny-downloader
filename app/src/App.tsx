@@ -3715,13 +3715,14 @@ function buildSubmissionPreviewMap(tabs: SearchTabState[]) {
 
 function getSubmissionPreviewSources(submission: SubmissionCard) {
   return dedupePreviewSources([
-    submission.previewUrl ||
-      "",
-    submission.latestPreviewUrl || "",
-    submission.screenUrl || "",
+    submission.thumbnailUrlHuge || "",
+    submission.thumbnailUrlLarge || "",
+    submission.thumbnailUrlMedium || "",
+    submission.thumbnailUrlHugeNonCustom || "",
+    submission.thumbnailUrlLargeNonCustom || "",
+    submission.thumbnailUrlMediumNonCustom || "",
     submission.thumbnailUrl || "",
     submission.latestThumbnailUrl || "",
-    submission.fullUrl || "",
   ]);
 }
 

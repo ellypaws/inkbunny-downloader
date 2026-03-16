@@ -1194,17 +1194,18 @@ func mapSubmissionCards(
 	for index, submission := range submissions {
 		submissionID := submission.SubmissionID.String()
 		detail := detailsByID[submissionID]
+		primaryFile, hasPrimaryFile := primarySubmissionFile(detail.Files)
 		previewURL := firstNonEmpty(
 			submissionResourceURL(detail.FileURLPreview.String(), sid, submission.Public.Bool()),
-			submissionResourceURL(submission.FileURLPreview.String(), sid, submission.Public.Bool()),
+			submissionMediaFileResourceURL(primaryFile.FileURLPreview.String(), sid, submission.Public.Bool(), hasPrimaryFile),
 		)
 		screenURL := firstNonEmpty(
 			submissionResourceURL(detail.FileURLScreen.String(), sid, submission.Public.Bool()),
-			submissionResourceURL(submission.FileURLScreen.String(), sid, submission.Public.Bool()),
+			submissionMediaFileResourceURL(primaryFile.FileURLScreen.String(), sid, submission.Public.Bool(), hasPrimaryFile),
 		)
 		fullURL := firstNonEmpty(
 			submissionResourceURL(detail.FileURLFull.String(), sid, submission.Public.Bool()),
-			submissionResourceURL(submission.FileURLFull.String(), sid, submission.Public.Bool()),
+			submissionMediaFileResourceURL(primaryFile.FileURLFull.String(), sid, submission.Public.Bool(), hasPrimaryFile),
 		)
 		thumbnail := firstNonEmpty(
 			detail.ThumbnailURLHuge,
@@ -1213,12 +1214,12 @@ func mapSubmissionCards(
 			detail.ThumbnailURLHugeNonCustom,
 			detail.ThumbnailURLLargeNonCustom,
 			detail.ThumbnailURLMediumNonCustom,
-			submission.ThumbnailURLHuge,
-			submission.ThumbnailURLLarge,
-			submission.ThumbnailURLMedium,
-			submission.ThumbnailURLHugeNonCustom,
-			submission.ThumbnailURLLargeNonCustom,
-			submission.ThumbnailURLMediumNonCustom,
+			submissionMediaFileValue(primaryFile.ThumbnailURLHuge, hasPrimaryFile),
+			submissionMediaFileValue(primaryFile.ThumbnailURLLarge, hasPrimaryFile),
+			submissionMediaFileValue(primaryFile.ThumbnailURLMedium, hasPrimaryFile),
+			submissionMediaFileValue(primaryFile.ThumbnailURLHugeNonCustom, hasPrimaryFile),
+			submissionMediaFileValue(primaryFile.ThumbnailURLLargeNonCustom, hasPrimaryFile),
+			submissionMediaFileValue(primaryFile.ThumbnailURLMediumNonCustom, hasPrimaryFile),
 		)
 		latestThumbnail := firstNonEmpty(
 			detail.LatestThumbnailURLHuge,
@@ -1227,12 +1228,6 @@ func mapSubmissionCards(
 			detail.LatestThumbnailURLHugeNonCustom,
 			detail.LatestThumbnailURLLargeNonCustom,
 			detail.LatestThumbnailURLMediumNonCustom,
-			submission.LatestThumbnailURLHuge,
-			submission.LatestThumbnailURLLarge,
-			submission.LatestThumbnailURLMedium,
-			submission.LatestThumbnailURLHugeNonCustom,
-			submission.LatestThumbnailURLLargeNonCustom,
-			submission.LatestThumbnailURLMediumNonCustom,
 		)
 
 		badge := submission.TypeName
@@ -1267,34 +1262,34 @@ func mapSubmissionCards(
 			),
 			ThumbnailURLMedium: firstNonEmpty(
 				submissionResourceURL(detail.ThumbnailURLMedium, sid, submission.Public.Bool()),
-				submissionResourceURL(submission.ThumbnailURLMedium, sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.ThumbnailURLMedium, sid, submission.Public.Bool(), hasPrimaryFile),
 			),
 			ThumbnailURLLarge: firstNonEmpty(
 				submissionResourceURL(detail.ThumbnailURLLarge, sid, submission.Public.Bool()),
-				submissionResourceURL(submission.ThumbnailURLLarge, sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.ThumbnailURLLarge, sid, submission.Public.Bool(), hasPrimaryFile),
 			),
 			ThumbnailURLHuge: firstNonEmpty(
 				submissionResourceURL(detail.ThumbnailURLHuge, sid, submission.Public.Bool()),
-				submissionResourceURL(submission.ThumbnailURLHuge, sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.ThumbnailURLHuge, sid, submission.Public.Bool(), hasPrimaryFile),
 			),
 			ThumbnailURLMediumNonCustom: firstNonEmpty(
 				submissionResourceURL(detail.ThumbnailURLMediumNonCustom, sid, submission.Public.Bool()),
-				submissionResourceURL(submission.ThumbnailURLMediumNonCustom, sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.ThumbnailURLMediumNonCustom, sid, submission.Public.Bool(), hasPrimaryFile),
 			),
 			ThumbnailURLLargeNonCustom: firstNonEmpty(
 				submissionResourceURL(detail.ThumbnailURLLargeNonCustom, sid, submission.Public.Bool()),
-				submissionResourceURL(submission.ThumbnailURLLargeNonCustom, sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.ThumbnailURLLargeNonCustom, sid, submission.Public.Bool(), hasPrimaryFile),
 			),
 			ThumbnailURLHugeNonCustom: firstNonEmpty(
 				submissionResourceURL(detail.ThumbnailURLHugeNonCustom, sid, submission.Public.Bool()),
-				submissionResourceURL(submission.ThumbnailURLHugeNonCustom, sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.ThumbnailURLHugeNonCustom, sid, submission.Public.Bool(), hasPrimaryFile),
 			),
-			ThumbMediumX:          firstNonZeroInt(int(detail.ThumbMediumX), int(submission.ThumbMediumX)),
-			ThumbLargeX:           firstNonZeroInt(int(detail.ThumbLargeX), int(submission.ThumbLargeX)),
-			ThumbHugeX:            firstNonZeroInt(int(detail.ThumbHugeX), int(submission.ThumbHugeX)),
-			ThumbMediumNonCustomX: firstNonZeroInt(int(detail.ThumbMediumNonCustomX), int(submission.ThumbMediumNonCustomX)),
-			ThumbLargeNonCustomX:  firstNonZeroInt(int(detail.ThumbLargeNonCustomX), int(submission.ThumbLargeNonCustomX)),
-			ThumbHugeNonCustomX:   firstNonZeroInt(int(detail.ThumbHugeNonCustomX), int(submission.ThumbHugeNonCustomX)),
+			ThumbMediumX:          firstNonZeroInt(int(detail.ThumbMediumX), submissionMediaFileInt(int(primaryFile.ThumbMediumX), hasPrimaryFile)),
+			ThumbLargeX:           firstNonZeroInt(int(detail.ThumbLargeX), submissionMediaFileInt(int(primaryFile.ThumbLargeX), hasPrimaryFile)),
+			ThumbHugeX:            firstNonZeroInt(int(detail.ThumbHugeX), submissionMediaFileInt(int(primaryFile.ThumbHugeX), hasPrimaryFile)),
+			ThumbMediumNonCustomX: firstNonZeroInt(int(detail.ThumbMediumNonCustomX), submissionMediaFileInt(int(primaryFile.ThumbMediumNonCustomX), hasPrimaryFile)),
+			ThumbLargeNonCustomX:  firstNonZeroInt(int(detail.ThumbLargeNonCustomX), submissionMediaFileInt(int(primaryFile.ThumbLargeNonCustomX), hasPrimaryFile)),
+			ThumbHugeNonCustomX:   firstNonZeroInt(int(detail.ThumbHugeNonCustomX), submissionMediaFileInt(int(primaryFile.ThumbHugeNonCustomX), hasPrimaryFile)),
 			UserIconURLSmall:      submissionResourceURL(detail.UserIconURLs.Small, sid, submission.Public.Bool()),
 			UserIconURLMedium:     submissionResourceURL(detail.UserIconURLs.Medium, sid, submission.Public.Bool()),
 			UserIconURLLarge:      submissionResourceURL(detail.UserIconURLs.Large, sid, submission.Public.Bool()),
@@ -1308,6 +1303,41 @@ func mapSubmissionCards(
 		})
 	}
 	return cards
+}
+
+func primarySubmissionFile(files []inkbunny.File) (inkbunny.File, bool) {
+	if len(files) == 0 {
+		return inkbunny.File{}, false
+	}
+
+	primary := files[0]
+	for _, file := range files[1:] {
+		if int(file.SubmissionFileOrder) < int(primary.SubmissionFileOrder) {
+			primary = file
+		}
+	}
+	return primary, true
+}
+
+func submissionMediaFileResourceURL(raw string, sid string, isPublic bool, enabled bool) string {
+	if !enabled {
+		return ""
+	}
+	return submissionResourceURL(raw, sid, isPublic)
+}
+
+func submissionMediaFileValue(value string, enabled bool) string {
+	if !enabled {
+		return ""
+	}
+	return value
+}
+
+func submissionMediaFileInt(value int, enabled bool) int {
+	if !enabled {
+		return 0
+	}
+	return value
 }
 
 func mapSubmissionMediaFiles(files []inkbunny.File, sid string, isPublic bool) []types.SubmissionMediaFile {

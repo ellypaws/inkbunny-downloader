@@ -807,6 +807,8 @@ export function subscribeBackendEvent<E extends BackendEventName>(
   return browserEvents.subscribe(eventName, callback)
 }
 
+export const MEDIA_REFERRER_POLICY = 'no-referrer'
+
 export function resolveMediaURL(url?: string): string | undefined {
   if (!url) {
     return url

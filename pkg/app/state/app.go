@@ -552,7 +552,7 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 					URL:          file.FileURLFull.String(),
 					IsPublic:     submission.Public.Bool(),
 					Keywords:     keywords,
-					PreviewURL:   queuePreviewURL(searchResult, submission, file, user.SID, hasSearchResult),
+					PreviewURL:   queuePreviewURL(submission, file, user.SID),
 					SaveKeywords: saveKeywords,
 					DownloadRoot: downloadRoot,
 					Destinations: downloads.ResolveDestinations(downloadRoot, downloadPattern, submission, file),
@@ -768,37 +768,25 @@ func queueSubmissionUsername(
 }
 
 func queuePreviewURL(
-	searchResult inkbunny.SubmissionSearch,
 	submission inkbunny.SubmissionDetails,
 	file inkbunny.File,
 	sid string,
-	hasSearchResult bool,
 ) string {
-	if previewURL := submissionResourceURL(file.FileURLPreview.String(), sid, submission.Public.Bool()); previewURL != "" {
-		return previewURL
-	}
-	if previewURL := queueSubmissionPreviewURL(submission.SubmissionBasic, sid); previewURL != "" {
-		return previewURL
-	}
-	if hasSearchResult {
-		return queueSubmissionPreviewURL(searchResult.SubmissionBasic, sid)
-	}
-	return ""
-}
-
-func queueSubmissionPreviewURL(submission inkbunny.SubmissionBasic, sid string) string {
-	if previewURL := submissionResourceURL(submission.FileURLPreview.String(), sid, submission.Public.Bool()); previewURL != "" {
-		return previewURL
+	if isVideoMIMEType(file.MimeType) || hasVideoExtension(file.FileName) {
+		return ""
 	}
 	thumbnail := firstNonEmpty(
-		submission.ThumbnailURLHuge,
-		submission.ThumbnailURLLarge,
-		submission.ThumbnailURLMedium,
-		submission.ThumbnailURLHugeNonCustom,
-		submission.ThumbnailURLLargeNonCustom,
-		submission.ThumbnailURLMediumNonCustom,
+		file.ThumbnailURLHuge,
+		file.ThumbnailURLLarge,
+		file.ThumbnailURLMedium,
+		file.ThumbnailURLHugeNonCustom,
+		file.ThumbnailURLLargeNonCustom,
+		file.ThumbnailURLMediumNonCustom,
 	)
-	return submissionResourceURL(thumbnail, sid, submission.Public.Bool())
+	if thumbnailURL := submissionResourceURL(thumbnail, sid, submission.Public.Bool()); thumbnailURL != "" {
+		return thumbnailURL
+	}
+	return submissionResourceURL(file.FileURLPreview.String(), sid, submission.Public.Bool())
 }
 
 func (a *App) syncSessionAvatar(user *inkbunny.User) {
@@ -827,6 +815,20 @@ func (a *App) syncSessionAvatar(user *inkbunny.User) {
 
 func (a *App) cachedSubmissionDetails(user *inkbunny.User, submissionIDs []string) (inkbunny.SubmissionDetailsResponse, error) {
 	return a.cachedSubmissionDetailsWithContext(context.Background(), user, submissionIDs)
+}
+
+func isVideoMIMEType(value string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "video/")
+}
+
+func hasVideoExtension(value string) bool {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(value)))
+	switch ext {
+	case ".mp4", ".webm", ".ogg", ".mov":
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *App) cachedSubmissionDetailsWithContext(
