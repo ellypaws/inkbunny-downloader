@@ -58,6 +58,7 @@ type SearchWorkspaceProps = {
   onToggleMyWatches: () => void;
   onSearch: () => void;
   onStopSearch: () => void;
+  onDisableUnreadMode: () => void;
   onClearForm: () => void;
   onNewTab: () => void;
   onToggleAutoQueue: (enabled: boolean) => void;
@@ -203,30 +204,47 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
     >
       <div className="pointer-events-none absolute inset-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay bg-[radial-gradient(circle_at_top_right,var(--theme-accent-soft),transparent_30%),radial-gradient(circle_at_bottom_left,var(--theme-border-soft),transparent_22%)]" />
       <div className="theme-panel relative z-10 overflow-hidden rounded-toy-sm border shadow-pop backdrop-blur-xl">
-        <button
-          type="button"
-          onClick={props.onToggleCollapse}
-          className="theme-divider theme-hover group flex w-full items-center justify-between border-b px-4 py-3.5 text-left transition-colors sm:px-6 sm:py-4"
-          aria-expanded={!props.collapsed}
-        >
+        <div className="theme-divider flex items-center justify-between border-b px-4 py-3.5 sm:px-6 sm:py-4">
           <div className="flex items-center gap-3">
-            <h2 className="font-display text-2xl font-black text-[var(--theme-accent-strong)] sm:text-[2.1rem]">
-              Search
-            </h2>
+            <button
+              type="button"
+              onClick={props.onToggleCollapse}
+              className="group flex items-center text-left"
+              aria-expanded={!props.collapsed}
+              title={props.collapsed ? "Expand search" : "Collapse search"}
+            >
+              <h2 className="font-display text-2xl font-black text-[var(--theme-accent-strong)] transition-colors group-hover:text-[var(--theme-info)] sm:text-[2.1rem]">
+                Search
+              </h2>
+            </button>
             {props.mode === "unread" ? (
-              <span className="rounded-full border border-[var(--inkbunny-green)] px-3 py-1 text-[11px] font-black dark:text-white text-[var(--inkbunny-slate)] shadow-sm">
-                Unread Mode
-              </span>
+              <div className="group/unread relative">
+                <button
+                  type="button"
+                  onClick={props.onDisableUnreadMode}
+                  className="inline-block rounded-full scale-85 border border-[var(--inkbunny-green)] px-2.5 py-[0.28rem] pt-[0.29rem] text-[10px] leading-none font-black text-[var(--inkbunny-slate)] shadow-sm transition-colors hover:border-[var(--theme-danger)] hover:bg-[color-mix(in_srgb,var(--theme-danger)_8%,transparent)] hover:text-[var(--theme-danger)] hover:line-through dark:text-white"
+                >
+                  Unread Mode
+                </button>
+                <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-72 translate-y-1 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-surface-strong)] px-3 py-2 text-left text-xs font-medium text-[var(--theme-text)] opacity-0 shadow-xl transition-all duration-200 group-hover/unread:translate-y-0 group-hover/unread:opacity-100 group-focus-within/unread:translate-y-0 group-focus-within/unread:opacity-100">
+                  Unread Mode is for checking only new submissions you have not
+                  opened yet. Click to turn it off and search normally.
+                </div>
+              </div>
             ) : null}
           </div>
-          <span
-            className={`theme-panel-strong flex h-11 w-11 items-center justify-center rounded-full border text-[var(--theme-info)] shadow-sm backdrop-blur-md transition-all duration-300 group-hover:scale-105 ${
+          <button
+            type="button"
+            onClick={props.onToggleCollapse}
+            className={`theme-panel-strong theme-hover flex h-11 w-11 items-center justify-center rounded-full border text-[var(--theme-info)] shadow-sm backdrop-blur-md transition-all duration-300 ${
               props.collapsed ? "-rotate-90" : "rotate-0"
             }`}
+            aria-expanded={!props.collapsed}
+            title={props.collapsed ? "Expand search" : "Collapse search"}
           >
             <ChevronDown size={20} />
-          </span>
-        </button>
+          </button>
+        </div>
 
         <div
           className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${

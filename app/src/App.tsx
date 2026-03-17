@@ -1789,6 +1789,30 @@ export default function App() {
     void handleSearch(1, targetTab.id);
   }
 
+  async function handleDisableUnreadMode(targetTabId = activeTabIdRef.current) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab || tab.mode !== "unread") {
+      return;
+    }
+
+    markWorkspaceInputEdit(targetTabId);
+    updateTab(targetTabId, (currentTab) =>
+      currentTab.mode !== "unread"
+        ? currentTab
+        : {
+            ...currentTab,
+            mode: "default",
+            searchParams: normalizeSearchParamsForMode(
+              currentTab.searchParams,
+              "default",
+              sessionRef.current,
+              settingsRef.current,
+            ),
+          },
+    );
+    await handleSearchAction(targetTabId);
+  }
+
   function handleCloseTab(tabId: string) {
     const currentTabs = tabsRef.current;
     const closingIndex = currentTabs.findIndex((tab) => tab.id === tabId);
@@ -3991,6 +4015,7 @@ export default function App() {
               onToggleMyWatches={() => void handleToggleWatchingArtists()}
               onSearch={() => void handleSearchAction()}
               onStopSearch={() => void stopActiveSearch()}
+              onDisableUnreadMode={() => void handleDisableUnreadMode()}
               onClearForm={() => handleClearSearchForm()}
               onNewTab={handleAddTab}
               onToggleAutoQueue={(enabled) => handleToggleAutoQueue(enabled)}
@@ -4087,6 +4112,7 @@ export default function App() {
             <ResultsShowcase
               searchResponse={activeSearchResponse}
               results={activeResults}
+              unreadModeActive={unreadModeActive}
               activeSubmissionId={activeSubmissionId}
               selectedSubmissionIds={activeSelectedSubmissionIds}
               showCustomThumbnails={activeTab?.showCustomThumbnails ?? true}
@@ -4164,6 +4190,8 @@ export default function App() {
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
               onStopSearch={() => void stopActiveSearch()}
+              onDisableUnreadMode={() => void handleDisableUnreadMode()}
+              onStartNewSearch={handleAddTab}
               onDownloadAction={() => void handleQueueDownloads()}
               onLoadMore={() => void handleLoadMore("more")}
               onLoadAll={() => void handleLoadMore("all")}

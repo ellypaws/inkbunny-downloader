@@ -50,7 +50,7 @@ export const GLOBAL_STYLES = `
     --theme-accent-soft: rgba(85, 87, 83, 0.12);
     --theme-info: #555753;
     --theme-info-strong: #2e3436;
-    --theme-danger: #2e3436;
+    --theme-danger: #eb4634;
     --theme-danger-soft: rgba(46, 52, 54, 0.12);
     --theme-success: #555753;
     --theme-success-soft: rgba(85, 87, 83, 0.12);

@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  AlertTriangle,
   ChevronsDown,
   Check,
   Download,
@@ -56,6 +57,7 @@ import type {
 type ResultsShowcaseProps = {
   searchResponse: SearchResponse | null;
   results: SubmissionCard[];
+  unreadModeActive: boolean;
   activeSubmissionId: string;
   selectedSubmissionIds: string[];
   showCustomThumbnails: boolean;
@@ -88,6 +90,8 @@ type ResultsShowcaseProps = {
   onStopAll: () => void;
   onRefresh: () => void;
   onStopSearch: () => void;
+  onDisableUnreadMode: () => void;
+  onStartNewSearch: () => void;
   onDownloadAction: () => void;
   onLoadMore: () => void;
   onLoadAll: () => void;
@@ -290,6 +294,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const emptyState = getEmptyResultsState(
     props.searchResponse,
     props.searchPhase,
+    props.unreadModeActive,
   );
   const refreshButtonState = getRefreshButtonState(
     props.searchPhase,
@@ -986,6 +991,35 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
             <p className="mt-2 max-w-lg text-sm text-[var(--theme-text-soft)]">
               {emptyState.description}
             </p>
+            {emptyState.showUnreadWarning ? (
+              <div className="mt-4 max-w-xl rounded-3xl border border-[color-mix(in_srgb,var(--theme-danger)_35%,var(--theme-border-strong))] bg-[color-mix(in_srgb,var(--theme-danger-soft)_55%,transparent)] px-4 py-3 text-sm text-[var(--theme-text)] shadow-sm">
+                <div className="flex items-start justify-center gap-2 text-left">
+                  <AlertTriangle
+                    size={16}
+                    className="mt-0.5 shrink-0 text-[var(--theme-danger)]"
+                  />
+                  <p>
+                    Did you mean to{" "}
+                    <button
+                      type="button"
+                      onClick={props.onDisableUnreadMode}
+                      className="font-black text-[var(--theme-accent-strong)] underline decoration-dotted underline-offset-4 transition-colors hover:text-[var(--theme-danger)]"
+                    >
+                      turn off unread mode
+                    </button>{" "}
+                    or{" "}
+                    <button
+                      type="button"
+                      onClick={props.onStartNewSearch}
+                      className="font-black text-[var(--theme-accent-strong)] underline decoration-dotted underline-offset-4 transition-colors hover:text-[var(--inkbunny-green)] dark:hover:text-[var(--theme-info)]"
+                    >
+                      start a new search
+                    </button>
+                    ?
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           panelItems.map((item, index) => {
@@ -1559,6 +1593,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 function getEmptyResultsState(
   searchResponse: SearchResponse | null,
   searchPhase: ResultsShowcaseProps["searchPhase"],
+  unreadModeActive: boolean,
 ) {
   if (searchPhase === "searching") {
     return {
@@ -1567,6 +1602,7 @@ function getEmptyResultsState(
       description: searchResponse
         ? "Checking the next page of matches."
         : "Checking Inkbunny for matching submissions.",
+      showUnreadWarning: false,
     };
   }
   if (searchPhase === "processing") {
@@ -1574,19 +1610,24 @@ function getEmptyResultsState(
       busy: true,
       title: "Processing results...",
       description: "Preparing matches for display.",
+      showUnreadWarning: false,
     };
   }
   if (searchResponse) {
     return {
       busy: false,
       title: "No results found.",
-      description: "Try broader keywords, different artists, or looser filters.",
+      description: unreadModeActive
+        ? "Unread Mode only shows new submissions, so this search may be empty even when older matches exist."
+        : "Try broader keywords, different artists, or looser filters.",
+      showUnreadWarning: unreadModeActive,
     };
   }
   return {
     busy: false,
     title: "Search results appear here.",
     description: "Run a search to fill this panel.",
+    showUnreadWarning: false,
   };
 }
 
