@@ -253,6 +253,21 @@ function appendRemoteAuthQuery(target: string): string {
   return `${url.pathname}${url.search}${url.hash}`
 }
 
+function hasLocalProxyPath(
+  target: string,
+  allowedPaths: readonly string[],
+): boolean {
+  try {
+    const parsed = new URL(target, window.location.origin)
+    return (
+      parsed.origin === window.location.origin &&
+      allowedPaths.includes(parsed.pathname)
+    )
+  } catch {
+    return false
+  }
+}
+
 function buildBrowserHeaders(body: unknown): HeadersInit | undefined {
   const token = currentRemoteAuthToken()
   const headers: Record<string, string> = {}
@@ -461,6 +476,9 @@ class BrowserEventBus {
 const browserEvents = new BrowserEventBus()
 
 function buildRemoteResourceURL(url: string): string {
+  if (hasLocalProxyPath(url, ['/api/resource', '/api/avatar/image'])) {
+    return appendRemoteAuthQuery(url)
+  }
   return appendRemoteAuthQuery(`/api/resource?url=${encodeURIComponent(url)}`)
 }
 
@@ -469,6 +487,9 @@ function buildAvatarImageURL(url: string): string {
 }
 
 function buildRemoteOpenURL(url: string): string {
+  if (hasLocalProxyPath(url, ['/api/open'])) {
+    return appendRemoteAuthQuery(url)
+  }
   return appendRemoteAuthQuery(`/api/open?url=${encodeURIComponent(url)}`)
 }
 

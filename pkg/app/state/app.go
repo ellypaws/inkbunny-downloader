@@ -800,7 +800,7 @@ func queuePreviewURL(
 	file inkbunny.File,
 	sid string,
 ) string {
-	if isVideoMIMEType(file.MimeType) || hasVideoExtension(file.FileName) {
+	if !supportsResizedAssetVariants(file.MimeType, file.FileName) {
 		return ""
 	}
 	thumbnail := firstNonEmpty(
@@ -814,7 +814,7 @@ func queuePreviewURL(
 	if thumbnailURL := submissionResourceURL(thumbnail, sid, submission.Public.Bool()); thumbnailURL != "" {
 		return thumbnailURL
 	}
-	return submissionResourceURL(file.FileURLPreview.String(), sid, submission.Public.Bool())
+	return ""
 }
 
 func (a *App) syncSessionAvatar(user *inkbunny.User) {
@@ -857,6 +857,24 @@ func hasVideoExtension(value string) bool {
 	default:
 		return false
 	}
+}
+
+func isImageMIMEType(value string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "image/")
+}
+
+func hasImageExtension(value string) bool {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(value)))
+	switch ext {
+	case ".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".svg", ".tif", ".tiff", ".webp":
+		return true
+	default:
+		return false
+	}
+}
+
+func supportsResizedAssetVariants(mimeType string, fileName string) bool {
+	return isImageMIMEType(mimeType) || hasImageExtension(fileName)
 }
 
 func (a *App) cachedSubmissionDetailsWithContext(

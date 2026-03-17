@@ -1195,14 +1195,38 @@ func mapSubmissionCards(
 		submissionID := submission.SubmissionID.String()
 		detail := detailsByID[submissionID]
 		primaryFile, hasPrimaryFile := primarySubmissionFile(detail.Files)
-		previewURL := firstNonEmpty(
-			submissionResourceURL(detail.FileURLPreview.String(), sid, submission.Public.Bool()),
-			submissionMediaFileResourceURL(primaryFile.FileURLPreview.String(), sid, submission.Public.Bool(), hasPrimaryFile),
-		)
-		screenURL := firstNonEmpty(
-			submissionResourceURL(detail.FileURLScreen.String(), sid, submission.Public.Bool()),
-			submissionMediaFileResourceURL(primaryFile.FileURLScreen.String(), sid, submission.Public.Bool(), hasPrimaryFile),
-		)
+		primaryMimeType := ""
+		primaryFileName := ""
+		if hasPrimaryFile {
+			primaryMimeType = strings.TrimSpace(primaryFile.MimeType)
+			primaryFileName = strings.TrimSpace(primaryFile.FileName)
+		}
+		if primaryMimeType == "" {
+			primaryMimeType = strings.TrimSpace(detail.MimeType)
+		}
+		if primaryFileName == "" {
+			primaryFileName = strings.TrimSpace(detail.FileName.String())
+		}
+		if primaryMimeType == "" {
+			primaryMimeType = strings.TrimSpace(submission.MimeType)
+		}
+		if primaryFileName == "" {
+			primaryFileName = strings.TrimSpace(submission.FileName.String())
+		}
+		previewURL := ""
+		screenURL := ""
+		latestPreviewURL := ""
+		if supportsResizedAssetVariants(primaryMimeType, primaryFileName) {
+			previewURL = firstNonEmpty(
+				submissionResourceURL(detail.FileURLPreview.String(), sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.FileURLPreview.String(), sid, submission.Public.Bool(), hasPrimaryFile),
+			)
+			screenURL = firstNonEmpty(
+				submissionResourceURL(detail.FileURLScreen.String(), sid, submission.Public.Bool()),
+				submissionMediaFileResourceURL(primaryFile.FileURLScreen.String(), sid, submission.Public.Bool(), hasPrimaryFile),
+			)
+			latestPreviewURL = submissionResourceURL(detail.LatestFileURLPreview, sid, submission.Public.Bool())
+		}
 		fullURL := firstNonEmpty(
 			submissionResourceURL(detail.FileURLFull.String(), sid, submission.Public.Bool()),
 			submissionMediaFileResourceURL(primaryFile.FileURLFull.String(), sid, submission.Public.Bool(), hasPrimaryFile),
@@ -1251,7 +1275,7 @@ func mapSubmissionCards(
 			MimeType:         submission.MimeType,
 			LatestMimeType:   submission.LatestMimeType,
 			PreviewURL:       previewURL,
-			LatestPreviewURL: submissionResourceURL(detail.LatestFileURLPreview, sid, submission.Public.Bool()),
+			LatestPreviewURL: latestPreviewURL,
 			ScreenURL:        screenURL,
 			FullURL:          fullURL,
 			ThumbnailURL:     submissionResourceURL(thumbnail, sid, submission.Public.Bool()),
@@ -1360,13 +1384,19 @@ func mapSubmissionMediaFiles(files []inkbunny.File, sid string, isPublic bool) [
 			file.ThumbnailURLLargeNonCustom,
 			file.ThumbnailURLMediumNonCustom,
 		)
+		previewURL := ""
+		screenURL := ""
+		if supportsResizedAssetVariants(file.MimeType, file.FileName) {
+			previewURL = submissionResourceURL(file.FileURLPreview.String(), sid, isPublic)
+			screenURL = submissionResourceURL(file.FileURLScreen.String(), sid, isPublic)
+		}
 		mediaFiles = append(mediaFiles, types.SubmissionMediaFile{
 			FileID:                      file.FileID.String(),
 			FileName:                    file.FileName,
 			MimeType:                    file.MimeType,
 			Order:                       int(file.SubmissionFileOrder),
-			PreviewURL:                  submissionResourceURL(file.FileURLPreview.String(), sid, isPublic),
-			ScreenURL:                   submissionResourceURL(file.FileURLScreen.String(), sid, isPublic),
+			PreviewURL:                  previewURL,
+			ScreenURL:                   screenURL,
 			FullURL:                     submissionResourceURL(file.FileURLFull.String(), sid, isPublic),
 			ThumbnailURL:                submissionResourceURL(thumbnail, sid, isPublic),
 			ThumbnailURLMedium:          submissionResourceURL(file.ThumbnailURLMedium, sid, isPublic),

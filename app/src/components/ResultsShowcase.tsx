@@ -2449,18 +2449,7 @@ function getSubmissionPrimaryVideoSources(submission: SubmissionCard) {
 function getVideoPlaybackSources(
   item: VideoAssetLike,
 ) {
-  return dedupePreviewSources([
-    toPreviewSource(item.fullUrl),
-    toPreviewSourceIfVideo(item.screenUrl),
-    toPreviewSourceIfVideo(item.previewUrl),
-  ]);
-}
-
-function toPreviewSourceIfVideo(src?: string): PreviewSource | null {
-  if (!src || !isVideoURL(src)) {
-    return null;
-  }
-  return toPreviewSource(src);
+  return dedupePreviewSources([toPreviewSource(item.fullUrl)]);
 }
 
 function isVideoAsset(
@@ -2469,9 +2458,7 @@ function isVideoAsset(
   return (
     isVideoMimeType(item.mimeType || item.latestMimeType) ||
     hasVideoExtension(item.fileName) ||
-    isVideoURL(item.fullUrl) ||
-    isVideoURL(item.screenUrl) ||
-    isVideoURL(item.previewUrl)
+    isVideoURL(item.fullUrl)
   );
 }
 
