@@ -1,7 +1,9 @@
+import { Bug, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountSidebar } from "./components/AccountSidebar";
 import BubbleMenu, { type BubbleMenuItem } from "./components/BubbleMenu";
+import { ContextMenu, type ContextMenuSection } from "./components/ContextMenu";
 import { DownloadQueuePanel } from "./components/DownloadQueuePanel";
 import { LoginModal } from "./components/LoginModal";
 import { NavigationPill } from "./components/NavigationPill";
@@ -101,15 +103,25 @@ type TourStepId =
   | "queue-images"
   | "queue-panel";
 
+type ShellContextMenuState = {
+  x: number;
+  y: number;
+  confirmReset: boolean;
+} | null;
+
 export default function App() {
   const initialTabRef = useRef<SearchTabState | null>(null);
   if (!initialTabRef.current) {
-    initialTabRef.current = createSearchTab(EMPTY_SESSION, EMPTY_SESSION.settings);
+    initialTabRef.current = createSearchTab(
+      EMPTY_SESSION,
+      EMPTY_SESSION.settings,
+    );
   }
 
   const [session, setSession] = useState<SessionInfo>(EMPTY_SESSION);
   const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
-  const [remoteAccessInfo, setRemoteAccessInfo] = useState<RemoteAccessInfo | null>(null);
+  const [remoteAccessInfo, setRemoteAccessInfo] =
+    useState<RemoteAccessInfo | null>(null);
   const [remoteAccessLoading, setRemoteAccessLoading] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SESSION.settings);
   const [loginOpen, setLoginOpen] = useState(true);
@@ -119,18 +131,35 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [tabMenuOpen, setTabMenuOpen] = useState(false);
-  const [tabs, setTabs] = useState<SearchTabState[]>(() => [initialTabRef.current!]);
-  const [activeTabId, setActiveTabId] = useState(() => initialTabRef.current!.id);
+  const [shellContextMenu, setShellContextMenu] =
+    useState<ShellContextMenuState>(null);
+  const [tabs, setTabs] = useState<SearchTabState[]>(() => [
+    initialTabRef.current!,
+  ]);
+  const [activeTabId, setActiveTabId] = useState(
+    () => initialTabRef.current!.id,
+  );
   const [ratingUpdating, setRatingUpdating] = useState(false);
-  const [keywordSuggestions, setKeywordSuggestions] = useState<KeywordSuggestion[]>([]);
-  const [artistSuggestions, setArtistSuggestions] = useState<UsernameSuggestion[]>([]);
-  const [favoriteSuggestions, setFavoriteSuggestions] = useState<UsernameSuggestion[]>([]);
-  const [watchingUsers, setWatchingUsers] = useState<UsernameSuggestion[] | null>(null);
+  const [keywordSuggestions, setKeywordSuggestions] = useState<
+    KeywordSuggestion[]
+  >([]);
+  const [artistSuggestions, setArtistSuggestions] = useState<
+    UsernameSuggestion[]
+  >([]);
+  const [favoriteSuggestions, setFavoriteSuggestions] = useState<
+    UsernameSuggestion[]
+  >([]);
+  const [watchingUsers, setWatchingUsers] = useState<
+    UsernameSuggestion[] | null
+  >(null);
   const [watchingLoading, setWatchingLoading] = useState(false);
   const [queue, setQueue] = useState<QueueSnapshot>(EMPTY_QUEUE);
-  const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] = useState<string[]>([]);
+  const [pendingDownloadSubmissionIds, setPendingDownloadSubmissionIds] =
+    useState<string[]>([]);
   const [panelPreviewImages, setPanelPreviewImages] = useState<string[][]>([]);
-  const [recentDownloadedImages, setRecentDownloadedImages] = useState<string[][]>([]);
+  const [recentDownloadedImages, setRecentDownloadedImages] = useState<
+    string[][]
+  >([]);
   const [queueMessage, setQueueMessage] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [apiCooldownUntil, setApiCooldownUntil] = useState(0);
@@ -209,7 +238,8 @@ export default function App() {
     [downloadedSubmissionIds, pendingDownloadSubmissionIds, queue],
   );
   const unavailableSubmissionIdsRef = useRef(unavailableSubmissionIds);
-  const activeSearchParams = activeTab?.searchParams ?? buildDefaultSearch(session, settings);
+  const activeSearchParams =
+    activeTab?.searchParams ?? buildDefaultSearch(session, settings);
   const activeArtistDraft = activeTab?.artistDraft ?? "";
   const activeSearchResponse = activeTab?.searchResponse ?? null;
   const activeResults = activeTab?.results ?? [];
@@ -221,27 +251,22 @@ export default function App() {
   const activeSearchCollapsed = activeTab?.searchCollapsed ?? false;
   const activeSearchError = activeTab?.searchError ?? "";
   const activeResultsRefreshToken = activeTab?.resultsRefreshToken ?? 0;
-  const activeLoadMoreState = activeTab?.loadMoreState ?? createIdleLoadMoreState();
+  const activeLoadMoreState =
+    activeTab?.loadMoreState ?? createIdleLoadMoreState();
   const activeSearchBusy =
     activeSearchLoading ||
     activeLoadMoreState.mode !== "idle" ||
     activeTab?.autoQueuePhase === "searching";
   const activeTabQueueing = activeTab?.autoQueuePhase === "queueing";
   const activeTabDownloading = activeTab
-    ? hasTrackedQueueActivity(
-        activeTab,
-        queue,
-        pendingDownloadSubmissionIds,
-      )
+    ? hasTrackedQueueActivity(activeTab, queue, pendingDownloadSubmissionIds)
     : false;
   const activeAutoQueueArmed =
     Boolean(activeTab?.autoQueueEnabled) &&
     (activeTab?.autoQueueNextRunAt ?? 0) > 0;
   const hasAutoQueueCountdown = useMemo(
     () =>
-      tabs.some(
-        (tab) => tab.autoQueueEnabled && tab.autoQueueNextRunAt > 0,
-      ),
+      tabs.some((tab) => tab.autoQueueEnabled && tab.autoQueueNextRunAt > 0),
     [tabs],
   );
   const activeSearchButtonMode = activeSearchBusy
@@ -257,7 +282,10 @@ export default function App() {
       : activeSearchButtonMode === "downloading"
         ? "Downloading"
         : activeSearchButtonMode === "waiting"
-          ? formatAutoQueueCountdown(activeTab?.autoQueueNextRunAt ?? 0, autoQueueClock)
+          ? formatAutoQueueCountdown(
+              activeTab?.autoQueueNextRunAt ?? 0,
+              autoQueueClock,
+            )
           : "Search";
   const activeSearchButtonDisabled = activeSearchButtonMode === "downloading";
   const activeDownloadButtonMode = "default";
@@ -268,12 +296,16 @@ export default function App() {
   const folderPreviewImages = useMemo(
     () =>
       dedupePreviewImageSets(
-        panelPreviewImages.length > 0 ? panelPreviewImages : recentDownloadedImages,
+        panelPreviewImages.length > 0
+          ? panelPreviewImages
+          : recentDownloadedImages,
       ),
     [panelPreviewImages, recentDownloadedImages],
   );
   const newUnreadCount =
-    trackedUnreadBaseline < 0 ? 0 : Math.max(unreadTotal - trackedUnreadBaseline, 0);
+    trackedUnreadBaseline < 0
+      ? 0
+      : Math.max(unreadTotal - trackedUnreadBaseline, 0);
   const hasActiveResult = activeResults.length > 0;
   const hasSelectableActiveResult = activeResults.some(
     (item) => !downloadedSubmissionIds.has(item.submissionId),
@@ -306,7 +338,9 @@ export default function App() {
     pendingDownloadSubmissionIds.length,
   ].join(":");
   const allResultsSelected =
-    activeResults.some((item) => !downloadedSubmissionIds.has(item.submissionId)) &&
+    activeResults.some(
+      (item) => !downloadedSubmissionIds.has(item.submissionId),
+    ) &&
     activeResults
       .filter((item) => !downloadedSubmissionIds.has(item.submissionId))
       .every((item) => activeSelectedSubmissionIds.includes(item.submissionId));
@@ -315,7 +349,12 @@ export default function App() {
       tabs.map((tab, index) => ({
         id: tab.id,
         label: getSearchTabLabel(tab, index),
-        subtitle: getSearchTabSubtitle(tab, queue, pendingDownloadSubmissionIds, autoQueueClock),
+        subtitle: getSearchTabSubtitle(
+          tab,
+          queue,
+          pendingDownloadSubmissionIds,
+          autoQueueClock,
+        ),
         active: tab.id === activeTabId,
         showEye: tab.autoQueueEnabled,
         showLoading:
@@ -349,8 +388,138 @@ export default function App() {
     [recentCompletedPreviewImages],
   );
   const recentCompletedPreviewImagesRef = useRef(recentCompletedPreviewImages);
+  const canOpenWebviewDebugConsole =
+    typeof (
+      window as Window & {
+        runtime?: Window["runtime"] & {
+          OpenDevToolsWindow?: () => void;
+        };
+      }
+    ).runtime?.OpenDevToolsWindow === "function";
+  const shellContextSections: ContextMenuSection[] = [
+    {
+      id: "refresh",
+      label: "App",
+      items: [
+        {
+          id: "refresh-page",
+          label: "Refresh page",
+          leftSection: <RefreshCw size={14} />,
+          onClick: handleShellRefresh,
+        },
+        {
+          id: "clear-cache",
+          label: "Clear cache",
+          leftSection: <RotateCcw size={14} />,
+          onClick: handleShellClearCache,
+        },
+        {
+          id: "reset-data",
+          label: shellContextMenu?.confirmReset ? "Reset confirmation" : "Reset data",
+          leftSection: shellContextMenu?.confirmReset ? undefined : <Trash2 size={14} />,
+          closeOnClick: shellContextMenu?.confirmReset ? false : false,
+          customContent: shellContextMenu?.confirmReset ? (
+            <div className="flex items-center justify-center gap-12 px-3 py-2 text-sm font-bold">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShellContextMenu(null);
+                  handleShellResetData();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShellContextMenu(null);
+                  handleShellResetData();
+                }}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[color-mix(in_srgb,var(--theme-danger)_12%,transparent)] px-3 py-1.5 text-[var(--theme-danger)] transition-colors hover:bg-[color-mix(in_srgb,var(--theme-danger)_18%,transparent)]"
+              >
+                <Trash2 size={14} />
+                Reset
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShellContextMenu((current) =>
+                    current
+                      ? {
+                          ...current,
+                          confirmReset: false,
+                        }
+                      : current,
+                  );
+                  pushToast({
+                    level: "info",
+                    message: "Reset cancelled.",
+                    dedupeKey: "shell-reset-data-cancelled",
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShellContextMenu((current) =>
+                    current
+                      ? {
+                          ...current,
+                          confirmReset: false,
+                        }
+                      : current,
+                  );
+                  pushToast({
+                    level: "info",
+                    message: "Reset cancelled.",
+                    dedupeKey: "shell-reset-data-cancelled",
+                  });
+                }}
+                className="cursor-pointer rounded-lg px-3 py-1.5 text-[var(--theme-title)] transition-colors hover:bg-[var(--theme-hover)]"
+              >
+                Cancel
+              </span>
+            </div>
+          ) : undefined,
+          onClick: () => {
+            setShellContextMenu((current) =>
+              current
+                ? {
+                    ...current,
+                    confirmReset: true,
+                  }
+                : current,
+            );
+            pushToast({
+              level: "warning",
+              message: "Choose Reset again to confirm, or Cancel. This will log you out and clear all local data.",
+              dedupeKey: "shell-reset-data-confirm",
+            });
+          },
+        },
+        {
+          id: "open-debug-console",
+          label: "Debug",
+          leftSection: <Bug size={14} />,
+          disabled: !canOpenWebviewDebugConsole,
+          onClick: handleShellOpenDebug,
+        },
+      ],
+    },
+  ];
 
-  function applySession(nextSession: SessionInfo, nextSettings = nextSession.settings) {
+  function applySession(
+    nextSession: SessionInfo,
+    nextSettings = nextSession.settings,
+  ) {
     sessionRef.current = nextSession;
     settingsRef.current = nextSettings;
     setSession(nextSession);
@@ -378,8 +547,13 @@ export default function App() {
     setSettings(nextSettings);
   }
 
-  function updateTab(tabId: string, updater: (tab: SearchTabState) => SearchTabState) {
-    const nextTabs = tabsRef.current.map((tab) => (tab.id === tabId ? updater(tab) : tab));
+  function updateTab(
+    tabId: string,
+    updater: (tab: SearchTabState) => SearchTabState,
+  ) {
+    const nextTabs = tabsRef.current.map((tab) =>
+      tab.id === tabId ? updater(tab) : tab,
+    );
     tabsRef.current = nextTabs;
     setTabs(nextTabs);
   }
@@ -394,7 +568,10 @@ export default function App() {
   function getProtectedWorkspaceInputTabIds(now = Date.now()) {
     const protectedTabIds = new Set<string>();
     const staleTabIds: string[] = [];
-    for (const [tabId, editedAt] of recentWorkspaceInputEditsRef.current.entries()) {
+    for (const [
+      tabId,
+      editedAt,
+    ] of recentWorkspaceInputEditsRef.current.entries()) {
       if (now - editedAt <= LOCAL_WORKSPACE_INPUT_PROTECTION_MS) {
         protectedTabIds.add(tabId);
         continue;
@@ -406,10 +583,8 @@ export default function App() {
     }
     if (
       activeTabIdRef.current &&
-      (
-        workspacePersistTimeoutRef.current !== null ||
-        pendingWorkspaceEchoesRef.current.length > 0
-      )
+      (workspacePersistTimeoutRef.current !== null ||
+        pendingWorkspaceEchoesRef.current.length > 0)
     ) {
       protectedTabIds.add(activeTabIdRef.current);
     }
@@ -481,7 +656,10 @@ export default function App() {
       return;
     }
 
-    const seededMatch = findExactUsernameSuggestion(artistName, seedSuggestions);
+    const seededMatch = findExactUsernameSuggestion(
+      artistName,
+      seedSuggestions,
+    );
     if (seededMatch) {
       applyArtistResolution(targetTabId, artistName, {
         avatarUrl: seededMatch.avatarUrl || "",
@@ -518,7 +696,9 @@ export default function App() {
 
   function isLoadMoreStopRequested(tabId: string, runId: number) {
     const controller = loadMoreControllersRef.current.get(tabId);
-    return !controller || controller.runId !== runId || controller.stopRequested;
+    return (
+      !controller || controller.runId !== runId || controller.stopRequested
+    );
   }
 
   function stopLoadMore(tabId: string) {
@@ -561,7 +741,9 @@ export default function App() {
 
   function isSearchRequestStopRequested(tabId: string, runId: number) {
     const controller = searchRequestControllersRef.current.get(tabId);
-    return !controller || controller.runId !== runId || controller.stopRequested;
+    return (
+      !controller || controller.runId !== runId || controller.stopRequested
+    );
   }
 
   function stopSearchRequest(tabId: string) {
@@ -613,7 +795,9 @@ export default function App() {
     setToasts((previous) => {
       if (existing) {
         return previous.map((item) =>
-          item.id === existing.id ? { ...item, ...toast, id: existing.id } : item,
+          item.id === existing.id
+            ? { ...item, ...toast, id: existing.id }
+            : item,
         );
       }
       return [...previous, { ...toast, id }];
@@ -628,7 +812,10 @@ export default function App() {
     }
     toastTimeoutsRef.current.set(
       id,
-      window.setTimeout(() => dismissToast(id), getToastDuration(toast.level, toast.retryAfterMs)),
+      window.setTimeout(
+        () => dismissToast(id),
+        getToastDuration(toast.level, toast.retryAfterMs),
+      ),
     );
   }
 
@@ -638,7 +825,11 @@ export default function App() {
     }
   }
 
-  function updateQueueMessage(message: string, level?: ToastItem["level"], dedupeKey?: string) {
+  function updateQueueMessage(
+    message: string,
+    level?: ToastItem["level"],
+    dedupeKey?: string,
+  ) {
     setQueueMessage(message);
     if (level) {
       pushToast({ level, message, dedupeKey });
@@ -711,7 +902,10 @@ export default function App() {
     );
   }
 
-  function writeFrontendSearchLog(message: string, fields?: Record<string, unknown>) {
+  function writeFrontendSearchLog(
+    message: string,
+    fields?: Record<string, unknown>,
+  ) {
     if (!isFrontendSearchLoggingEnabled()) {
       return;
     }
@@ -723,7 +917,11 @@ export default function App() {
     nextSession = sessionRef.current,
     nextSettings = settingsRef.current,
   ) {
-    const restoredTabs = restoreWorkspaceTabs(workspace, nextSession, nextSettings);
+    const restoredTabs = restoreWorkspaceTabs(
+      workspace,
+      nextSession,
+      nextSettings,
+    );
     const protectedTabIds = getProtectedWorkspaceInputTabIds();
     const mergedTabs = mergeWorkspaceTabsWithTransientState(
       restoredTabs,
@@ -813,10 +1011,13 @@ export default function App() {
     return `Cleared deferred state (${toastCount} toasts, ${autoClearTimerCount} timers, ${pendingDownloadCount} pending downloads).`;
   }
 
-  function formatDebugResetMessage(scope: DebugResetTarget, result?: DebugResetResult) {
+  function formatDebugResetMessage(
+    scope: DebugResetTarget,
+    result?: DebugResetResult,
+  ) {
     switch (scope) {
       case "cache":
-        return "Cleared backend caches and active search state.";
+        return "Cleared cache and active search.";
       case "state":
         return "Reset persisted settings and workspace state.";
       case "settings":
@@ -880,7 +1081,13 @@ export default function App() {
   }
 
   async function fetchAppSnapshotFromBackend() {
-    const [nextBuildInfo, nextSession, workspace, snapshot, nextRemoteAccessInfo] = await Promise.all([
+    const [
+      nextBuildInfo,
+      nextSession,
+      workspace,
+      snapshot,
+      nextRemoteAccessInfo,
+    ] = await Promise.all([
       backend.getBuildInfo(),
       backend.getSession(),
       backend.getWorkspaceState(),
@@ -897,11 +1104,17 @@ export default function App() {
     };
   }
 
-  function applyBackendSnapshot(snapshot: Awaited<ReturnType<typeof fetchAppSnapshotFromBackend>>) {
+  function applyBackendSnapshot(
+    snapshot: Awaited<ReturnType<typeof fetchAppSnapshotFromBackend>>,
+  ) {
     setBuildInfo(snapshot.buildInfo);
     setRemoteAccessInfo(snapshot.remoteAccessInfo);
     applySession(snapshot.session);
-    applyWorkspaceSnapshot(snapshot.workspace, snapshot.session, snapshot.session.settings);
+    applyWorkspaceSnapshot(
+      snapshot.workspace,
+      snapshot.session,
+      snapshot.session.settings,
+    );
     applyQueueSnapshot(snapshot.queue);
     setLoginOpen(!snapshot.session.hasSession);
     setAuthError("");
@@ -934,7 +1147,11 @@ export default function App() {
       )
     ) {
       suppressNextWorkspacePersistRef.current = true;
-      applyWorkspaceSnapshot(snapshot.workspace, snapshot.session, snapshot.settings);
+      applyWorkspaceSnapshot(
+        snapshot.workspace,
+        snapshot.session,
+        snapshot.settings,
+      );
     }
     applyQueueSnapshot(snapshot.queue);
     workspaceLoadedRef.current = true;
@@ -974,19 +1191,25 @@ export default function App() {
       rememberPendingHydratedResults(normalizedUpdate);
     }
     startTransition(() => {
-      setTabs((previous) => mergeHydratedSearchResults(previous, normalizedUpdate));
+      setTabs((previous) =>
+        mergeHydratedSearchResults(previous, normalizedUpdate),
+      );
     });
   }
 
   function rememberPendingHydratedResults(update: SearchResultsHydratedUpdate) {
-    const existing = pendingHydratedResultsRef.current.get(update.searchId) ?? new Map();
+    const existing =
+      pendingHydratedResultsRef.current.get(update.searchId) ?? new Map();
     for (const result of update.results) {
       existing.set(result.submissionId, result);
     }
     pendingHydratedResultsRef.current.set(update.searchId, existing);
   }
 
-  function applyPendingHydratedResults(searchId: string, results: SubmissionCard[]) {
+  function applyPendingHydratedResults(
+    searchId: string,
+    results: SubmissionCard[],
+  ) {
     const normalizedResults = normalizeSubmissionCards(results);
     const merged = mergePendingHydratedResults(searchId, normalizedResults);
     if (merged.matchedSubmissionIds.length === 0) {
@@ -996,7 +1219,10 @@ export default function App() {
     return merged.results;
   }
 
-  function mergePendingHydratedResults(searchId: string, results: SubmissionCard[]) {
+  function mergePendingHydratedResults(
+    searchId: string,
+    results: SubmissionCard[],
+  ) {
     const pending = pendingHydratedResultsRef.current.get(searchId);
     if (!pending || pending.size === 0 || results.length === 0) {
       return {
@@ -1026,7 +1252,10 @@ export default function App() {
     };
   }
 
-  function clearPendingHydratedResults(searchId: string, submissionIds: string[]) {
+  function clearPendingHydratedResults(
+    searchId: string,
+    submissionIds: string[],
+  ) {
     if (!searchId || submissionIds.length === 0) {
       return;
     }
@@ -1055,7 +1284,10 @@ export default function App() {
         return tab;
       }
 
-      const mergedTabResults = mergePendingHydratedResults(searchId, tab.results);
+      const mergedTabResults = mergePendingHydratedResults(
+        searchId,
+        tab.results,
+      );
       const mergedSearchResponseResults = mergePendingHydratedResults(
         searchId,
         tab.searchResponse?.results ?? [],
@@ -1104,7 +1336,9 @@ export default function App() {
   }
 
   function areHydratedResultsMounted(update: SearchResultsHydratedUpdate) {
-    const resultIds = new Set(update.results.map((result) => result.submissionId));
+    const resultIds = new Set(
+      update.results.map((result) => result.submissionId),
+    );
     if (resultIds.size === 0) {
       return true;
     }
@@ -1113,7 +1347,9 @@ export default function App() {
       if (tab.searchResponse?.searchId !== update.searchId) {
         return false;
       }
-      const tabResultIds = new Set(tab.results.map((result) => result.submissionId));
+      const tabResultIds = new Set(
+        tab.results.map((result) => result.submissionId),
+      );
       for (const submissionId of resultIds) {
         if (!tabResultIds.has(submissionId)) {
           return false;
@@ -1146,16 +1382,27 @@ export default function App() {
   }
 
   function applyIncomingWorkspaceUpdate(update: WorkspaceStateUpdate) {
-    const currentWorkspace = buildWorkspaceState(tabsRef.current, activeTabIdRef.current);
+    const currentWorkspace = buildWorkspaceState(
+      tabsRef.current,
+      activeTabIdRef.current,
+    );
     if (areWorkspaceStatesEqual(currentWorkspace, update.workspace)) {
-      acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, update.workspace);
+      acknowledgePendingWorkspaceEcho(
+        pendingWorkspaceEchoesRef,
+        update.workspace,
+      );
       writeFrontendSearchLog("ignored workspace update", {
         reason: "matches-current",
         revision: update.revision,
       });
       return;
     }
-    if (acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, update.workspace)) {
+    if (
+      acknowledgePendingWorkspaceEcho(
+        pendingWorkspaceEchoesRef,
+        update.workspace,
+      )
+    ) {
       writeFrontendSearchLog("ignored workspace update", {
         reason: "matched-pending-echo",
         revision: update.revision,
@@ -1185,7 +1432,9 @@ export default function App() {
     if (!nextJob?.id) {
       return;
     }
-    setQueue((current) => applyQueueJobUpdate(current, compactQueueJob(nextJob, true)));
+    setQueue((current) =>
+      applyQueueJobUpdate(current, compactQueueJob(nextJob, true)),
+    );
   }
 
   async function handleEnableRemoteAccess() {
@@ -1220,13 +1469,86 @@ export default function App() {
     return "Reloading page.";
   }
 
+  function handleShellRefresh() {
+    pushToast({
+      level: "info",
+      message: "Reloading page.",
+      dedupeKey: "shell-refresh-page",
+    });
+    window.setTimeout(() => {
+      reloadDebugPage();
+    }, 90);
+  }
+
+  function handleShellClearCache() {
+    pushToast({
+      level: "info",
+      message: "Clearing cache.",
+      dedupeKey: "shell-clear-cache-start",
+    });
+    void runDebugStateReset("cache")
+      .then((message) => {
+        pushToast({
+          level: "success",
+          message,
+          dedupeKey: "debug-clear-cache-success",
+        });
+      })
+      .catch((error: unknown) => {
+        pushErrorToast(
+          getErrorMessage(error, "Could not clear the cache."),
+          "debug-clear-cache-error",
+        );
+      });
+  }
+
+  function handleShellResetData() {
+    pushToast({
+      level: "warning",
+      message: "Resetting app data.",
+      dedupeKey: "shell-reset-data-start",
+    });
+    void runDebugStateReset("all")
+      .then((message) => {
+        pushToast({
+          level: "success",
+          message,
+          dedupeKey: "debug-reset-data-success",
+        });
+      })
+      .catch((error: unknown) => {
+        pushErrorToast(
+          getErrorMessage(error, "Could not reset the app data."),
+          "debug-reset-data-error",
+        );
+      });
+  }
+
+  function handleShellOpenDebug() {
+    if (!canOpenWebviewDebugConsole) {
+      pushErrorToast(
+        "Webview devtools are not exposed by this build.",
+        "open-webview-console-error",
+      );
+      return;
+    }
+    pushToast({
+      level: "info",
+      message: "Opening debug tools.",
+      dedupeKey: "shell-open-debug",
+    });
+    openWebviewDebugConsole();
+  }
+
   function buildMemoryReport() {
     const allResults = tabsRef.current.flatMap((tab) => tab.results);
     const submissionStats = getSubmissionArtistStoreStats(allResults);
     const queueSnapshot = queueRef.current;
     const queueEstimatedBytes = estimateValueBytes(queueSnapshot.jobs);
     const visibleImageBytes = estimateVisibleImageBytes();
-    const queuePreviewCount = queueSnapshot.jobs.filter((job) => Boolean(job.previewUrl)).length;
+    const queuePreviewCount = queueSnapshot.jobs.filter((job) =>
+      Boolean(job.previewUrl),
+    ).length;
     const hiddenCompletedJobs = Math.max(
       0,
       queueSnapshot.completedCount -
@@ -1243,18 +1565,23 @@ export default function App() {
       tabs: {
         tabCount: tabsRef.current.length,
         totalResults: allResults.length,
-        activeTabResults: tabsRef.current.find((tab) => tab.id === activeTabIdRef.current)?.results
-          .length ?? 0,
+        activeTabResults:
+          tabsRef.current.find((tab) => tab.id === activeTabIdRef.current)
+            ?.results.length ?? 0,
       },
       results: {
         count: submissionStats.resultCount,
         uniqueArtists: submissionStats.uniqueArtistCount,
         normalizedBytes: submissionStats.normalizedResultBytes,
-        normalizedLabel: formatMemoryBytes(submissionStats.normalizedResultBytes),
+        normalizedLabel: formatMemoryBytes(
+          submissionStats.normalizedResultBytes,
+        ),
         uniqueArtistBytes: submissionStats.uniqueArtistBytes,
         uniqueArtistLabel: formatMemoryBytes(submissionStats.uniqueArtistBytes),
         denormalizedBytes: submissionStats.denormalizedResultBytes,
-        denormalizedLabel: formatMemoryBytes(submissionStats.denormalizedResultBytes),
+        denormalizedLabel: formatMemoryBytes(
+          submissionStats.denormalizedResultBytes,
+        ),
         savedBytes: submissionStats.savedBytes,
         savedLabel: formatMemoryBytes(submissionStats.savedBytes),
       },
@@ -1272,12 +1599,14 @@ export default function App() {
         retainedPreviewUrls: queuePreviewCount,
       },
       images: {
-        domImageCount: typeof document === "undefined" ? 0 : document.images.length,
+        domImageCount:
+          typeof document === "undefined" ? 0 : document.images.length,
         visibleDecodedBytes: visibleImageBytes,
         visibleDecodedLabel: formatMemoryBytes(visibleImageBytes),
       },
       likelyDriver: summarizeLikelyMemoryDriver(
-        submissionStats.normalizedResultBytes + submissionStats.uniqueArtistBytes,
+        submissionStats.normalizedResultBytes +
+          submissionStats.uniqueArtistBytes,
         queueEstimatedBytes,
         visibleImageBytes,
       ),
@@ -1302,7 +1631,10 @@ export default function App() {
     return reloadDebugPage();
   }
 
-  function showReleaseUpdateToast(status: ReleaseStatus, currentSettings: AppSettings) {
+  function showReleaseUpdateToast(
+    status: ReleaseStatus,
+    currentSettings: AppSettings,
+  ) {
     if (
       !status.updateAvailable ||
       !status.latestTag ||
@@ -1324,7 +1656,10 @@ export default function App() {
             .openExternalURL(status.releaseURL)
             .then(() => dismissToast(RELEASE_UPDATE_TOAST_ID))
             .catch((error: unknown) => {
-              pushErrorToast(getErrorMessage(error, "Could not open the release page."), "release-open-error");
+              pushErrorToast(
+                getErrorMessage(error, "Could not open the release page."),
+                "release-open-error",
+              );
             });
         },
       },
@@ -1340,7 +1675,10 @@ export default function App() {
             })
             .catch((error: unknown) => {
               pushErrorToast(
-                getErrorMessage(error, "Could not save the release preference."),
+                getErrorMessage(
+                  error,
+                  "Could not save the release preference.",
+                ),
                 "release-skip-error",
               );
             });
@@ -1355,7 +1693,45 @@ export default function App() {
     setActiveTabId(nextTab.id);
   }
 
-  function handleToggleAutoQueue(enabled: boolean, targetTabId = activeTabIdRef.current) {
+  function handleClearSearchForm(targetTabId = activeTabIdRef.current) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab) {
+      return;
+    }
+    markWorkspaceInputEdit(targetTabId);
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      searchParams: normalizeSearchParamsForMode(
+        buildDefaultSearch(sessionRef.current, settingsRef.current),
+        currentTab.mode,
+        sessionRef.current,
+        settingsRef.current,
+      ),
+      artistDraft: "",
+      artistAvatars: {},
+      artistValidation: {},
+    }));
+  }
+
+  function openWebviewDebugConsole() {
+    const runtimeWindow = window as Window & {
+      runtime?: Window["runtime"] & {
+        OpenDevToolsWindow?: () => void;
+      };
+    };
+
+    if (typeof runtimeWindow.runtime?.OpenDevToolsWindow === "function") {
+      runtimeWindow.runtime.OpenDevToolsWindow();
+      return;
+    }
+
+    console.info("Debug console is not exposed by this build.");
+  }
+
+  function handleToggleAutoQueue(
+    enabled: boolean,
+    targetTabId = activeTabIdRef.current,
+  ) {
     updateTab(targetTabId, (currentTab) => ({
       ...currentTab,
       autoQueueEnabled: enabled,
@@ -1389,11 +1765,17 @@ export default function App() {
     }
 
     const currentTabs = tabsRef.current;
-    const currentTab = currentTabs.find((tab) => tab.id === activeTabIdRef.current) ?? null;
+    const currentTab =
+      currentTabs.find((tab) => tab.id === activeTabIdRef.current) ?? null;
     const reuseCurrentTab =
-      currentTab !== null && isSearchTabUntouched(currentTab, sessionRef.current, settingsRef.current);
+      currentTab !== null &&
+      isSearchTabUntouched(currentTab, sessionRef.current, settingsRef.current);
     const targetTab = reuseCurrentTab
-      ? switchSearchTabToUnread(currentTab!, sessionRef.current, settingsRef.current)
+      ? switchSearchTabToUnread(
+          currentTab!,
+          sessionRef.current,
+          settingsRef.current,
+        )
       : createUnreadSearchTab(sessionRef.current, settingsRef.current);
     const nextTabs = reuseCurrentTab
       ? currentTabs.map((tab) => (tab.id === targetTab.id ? targetTab : tab))
@@ -1416,7 +1798,9 @@ export default function App() {
     if (currentTabs.length === 1) {
       setTabs((previous) =>
         previous.map((tab) =>
-          tab.id === tabId ? resetSearchTab(tab, sessionRef.current, settingsRef.current) : tab,
+          tab.id === tabId
+            ? resetSearchTab(tab, sessionRef.current, settingsRef.current)
+            : tab,
         ),
       );
       setActiveTabId(tabId);
@@ -1425,7 +1809,7 @@ export default function App() {
     const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
     const nextActiveId =
       activeTabIdRef.current === tabId
-        ? nextTabs[Math.max(0, closingIndex - 1)]?.id ?? nextTabs[0]?.id ?? ""
+        ? (nextTabs[Math.max(0, closingIndex - 1)]?.id ?? nextTabs[0]?.id ?? "")
         : activeTabIdRef.current;
     setTabs(nextTabs);
     if (nextActiveId) {
@@ -1437,18 +1821,28 @@ export default function App() {
   useEffect(() => void (activeTabIdRef.current = activeTabId), [activeTabId]);
   useEffect(() => void (queueRef.current = queue), [queue]);
   useEffect(
-    () => void (pendingDownloadSubmissionIdsRef.current = pendingDownloadSubmissionIds),
+    () =>
+      void (pendingDownloadSubmissionIdsRef.current =
+        pendingDownloadSubmissionIds),
     [pendingDownloadSubmissionIds],
   );
   useEffect(() => void (sessionRef.current = session), [session]);
   useEffect(() => void (settingsRef.current = settings), [settings]);
   useEffect(() => void (buildInfoRef.current = buildInfo), [buildInfo]);
   useEffect(() => void (unreadTotalRef.current = unreadTotal), [unreadTotal]);
-  useEffect(() => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds), [downloadedSubmissionIds]);
-  useEffect(() => void (unavailableSubmissionIdsRef.current = unavailableSubmissionIds), [unavailableSubmissionIds]);
+  useEffect(
+    () => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds),
+    [downloadedSubmissionIds],
+  );
+  useEffect(
+    () => void (unavailableSubmissionIdsRef.current = unavailableSubmissionIds),
+    [unavailableSubmissionIds],
+  );
   useEffect(() => void (toastsRef.current = toasts), [toasts]);
   useEffect(
-    () => void (recentCompletedPreviewImagesRef.current = recentCompletedPreviewImages),
+    () =>
+      void (recentCompletedPreviewImagesRef.current =
+        recentCompletedPreviewImages),
     [recentCompletedPreviewImages],
   );
   useEffect(() => {
@@ -1510,7 +1904,9 @@ export default function App() {
           return;
         }
         setUnreadTotal(total);
-        setTrackedUnreadBaseline((previous) => (previous < 0 ? total : previous));
+        setTrackedUnreadBaseline((previous) =>
+          previous < 0 ? total : previous,
+        );
       } catch {
         return;
       }
@@ -1585,7 +1981,10 @@ export default function App() {
       scheduleTourAdvance("select-images");
       return;
     }
-    if (tourStepId === "select-images" && activeSelectedSubmissionIds.length > 0) {
+    if (
+      tourStepId === "select-images" &&
+      activeSelectedSubmissionIds.length > 0
+    ) {
       scheduleTourAdvance("queue-images");
       return;
     }
@@ -1650,7 +2049,10 @@ export default function App() {
     if (apiCooldownUntil <= Date.now()) {
       return;
     }
-    const timeout = window.setTimeout(() => setApiCooldownUntil(0), apiCooldownUntil - Date.now());
+    const timeout = window.setTimeout(
+      () => setApiCooldownUntil(0),
+      apiCooldownUntil - Date.now(),
+    );
     return () => window.clearTimeout(timeout);
   }, [apiCooldownUntil]);
 
@@ -1667,7 +2069,10 @@ export default function App() {
         if (!mounted) {
           return;
         }
-        const message = error instanceof Error ? error.message : "Unable to reach the Wails backend.";
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to reach the Wails backend.";
         setAuthError(message);
         pushErrorToast(message, "backend-unavailable");
       });
@@ -1677,33 +2082,57 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribeSnapshot = subscribeBackendEvent("snapshot.initial", (snapshot) => {
-      applySharedSnapshot(snapshot);
-    });
-    const unsubscribeSession = subscribeBackendEvent("session.updated", (update) => {
-      handleSessionStateUpdate(update);
-    });
-    const unsubscribeSettings = subscribeBackendEvent("settings.updated", (update) => {
-      handleSettingsStateUpdate(update);
-    });
-    const unsubscribeWorkspace = subscribeBackendEvent("workspace.updated", (update) => {
-      handleWorkspaceStateUpdate(update);
-    });
-    const unsubscribeQueue = subscribeBackendEvent("queue.updated", (update) => {
-      handleQueueStateUpdate(update);
-    });
-    const unsubscribeQueueJobUpdated = subscribeBackendEvent("download.jobUpdated", (update) => {
-      handleQueueJobUpdated(update);
-    });
-    const unsubscribeHydratedResults = subscribeBackendEvent("search.resultsHydrated", (update) => {
-      handleSearchResultsHydrated(update);
-    });
+    const unsubscribeSnapshot = subscribeBackendEvent(
+      "snapshot.initial",
+      (snapshot) => {
+        applySharedSnapshot(snapshot);
+      },
+    );
+    const unsubscribeSession = subscribeBackendEvent(
+      "session.updated",
+      (update) => {
+        handleSessionStateUpdate(update);
+      },
+    );
+    const unsubscribeSettings = subscribeBackendEvent(
+      "settings.updated",
+      (update) => {
+        handleSettingsStateUpdate(update);
+      },
+    );
+    const unsubscribeWorkspace = subscribeBackendEvent(
+      "workspace.updated",
+      (update) => {
+        handleWorkspaceStateUpdate(update);
+      },
+    );
+    const unsubscribeQueue = subscribeBackendEvent(
+      "queue.updated",
+      (update) => {
+        handleQueueStateUpdate(update);
+      },
+    );
+    const unsubscribeQueueJobUpdated = subscribeBackendEvent(
+      "download.jobUpdated",
+      (update) => {
+        handleQueueJobUpdated(update);
+      },
+    );
+    const unsubscribeHydratedResults = subscribeBackendEvent(
+      "search.resultsHydrated",
+      (update) => {
+        handleSearchResultsHydrated(update);
+      },
+    );
     const unsubscribeDebugLogs = subscribeBackendEvent("debug", (event) => {
       writeBackendDebugEvent(event);
     });
-    const unsubscribeNotifications = subscribeBackendEvent("notification", (event) => {
-      handleAppNotification(event);
-    });
+    const unsubscribeNotifications = subscribeBackendEvent(
+      "notification",
+      (event) => {
+        handleAppNotification(event);
+      },
+    );
     return () => {
       unsubscribeSnapshot();
       unsubscribeSession();
@@ -1725,10 +2154,12 @@ export default function App() {
     setTabs((previous) => {
       let changed = false;
       const nextTabs = previous.map((tab) => {
-        const nextTracked = tab.trackedDownloadSubmissionIds.filter((submissionId) =>
-          activeSubmissionIds.has(submissionId),
+        const nextTracked = tab.trackedDownloadSubmissionIds.filter(
+          (submissionId) => activeSubmissionIds.has(submissionId),
         );
-        if (areStringArraysEqual(nextTracked, tab.trackedDownloadSubmissionIds)) {
+        if (
+          areStringArraysEqual(nextTracked, tab.trackedDownloadSubmissionIds)
+        ) {
           return tab;
         }
         changed = true;
@@ -1750,9 +2181,13 @@ export default function App() {
       lastWorkspacePersistSkipKeyRef.current = "";
       return;
     }
-    const transientWorkspaceState = describeTransientWorkspaceState(tabsRef.current);
+    const transientWorkspaceState = describeTransientWorkspaceState(
+      tabsRef.current,
+    );
     if (transientWorkspaceState !== null) {
-      if (lastWorkspacePersistSkipKeyRef.current !== transientWorkspaceState.key) {
+      if (
+        lastWorkspacePersistSkipKeyRef.current !== transientWorkspaceState.key
+      ) {
         lastWorkspacePersistSkipKeyRef.current = transientWorkspaceState.key;
         writeFrontendSearchLog("skipping workspace persist", {
           reason: "transient-search-state",
@@ -1768,12 +2203,18 @@ export default function App() {
     }
     workspacePersistTimeoutRef.current = window.setTimeout(() => {
       workspacePersistTimeoutRef.current = null;
-      const workspaceState = buildWorkspaceState(tabsRef.current, activeTabIdRef.current);
+      const workspaceState = buildWorkspaceState(
+        tabsRef.current,
+        activeTabIdRef.current,
+      );
       rememberPendingWorkspaceEcho(pendingWorkspaceEchoesRef, workspaceState);
       void backend
         .saveWorkspaceState(workspaceState)
         .catch((error: unknown) => {
-          acknowledgePendingWorkspaceEcho(pendingWorkspaceEchoesRef, workspaceState);
+          acknowledgePendingWorkspaceEcho(
+            pendingWorkspaceEchoesRef,
+            workspaceState,
+          );
           pushErrorToast(
             getErrorMessage(error, "Unable to save tab workspace."),
             "save-workspace-error",
@@ -1832,10 +2273,18 @@ export default function App() {
       });
       break;
     }
-  }, [autoQueueClock, pendingDownloadSubmissionIds, queue, session.hasSession, tabs]);
+  }, [
+    autoQueueClock,
+    pendingDownloadSubmissionIds,
+    queue,
+    session.hasSession,
+    tabs,
+  ]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
+    document.documentElement.dataset.theme = settings.darkMode
+      ? "dark"
+      : "light";
   }, [settings.darkMode]);
 
   useEffect(() => {
@@ -1887,7 +2336,12 @@ export default function App() {
       behavior: settings.motionEnabled ? "smooth" : "auto",
       block: "start",
     });
-  }, [activeResults.length, activeSearchResponse?.searchId, activeTabId, settings.motionEnabled]);
+  }, [
+    activeResults.length,
+    activeSearchResponse?.searchId,
+    activeTabId,
+    settings.motionEnabled,
+  ]);
 
   useEffect(() => {
     if (completedQueueSubmissionIds.size === 0) {
@@ -1902,7 +2356,10 @@ export default function App() {
       const nextTabs = previous.map((tab) => {
         let tabChanged = false;
         const nextResults = tab.results.map((result) => {
-          if (!completedQueueSubmissionIds.has(result.submissionId) || result.downloaded) {
+          if (
+            !completedQueueSubmissionIds.has(result.submissionId) ||
+            result.downloaded
+          ) {
             return result;
           }
           tabChanged = true;
@@ -1911,7 +2368,9 @@ export default function App() {
         const nextSelectedSubmissionIds = tab.selectedSubmissionIds.filter(
           (submissionId) => !nextDownloadedSubmissionIds.has(submissionId),
         );
-        if (nextSelectedSubmissionIds.length !== tab.selectedSubmissionIds.length) {
+        if (
+          nextSelectedSubmissionIds.length !== tab.selectedSubmissionIds.length
+        ) {
           tabChanged = true;
         }
         if (!tabChanged) {
@@ -1938,7 +2397,9 @@ export default function App() {
         ...completedPreviewImages,
         ...current,
       ]).slice(0, 3);
-      return arePreviewImageSetsEqual(nextImages, current) ? current : nextImages;
+      return arePreviewImageSetsEqual(nextImages, current)
+        ? current
+        : nextImages;
     });
   }, [recentCompletedPreviewImagesKey]);
 
@@ -1995,7 +2456,11 @@ export default function App() {
         });
     }, 200);
     return () => window.clearTimeout(timeout);
-  }, [activeArtistDraft, activeSearchParams.useWatchingArtists, apiCooldownUntil]);
+  }, [
+    activeArtistDraft,
+    activeSearchParams.useWatchingArtists,
+    apiCooldownUntil,
+  ]);
 
   useEffect(() => {
     const requestId = ++favoritesRequestRef.current;
@@ -2030,7 +2495,11 @@ export default function App() {
     try {
       syncSettings(await backend.updateSettings(next));
     } catch (error) {
-      updateQueueMessage(getErrorMessage(error, "Unable to save settings."), "error", "save-settings-error");
+      updateQueueMessage(
+        getErrorMessage(error, "Unable to save settings."),
+        "error",
+        "save-settings-error",
+      );
     }
   }
 
@@ -2164,14 +2633,30 @@ export default function App() {
       const snapshot = await backend.clearCompletedDownloads();
       applyQueueSnapshot(snapshot);
       if (auto) {
-        updateQueueMessage("Completed downloads cleared automatically.", "success", "queue-auto-clear-completed");
+        updateQueueMessage(
+          "Completed downloads cleared automatically.",
+          "success",
+          "queue-auto-clear-completed",
+        );
         return;
       }
-      updateQueueMessage("Completed downloads cleared.", "success", "queue-clear-completed");
+      updateQueueMessage(
+        "Completed downloads cleared.",
+        "success",
+        "queue-clear-completed",
+      );
     } catch (error) {
-      const message = getErrorMessage(error, "Could not clear completed downloads.");
+      const message = getErrorMessage(
+        error,
+        "Could not clear completed downloads.",
+      );
       updateQueueMessage(message);
-      pushErrorToast(message, auto ? "queue-auto-clear-completed-error" : "queue-clear-completed-error");
+      pushErrorToast(
+        message,
+        auto
+          ? "queue-auto-clear-completed-error"
+          : "queue-clear-completed-error",
+      );
     }
   }
 
@@ -2207,13 +2692,23 @@ export default function App() {
       stopTutorial();
       applySession(await backend.logout());
       setLoginOpen(true);
-      pushToast({ level: "success", message: "Signed out.", dedupeKey: "logout-success" });
+      pushToast({
+        level: "success",
+        message: "Signed out.",
+        dedupeKey: "logout-success",
+      });
     } catch (error) {
-      updateQueueMessage(getErrorMessage(error, "Logout failed."), "error", "logout-error");
+      updateQueueMessage(
+        getErrorMessage(error, "Logout failed."),
+        "error",
+        "logout-error",
+      );
     }
   }
 
-  async function handleToggleWatchingArtists(targetTabId = activeTabIdRef.current) {
+  async function handleToggleWatchingArtists(
+    targetTabId = activeTabIdRef.current,
+  ) {
     const tab = tabsRef.current.find((item) => item.id === targetTabId);
     if (!tab) {
       return;
@@ -2233,7 +2728,10 @@ export default function App() {
     }
     if (!sessionRef.current.hasSession || sessionRef.current.isGuest) {
       const message = "Sign in with a member account to use My watches.";
-      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        searchError: message,
+      }));
       pushToast({ level: "warning", message, dedupeKey: "my-watches-sign-in" });
       return;
     }
@@ -2253,7 +2751,10 @@ export default function App() {
       }));
     } catch (error) {
       const message = getErrorMessage(error, "Could not load your watch list.");
-      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        searchError: message,
+      }));
       pushErrorToast(message, "my-watches-error");
     } finally {
       setWatchingLoading(false);
@@ -2270,7 +2771,10 @@ export default function App() {
     }
     if (!sessionRef.current.hasSession) {
       const message = "Sign in to search.";
-      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        searchError: message,
+      }));
       setLoginOpen(true);
       pushToast({ level: "warning", message, dedupeKey: "search-sign-in" });
       return;
@@ -2323,7 +2827,11 @@ export default function App() {
               maxActive: settingsRef.current.maxActive,
               clientOperationId: targetTabId,
             })
-          : await backend.loadMoreResults(tab.searchResponse!.searchId, page, targetTabId);
+          : await backend.loadMoreResults(
+              tab.searchResponse!.searchId,
+              page,
+              targetTabId,
+            );
       if (isSearchRequestStopRequested(targetTabId, runId)) {
         writeFrontendSearchLog("search response ignored", {
           tabId: targetTabId,
@@ -2354,7 +2862,9 @@ export default function App() {
         normalizeSubmissionCards(response.results),
       );
       const hydratedResponse =
-        hydratedResults === response.results ? response : { ...response, results: hydratedResults };
+        hydratedResults === response.results
+          ? response
+          : { ...response, results: hydratedResults };
       if (page === 1 && activeTabIdRef.current === targetTabId) {
         shouldScrollToResultsRef.current = true;
       }
@@ -2399,7 +2909,9 @@ export default function App() {
           searchResponse: hydratedResponse,
           results: [...currentTab.results, ...hydratedResponse.results],
           activeSubmissionId:
-            currentTab.activeSubmissionId || hydratedResponse.results[0]?.submissionId || "",
+            currentTab.activeSubmissionId ||
+            hydratedResponse.results[0]?.submissionId ||
+            "",
           searchError: "",
         };
       });
@@ -2428,11 +2940,17 @@ export default function App() {
         page,
         error: message,
       });
-      updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      updateTab(targetTabId, (currentTab) => ({
+        ...currentTab,
+        searchError: message,
+      }));
       pushErrorToast(message, page === 1 ? "search-error" : "load-more-error");
       return undefined;
     } finally {
-      if (clearSearchLoadingInFinally && isSearchRequestRunActive(targetTabId, runId)) {
+      if (
+        clearSearchLoadingInFinally &&
+        isSearchRequestRunActive(targetTabId, runId)
+      ) {
         writeFrontendSearchLog("search loading cleared in finally", {
           tabId: targetTabId,
           runId,
@@ -2466,14 +2984,22 @@ export default function App() {
     const runId = startSearchRequestRun(resolvedTabId);
     let clearSearchLoadingInFinally = true;
     try {
-      const response = await backend.refreshSearch(tab.searchResponse.searchId, resolvedTabId);
+      const response = await backend.refreshSearch(
+        tab.searchResponse.searchId,
+        resolvedTabId,
+      );
       if (isSearchRequestStopRequested(resolvedTabId, runId)) {
         return;
       }
       applySessionWithoutTabSync(response.session);
-      const hydratedResults = applyPendingHydratedResults(response.searchId, response.results);
+      const hydratedResults = applyPendingHydratedResults(
+        response.searchId,
+        response.results,
+      );
       const hydratedResponse =
-        hydratedResults === response.results ? response : { ...response, results: hydratedResults };
+        hydratedResults === response.results
+          ? response
+          : { ...response, results: hydratedResults };
       updateTab(resolvedTabId, (currentTab) => ({
         ...currentTab,
         searchPhase: "processing",
@@ -2508,10 +3034,16 @@ export default function App() {
         return;
       }
       const message = getErrorMessage(error, "Refresh failed.");
-      updateTab(resolvedTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+      updateTab(resolvedTabId, (currentTab) => ({
+        ...currentTab,
+        searchError: message,
+      }));
       pushErrorToast(message, "refresh-search-error");
     } finally {
-      if (clearSearchLoadingInFinally && isSearchRequestRunActive(resolvedTabId, runId)) {
+      if (
+        clearSearchLoadingInFinally &&
+        isSearchRequestRunActive(resolvedTabId, runId)
+      ) {
         updateTab(resolvedTabId, (currentTab) => ({
           ...currentTab,
           searchLoading: false,
@@ -2549,8 +3081,13 @@ export default function App() {
     try {
       let nextPage = tab.searchResponse.page + 1;
       while (true) {
-        const currentTab = tabsRef.current.find((item) => item.id === targetTabId);
-        if (!currentTab?.searchResponse || nextPage > currentTab.searchResponse.pagesCount) {
+        const currentTab = tabsRef.current.find(
+          (item) => item.id === targetTabId,
+        );
+        if (
+          !currentTab?.searchResponse ||
+          nextPage > currentTab.searchResponse.pagesCount
+        ) {
           return;
         }
 
@@ -2624,7 +3161,10 @@ export default function App() {
 
     const submissionIds = response.results
       .map((result) => result.submissionId)
-      .filter((submissionId) => !unavailableSubmissionIdsRef.current.has(submissionId));
+      .filter(
+        (submissionId) =>
+          !unavailableSubmissionIdsRef.current.has(submissionId),
+      );
 
     if (submissionIds.length > 0) {
       await handleDownloadSubmissions(submissionIds, targetTabId);
@@ -2648,10 +3188,7 @@ export default function App() {
     await handleSearchAction(nextTab.id);
   }
 
-  async function handleKeywordSearch(
-    keywordId: string,
-    keywordName: string,
-  ) {
+  async function handleKeywordSearch(keywordId: string, keywordName: string) {
     const normalizedKeywordId = keywordId.trim();
     const normalizedKeywordName = keywordName.trim();
     if (!normalizedKeywordId) {
@@ -2675,10 +3212,7 @@ export default function App() {
     });
   }
 
-  async function handleArtistSearch(
-    username: string,
-    avatarUrl = "",
-  ) {
+  async function handleArtistSearch(username: string, avatarUrl = "") {
     const normalizedUsername = normalizeArtistToken(username);
     if (!normalizedUsername) {
       return;
@@ -2762,7 +3296,9 @@ export default function App() {
       const snapshot = await backend.enqueueDownloads(
         tab.searchResponse.searchId,
         {
-          submissions: eligibleSubmissionIds.map((submissionId) => ({ submissionId })),
+          submissions: eligibleSubmissionIds.map((submissionId) => ({
+            submissionId,
+          })),
         },
         {
           saveKeywords: tab.searchParams.saveKeywords,
@@ -2785,7 +3321,84 @@ export default function App() {
       return [];
     } finally {
       setPendingDownloadSubmissionIds((previous) =>
-        previous.filter((submissionId) => !eligibleSubmissionIds.includes(submissionId)),
+        previous.filter(
+          (submissionId) => !eligibleSubmissionIds.includes(submissionId),
+        ),
+      );
+    }
+  }
+
+  async function handleDownloadSubmissionFile(
+    submissionId: string,
+    fileId?: string,
+    targetTabId = activeTabIdRef.current,
+  ) {
+    const normalizedSubmissionId = submissionId.trim();
+    const normalizedFileId = (fileId ?? "").trim();
+    if (!normalizedSubmissionId) {
+      return;
+    }
+    if (!normalizedFileId) {
+      await handleDownloadSubmissions([normalizedSubmissionId], targetTabId);
+      return;
+    }
+
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab?.searchResponse) {
+      return;
+    }
+    if (unavailableSubmissionIdsRef.current.has(normalizedSubmissionId)) {
+      updateQueueMessage(
+        "That file is already downloading or downloaded.",
+        "warning",
+        "queue-no-eligible-file",
+      );
+      return;
+    }
+
+    setQueueMessage("");
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      trackedDownloadSubmissionIds: mergeSubmissionIds(
+        currentTab.trackedDownloadSubmissionIds,
+        [normalizedSubmissionId],
+      ),
+    }));
+    setPendingDownloadSubmissionIds((previous) =>
+      mergeSubmissionIds(previous, [normalizedSubmissionId]),
+    );
+
+    try {
+      const snapshot = await backend.enqueueDownloads(
+        tab.searchResponse.searchId,
+        {
+          submissions: [
+            {
+              submissionId: normalizedSubmissionId,
+              fileIds: [normalizedFileId],
+            },
+          ],
+        },
+        {
+          saveKeywords: tab.searchParams.saveKeywords,
+          maxActive: settingsRef.current.maxActive,
+          downloadDirectory: settingsRef.current.downloadDirectory,
+          downloadPattern: settingsRef.current.downloadPattern,
+        },
+      );
+      applyQueueSnapshot(snapshot);
+      updateQueueMessage(
+        "Queued file download.",
+        "success",
+        "queue-file-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to queue file download.");
+      updateQueueMessage(message);
+      pushErrorToast(message, "queue-file-error");
+    } finally {
+      setPendingDownloadSubmissionIds((previous) =>
+        previous.filter((value) => value !== normalizedSubmissionId),
       );
     }
   }
@@ -2811,7 +3424,10 @@ export default function App() {
 
     const submissionIds = response.results
       .map((result) => result.submissionId)
-      .filter((submissionId) => !unavailableSubmissionIdsRef.current.has(submissionId));
+      .filter(
+        (submissionId) =>
+          !unavailableSubmissionIdsRef.current.has(submissionId),
+      );
     if (submissionIds.length === 0) {
       updateTab(targetTabId, (currentTab) => ({
         ...currentTab,
@@ -2840,7 +3456,9 @@ export default function App() {
       previous.filter((value) => value !== submissionId),
     );
     try {
-      applyQueueSnapshot(cancelSubmissionInQueueSnapshot(queueRef.current, submissionId));
+      applyQueueSnapshot(
+        cancelSubmissionInQueueSnapshot(queueRef.current, submissionId),
+      );
       applyQueueSnapshot(await backend.cancelSubmission(submissionId));
     } catch (error) {
       const message = getErrorMessage(error, "Failed to cancel download.");
@@ -2885,6 +3503,27 @@ export default function App() {
     }
   }
 
+  async function handleCancelDownload(jobId: string) {
+    if (!jobId) {
+      return;
+    }
+    try {
+      applyQueueSnapshot(await backend.cancelDownload(jobId));
+      updateQueueMessage(
+        "Stopped file download.",
+        "success",
+        "cancel-download-success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(
+        error,
+        "Failed to stop the file download.",
+      );
+      updateQueueMessage(message);
+      pushErrorToast(message, "cancel-download-error");
+    }
+  }
+
   async function handleOpenQueuedJobInFolder(jobId: string) {
     if (!jobId) {
       return;
@@ -2892,7 +3531,10 @@ export default function App() {
     try {
       await backend.openJobInFolder(jobId);
     } catch (error) {
-      const message = getErrorMessage(error, "Could not open the downloaded file.");
+      const message = getErrorMessage(
+        error,
+        "Could not open the downloaded file.",
+      );
       updateQueueMessage(message);
       pushErrorToast(message, "open-queued-job-folder-error");
     }
@@ -2904,7 +3546,11 @@ export default function App() {
     }
     try {
       applyQueueSnapshot(await backend.redownloadJob(jobId));
-      updateQueueMessage("Redownloading file.", "success", "redownload-job-success");
+      updateQueueMessage(
+        "Redownloading file.",
+        "success",
+        "redownload-job-success",
+      );
     } catch (error) {
       const message = getErrorMessage(error, "Failed to redownload the file.");
       updateQueueMessage(message);
@@ -2924,7 +3570,10 @@ export default function App() {
         "redownload-submission-success",
       );
     } catch (error) {
-      const message = getErrorMessage(error, "Failed to redownload the submission.");
+      const message = getErrorMessage(
+        error,
+        "Failed to redownload the submission.",
+      );
       updateQueueMessage(message);
       pushErrorToast(message, "redownload-submission-error");
     }
@@ -2936,9 +3585,16 @@ export default function App() {
     }
     try {
       applyQueueSnapshot(await backend.deleteJob(jobId));
-      updateQueueMessage("Deleted queue item.", "success", "delete-queue-job-success");
+      updateQueueMessage(
+        "Deleted queue item.",
+        "success",
+        "delete-queue-job-success",
+      );
     } catch (error) {
-      const message = getErrorMessage(error, "Failed to delete the queue item.");
+      const message = getErrorMessage(
+        error,
+        "Failed to delete the queue item.",
+      );
       updateQueueMessage(message);
       pushErrorToast(message, "delete-queue-job-error");
     }
@@ -2956,7 +3612,10 @@ export default function App() {
         "delete-queue-submission-success",
       );
     } catch (error) {
-      const message = getErrorMessage(error, "Failed to delete the submission jobs.");
+      const message = getErrorMessage(
+        error,
+        "Failed to delete the submission jobs.",
+      );
       updateQueueMessage(message);
       pushErrorToast(message, "delete-queue-submission-error");
     }
@@ -3056,7 +3715,10 @@ export default function App() {
     const optimisticSession = { ...sessionRef.current, ratingsMask: nextMask };
     sessionRef.current = optimisticSession;
     setSession(optimisticSession);
-    updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: "" }));
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      searchError: "",
+    }));
     pendingRatingsMaskRef.current = nextMask;
     if (ratingDebounceRef.current !== null) {
       window.clearTimeout(ratingDebounceRef.current);
@@ -3072,7 +3734,10 @@ export default function App() {
         })
         .catch((error: unknown) => {
           const message = getErrorMessage(error, "Unable to update ratings.");
-          updateTab(targetTabId, (currentTab) => ({ ...currentTab, searchError: message }));
+          updateTab(targetTabId, (currentTab) => ({
+            ...currentTab,
+            searchError: message,
+          }));
           pushErrorToast(message, "ratings-error");
           backend
             .getSession()
@@ -3104,7 +3769,9 @@ export default function App() {
       .filter((submissionId) => !downloadedSubmissionIds.has(submissionId));
     const allSelected =
       selectableResultIds.length > 0 &&
-      selectableResultIds.every((submissionId) => tab.selectedSubmissionIds.includes(submissionId));
+      selectableResultIds.every((submissionId) =>
+        tab.selectedSubmissionIds.includes(submissionId),
+      );
 
     const nextSelectedSubmissionIds =
       mode === "all"
@@ -3112,13 +3779,16 @@ export default function App() {
         : mode === "none"
           ? []
           : selectableResultIds.filter(
-              (submissionId) => !tab.selectedSubmissionIds.includes(submissionId),
+              (submissionId) =>
+                !tab.selectedSubmissionIds.includes(submissionId),
             );
 
     updateTab(resolvedTabId, (currentTab) => ({
       ...currentTab,
       selectedSubmissionIds:
-        mode === "all" && allSelected ? currentTab.selectedSubmissionIds : nextSelectedSubmissionIds,
+        mode === "all" && allSelected
+          ? currentTab.selectedSubmissionIds
+          : nextSelectedSubmissionIds,
     }));
   }
 
@@ -3134,17 +3804,34 @@ export default function App() {
       .filter((submissionId) => !downloadedSubmissionIds.has(submissionId));
     const allSelected =
       selectableResultIds.length > 0 &&
-      selectableResultIds.every((submissionId) => tab.selectedSubmissionIds.includes(submissionId));
+      selectableResultIds.every((submissionId) =>
+        tab.selectedSubmissionIds.includes(submissionId),
+      );
 
     handleUpdateSelection(allSelected ? "none" : "all", resolvedTabId);
   }
 
   return (
-    <div className={`theme-switch min-h-screen transition-colors duration-300 mobile-zoom ${settings.darkMode ? "dark theme-dark" : "theme-light"} ${!settings.motionEnabled ? "motion-reduced" : ""}`}>
+    <div
+      className={`theme-switch min-h-screen transition-colors duration-300 mobile-zoom ${settings.darkMode ? "dark theme-dark" : "theme-light"} ${!settings.motionEnabled ? "motion-reduced" : ""}`}
+    >
       <style>{GLOBAL_STYLES}</style>
       <ToastHost toasts={toasts} onDismiss={dismissToast} />
-      <StarBackground darkMode={settings.darkMode} motionEnabled={settings.motionEnabled} />
-      <div className="theme-shell min-h-screen overflow-x-hidden font-sans text-[var(--theme-text)] selection:bg-[var(--theme-accent)] selection:text-white transition-colors duration-300">
+      <StarBackground
+        darkMode={settings.darkMode}
+        motionEnabled={settings.motionEnabled}
+      />
+      <div
+        className="theme-shell min-h-screen overflow-x-hidden font-sans text-[var(--theme-text)] selection:bg-[var(--theme-accent)] selection:text-white transition-colors duration-300"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setShellContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            confirmReset: false,
+          });
+        }}
+      >
         <NavigationPill
           darkMode={settings.darkMode}
           motionEnabled={settings.motionEnabled}
@@ -3153,8 +3840,12 @@ export default function App() {
           unreadTotal={unreadTotal}
           newUnreadCount={newUnreadCount}
           unreadActive={unreadModeActive}
-          onToggleDarkMode={() => void persistSettings({ darkMode: !settings.darkMode })}
-          onToggleMotion={() => void persistSettings({ motionEnabled: !settings.motionEnabled })}
+          onToggleDarkMode={() =>
+            void persistSettings({ darkMode: !settings.darkMode })
+          }
+          onToggleMotion={() =>
+            void persistSettings({ motionEnabled: !settings.motionEnabled })
+          }
           onToggleTabs={() => setTabMenuOpen((current) => !current)}
           onOpenUnread={() => void handleOpenUnreadTab()}
           onOpenLogin={() => setLoginOpen(true)}
@@ -3281,7 +3972,8 @@ export default function App() {
                     ...currentTab.searchParams,
                     artistNames: currentTab.searchParams.artistNames.filter(
                       (artist) =>
-                        normalizeArtistToken(artist) !== normalizeArtistToken(value),
+                        normalizeArtistToken(artist) !==
+                        normalizeArtistToken(value),
                     ),
                   },
                   artistAvatars: Object.fromEntries(
@@ -3299,6 +3991,8 @@ export default function App() {
               onToggleMyWatches={() => void handleToggleWatchingArtists()}
               onSearch={() => void handleSearchAction()}
               onStopSearch={() => void stopActiveSearch()}
+              onClearForm={() => handleClearSearchForm()}
+              onNewTab={handleAddTab}
               onToggleAutoQueue={(enabled) => handleToggleAutoQueue(enabled)}
               onToggleCollapse={() => {
                 if (!activeTab) {
@@ -3312,8 +4006,14 @@ export default function App() {
               }}
               onToggleRating={(index) => void handleToggleRating(index)}
             />
-            <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${activeSearchCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}>
-              <div className={activeSearchCollapsed ? "overflow-hidden" : "overflow-visible"}>
+            <div
+              className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${activeSearchCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
+            >
+              <div
+                className={
+                  activeSearchCollapsed ? "overflow-hidden" : "overflow-visible"
+                }
+              >
                 <AccountSidebar
                   session={session}
                   settings={settings}
@@ -3345,14 +4045,20 @@ export default function App() {
                         });
                       })
                       .catch((error: unknown) => {
-                        const message = getErrorMessage(error, "Could not open folder picker.");
+                        const message = getErrorMessage(
+                          error,
+                          "Could not open folder picker.",
+                        );
                         updateQueueMessage(message);
                         pushErrorToast(message, "download-folder-picker-error");
                       })
                   }
                   onOpenDownloadFolder={() => {
                     backend.openDownloadDirectory().catch((error: unknown) => {
-                      const message = getErrorMessage(error, "Could not open the download folder.");
+                      const message = getErrorMessage(
+                        error,
+                        "Could not open the download folder.",
+                      );
                       updateQueueMessage(message);
                       pushErrorToast(message, "open-download-folder-error");
                     });
@@ -3418,9 +4124,12 @@ export default function App() {
                 }
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
-                  selectedSubmissionIds: currentTab.selectedSubmissionIds.includes(submissionId)
-                    ? currentTab.selectedSubmissionIds.filter((value) => value !== submissionId)
-                    : [...currentTab.selectedSubmissionIds, submissionId],
+                  selectedSubmissionIds:
+                    currentTab.selectedSubmissionIds.includes(submissionId)
+                      ? currentTab.selectedSubmissionIds.filter(
+                          (value) => value !== submissionId,
+                        )
+                      : [...currentTab.selectedSubmissionIds, submissionId],
                 }));
               }}
               onShowCustomThumbnailsChange={(enabled) => {
@@ -3443,9 +4152,15 @@ export default function App() {
                   showSubmissionDetails: enabled,
                 }));
               }}
-              onDownloadSubmission={(submissionId) => void handleDownloadSubmissions([submissionId])}
-              onCancelSubmission={(submissionId) => void handleCancelSubmission(submissionId)}
-              onRetrySubmission={(submissionId) => void handleRetrySubmission(submissionId)}
+              onDownloadSubmission={(submissionId) =>
+                void handleDownloadSubmissions([submissionId])
+              }
+              onCancelSubmission={(submissionId) =>
+                void handleCancelSubmission(submissionId)
+              }
+              onRetrySubmission={(submissionId) =>
+                void handleRetrySubmission(submissionId)
+              }
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}
               onStopSearch={() => void stopActiveSearch()}
@@ -3462,6 +4177,14 @@ export default function App() {
               onSearchKeyword={(keywordId, keywordName) =>
                 void handleKeywordSearch(keywordId, keywordName)
               }
+              onDownloadSubmissionFile={(submissionId, fileId) =>
+                void handleDownloadSubmissionFile(submissionId, fileId)
+              }
+              onOpenJobInFolder={(jobId) =>
+                void handleOpenQueuedJobInFolder(jobId)
+              }
+              onCancelDownloadJob={(jobId) => void handleCancelDownload(jobId)}
+              onRedownloadJob={(jobId) => void handleRedownloadJob(jobId)}
             />
           </div>
           <DownloadQueuePanel
@@ -3469,7 +4192,10 @@ export default function App() {
             message={queueMessage}
             maxActive={settings.maxActive}
             selectedCount={activeSelectedSubmissionIds.length}
-            canQueueDownloads={Boolean(activeSearchResponse) && activeSelectedSubmissionIds.length > 0}
+            canQueueDownloads={
+              Boolean(activeSearchResponse) &&
+              activeSelectedSubmissionIds.length > 0
+            }
             canStopAll={canStopAllDownloads}
             canPauseAll={canPauseAllDownloads}
             canResumeAll={canResumeAllDownloads}
@@ -3481,7 +4207,10 @@ export default function App() {
             folderPreviewImages={folderPreviewImages}
             onOpenDownloadFolder={() => {
               backend.openDownloadDirectory().catch((error: unknown) => {
-                const message = getErrorMessage(error, "Could not open the download folder.");
+                const message = getErrorMessage(
+                  error,
+                  "Could not open the download folder.",
+                );
                 updateQueueMessage(message);
                 pushErrorToast(message, "open-download-folder-error");
               });
@@ -3492,10 +4221,17 @@ export default function App() {
                 .then((snapshot) => {
                   applyQueueSnapshot(snapshot);
                   setPendingDownloadSubmissionIds([]);
-                  updateQueueMessage("Queue cleared.", "success", "queue-cleared");
+                  updateQueueMessage(
+                    "Queue cleared.",
+                    "success",
+                    "queue-cleared",
+                  );
                 })
                 .catch((error: unknown) => {
-                  const message = getErrorMessage(error, "Could not clear the queue.");
+                  const message = getErrorMessage(
+                    error,
+                    "Could not clear the queue.",
+                  );
                   updateQueueMessage(message);
                   pushErrorToast(message, "queue-clear-error");
                 });
@@ -3511,11 +4247,13 @@ export default function App() {
               void persistSettings({ autoClearCompleted: enabled })
             }
             onMaxActiveChange={handleMaxActiveChange}
-            onOpenJobInFolder={(jobId) => void handleOpenQueuedJobInFolder(jobId)}
-            onCancel={(jobId) => {
-              backend.cancelDownload(jobId).then(applyQueueSnapshot).catch(() => undefined);
-            }}
-            onCancelSubmission={(submissionId) => void handleCancelSubmission(submissionId)}
+            onOpenJobInFolder={(jobId) =>
+              void handleOpenQueuedJobInFolder(jobId)
+            }
+            onCancel={(jobId) => void handleCancelDownload(jobId)}
+            onCancelSubmission={(submissionId) =>
+              void handleCancelSubmission(submissionId)
+            }
             onRetry={(jobId) => void handleRetryDownload(jobId)}
             onRedownloadJob={(jobId) => void handleRedownloadJob(jobId)}
             onRedownloadSubmission={(submissionId) =>
@@ -3531,6 +4269,12 @@ export default function App() {
             }
           />
         </main>
+        <ContextMenu
+          opened={shellContextMenu !== null}
+          position={shellContextMenu}
+          sections={shellContextSections}
+          onClose={() => setShellContextMenu(null)}
+        />
       </div>
     </div>
   );
@@ -3538,7 +4282,13 @@ export default function App() {
 
 function getToastDuration(level: ToastItem["level"], retryAfterMs?: number) {
   const base =
-    level === "error" ? 6500 : level === "warning" ? 5500 : level === "success" ? 3500 : 4000;
+    level === "error"
+      ? 6500
+      : level === "warning"
+        ? 5500
+        : level === "success"
+          ? 3500
+          : 4000;
   return Math.max(base, (retryAfterMs ?? 0) + 1200);
 }
 
@@ -3571,7 +4321,10 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function isRateLimitMessage(message: string) {
   const value = message.toLowerCase();
-  return value.includes("rate limiting") || (value.includes("429") && value.includes("inkbunny"));
+  return (
+    value.includes("rate limiting") ||
+    (value.includes("429") && value.includes("inkbunny"))
+  );
 }
 
 function isSearchCancellationError(error: unknown) {
@@ -3732,7 +4485,10 @@ function getUnavailableSubmissionIds(
   pendingDownloadSubmissionIds: string[],
   downloadedSubmissionIds: Set<string>,
 ) {
-  const unavailable = new Set([...pendingDownloadSubmissionIds, ...downloadedSubmissionIds]);
+  const unavailable = new Set([
+    ...pendingDownloadSubmissionIds,
+    ...downloadedSubmissionIds,
+  ]);
   for (const job of queue.jobs) {
     if (!job.submissionId) {
       continue;
@@ -3829,7 +4585,8 @@ function dedupePreviewSources(sources: unknown) {
   return [
     ...new Set(
       sources.filter(
-        (value): value is string => typeof value === "string" && value.length > 0,
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
       ),
     ),
   ];
@@ -3880,13 +4637,18 @@ function getPreviewImageSetsKey(imageSets: string[][]) {
 function arePreviewImageSetsEqual(left: string[][], right: string[][]) {
   return (
     left.length === right.length &&
-    left.every((value, index) => areStringArraysEqual(value, right[index] ?? []))
+    left.every((value, index) =>
+      areStringArraysEqual(value, right[index] ?? []),
+    )
   );
 }
 
 function writeBackendDebugEvent(event: BackendDebugEvent) {
   const prefix = `[backend][${event.scope}] ${event.timestamp} ${event.message}`;
-  const fields = event.fields && Object.keys(event.fields).length > 0 ? event.fields : undefined;
+  const fields =
+    event.fields && Object.keys(event.fields).length > 0
+      ? event.fields
+      : undefined;
   if (event.level === "error") {
     console.error(prefix, fields ?? "");
     return;
@@ -3964,7 +4726,8 @@ function commitArtistSelection(
       useWatchingArtists: false,
     },
     artistAvatars:
-      options.avatarUrl && tab.artistAvatars[normalizedArtist] !== options.avatarUrl
+      options.avatarUrl &&
+      tab.artistAvatars[normalizedArtist] !== options.avatarUrl
         ? {
             ...tab.artistAvatars,
             [normalizedArtist]: options.avatarUrl,
@@ -4022,7 +4785,10 @@ function finalizeArtistDraft(searchParams: SearchParams, artistDraft: string) {
   }
   return {
     ...searchParams,
-    artistNames: appendArtistNames(searchParams.artistNames, committedArtistName),
+    artistNames: appendArtistNames(
+      searchParams.artistNames,
+      committedArtistName,
+    ),
   };
 }
 
@@ -4083,7 +4849,10 @@ function syncSearchParamsWithSession(
   return normalizeSearchParamsForMode(
     {
       ...cloneSearchParams(searchParams),
-      maxActive: settings.maxActive || searchParams.maxActive || DEFAULT_SEARCH.maxActive,
+      maxActive:
+        settings.maxActive ||
+        searchParams.maxActive ||
+        DEFAULT_SEARCH.maxActive,
       maxDownloads:
         session.isGuest && searchParams.maxDownloads <= 0
           ? GUEST_DEFAULT_MAX_DOWNLOADS
@@ -4106,7 +4875,8 @@ function normalizeSearchParamsForMode(
     ...cloneSearchParams(searchParams),
     unreadSubmissions: mode === "unread",
     perPage: normalizedPerPage,
-    maxActive: settings.maxActive || searchParams.maxActive || DEFAULT_SEARCH.maxActive,
+    maxActive:
+      settings.maxActive || searchParams.maxActive || DEFAULT_SEARCH.maxActive,
     maxDownloads:
       session.isGuest && searchParams.maxDownloads <= 0
         ? GUEST_DEFAULT_MAX_DOWNLOADS
@@ -4114,7 +4884,10 @@ function normalizeSearchParamsForMode(
   };
 }
 
-function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTabState {
+function createSearchTab(
+  session: SessionInfo,
+  settings: AppSettings,
+): SearchTabState {
   return {
     id: createTabId(),
     mode: "default",
@@ -4142,7 +4915,10 @@ function createSearchTab(session: SessionInfo, settings: AppSettings): SearchTab
   };
 }
 
-function createUnreadSearchTab(session: SessionInfo, settings: AppSettings): SearchTabState {
+function createUnreadSearchTab(
+  session: SessionInfo,
+  settings: AppSettings,
+): SearchTabState {
   return {
     ...createSearchTab(session, settings),
     mode: "unread",
@@ -4171,7 +4947,10 @@ function resetSearchTab(
 }
 
 function createTabId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -4184,7 +4963,9 @@ function createIdleLoadMoreState(): SearchTabLoadMoreState {
   };
 }
 
-function normalizeQueueSnapshot(snapshot: QueueSnapshot | null | undefined): QueueSnapshot {
+function normalizeQueueSnapshot(
+  snapshot: QueueSnapshot | null | undefined,
+): QueueSnapshot {
   const input: Record<string, unknown> = isRecord(snapshot) ? snapshot : {};
   const jobs = Array.isArray(input.jobs) ? input.jobs : EMPTY_QUEUE.jobs;
 
@@ -4193,9 +4974,17 @@ function normalizeQueueSnapshot(snapshot: QueueSnapshot | null | undefined): Que
     paused: Boolean(input.paused),
     queuedCount: normalizeQueueCount(input.queuedCount, jobs, "queued"),
     activeCount: normalizeQueueCount(input.activeCount, jobs, "active"),
-    completedCount: normalizeQueueCount(input.completedCount, jobs, "completed"),
+    completedCount: normalizeQueueCount(
+      input.completedCount,
+      jobs,
+      "completed",
+    ),
     failedCount: normalizeQueueCount(input.failedCount, jobs, "failed"),
-    cancelledCount: normalizeQueueCount(input.cancelledCount, jobs, "cancelled"),
+    cancelledCount: normalizeQueueCount(
+      input.cancelledCount,
+      jobs,
+      "cancelled",
+    ),
   };
 }
 
@@ -4213,7 +5002,9 @@ function compactQueueSnapshot(
   snapshot: QueueSnapshot,
   previousSnapshot: QueueSnapshot = EMPTY_QUEUE,
 ): QueueSnapshot {
-  const previousJobsByID = new Map(previousSnapshot.jobs.map((job) => [job.id, job]));
+  const previousJobsByID = new Map(
+    previousSnapshot.jobs.map((job) => [job.id, job]),
+  );
   const retainedJobs: QueueSnapshot["jobs"] = [];
   let retainedCompleted = 0;
   let retainedCancelled = 0;
@@ -4225,9 +5016,11 @@ function compactQueueSnapshot(
     }
     const status = inputJob.status;
     const keepCompleted =
-      status === "completed" && retainedCompleted < MAX_RETAINED_COMPLETED_QUEUE_JOBS;
+      status === "completed" &&
+      retainedCompleted < MAX_RETAINED_COMPLETED_QUEUE_JOBS;
     const keepCancelled =
-      status === "cancelled" && retainedCancelled < MAX_RETAINED_CANCELLED_QUEUE_JOBS;
+      status === "cancelled" &&
+      retainedCancelled < MAX_RETAINED_CANCELLED_QUEUE_JOBS;
     const keepJob =
       status === "queued" ||
       status === "active" ||
@@ -4395,7 +5188,9 @@ function applyQueueJobUpdate(
 
 function updateQueueSnapshotJobs(
   snapshot: QueueSnapshot,
-  updateJob: (job: QueueSnapshot["jobs"][number]) => QueueSnapshot["jobs"][number],
+  updateJob: (
+    job: QueueSnapshot["jobs"][number],
+  ) => QueueSnapshot["jobs"][number],
 ) {
   let changed = false;
   const jobs = snapshot.jobs.map((job) => {
@@ -4457,7 +5252,9 @@ function getBrowserMemoryStats() {
 
   return {
     usedJSHeapSize: performanceWithMemory.memory.usedJSHeapSize,
-    usedJSHeapLabel: formatMemoryBytes(performanceWithMemory.memory.usedJSHeapSize),
+    usedJSHeapLabel: formatMemoryBytes(
+      performanceWithMemory.memory.usedJSHeapSize,
+    ),
     totalJSHeapSize: performanceWithMemory.memory.totalJSHeapSize,
     totalJSHeapLabel: formatMemoryBytes(
       performanceWithMemory.memory.totalJSHeapSize,
@@ -4572,11 +5369,15 @@ function normalizeSavedSearchParams(
     ...buildDefaultSearch(session, settings),
     ...value,
     keywordId: typeof value.keywordId === "string" ? value.keywordId : "",
-    randomize: getBoolean(value.randomize, buildDefaultSearch(session, settings).randomize),
+    randomize: getBoolean(
+      value.randomize,
+      buildDefaultSearch(session, settings).randomize,
+    ),
     artistNames: getStringArray(value.artistNames),
     submissionTypes: Array.isArray(value.submissionTypes)
       ? value.submissionTypes.filter(
-          (item): item is number => typeof item === "number" && Number.isFinite(item),
+          (item): item is number =>
+            typeof item === "number" && Number.isFinite(item),
         )
       : [],
   };
@@ -4584,7 +5385,11 @@ function normalizeSavedSearchParams(
 }
 
 function normalizeSavedSearchResponse(input: unknown, session: SessionInfo) {
-  if (!isRecord(input) || typeof input.searchId !== "string" || !input.searchId.trim()) {
+  if (
+    !isRecord(input) ||
+    typeof input.searchId !== "string" ||
+    !input.searchId.trim()
+  ) {
     return null;
   }
   const results = normalizeSubmissionCards(
@@ -4594,7 +5399,10 @@ function normalizeSavedSearchResponse(input: unknown, session: SessionInfo) {
     searchId: input.searchId,
     page: getNumber(input.page, 1),
     pagesCount: Math.max(getNumber(input.pagesCount, 1), 1),
-    resultsCount: Math.max(getNumber(input.resultsCount, results.length), results.length),
+    resultsCount: Math.max(
+      getNumber(input.resultsCount, results.length),
+      results.length,
+    ),
     results,
     session,
   };
@@ -4604,7 +5412,8 @@ function getSearchTabLabel(tab: SearchTabState, index: number) {
   if (tab.mode === "unread") {
     return "Unread";
   }
-  const { query, artistNames, useWatchingArtists, favoritesBy, poolId } = tab.searchParams;
+  const { query, artistNames, useWatchingArtists, favoritesBy, poolId } =
+    tab.searchParams;
   if (query.trim()) {
     return truncateLabel(query.trim(), 26);
   }
@@ -4726,7 +5535,9 @@ function rememberPendingWorkspaceEcho(
   const serialized = serializeWorkspaceState(workspace);
   const nextPending = [...pendingRef.current, serialized];
   pendingRef.current =
-    nextPending.length > 12 ? nextPending.slice(nextPending.length - 12) : nextPending;
+    nextPending.length > 12
+      ? nextPending.slice(nextPending.length - 12)
+      : nextPending;
 }
 
 function acknowledgePendingWorkspaceEcho(
@@ -4803,7 +5614,8 @@ function mergeWorkspaceTabsWithTransientState(
       hasTransientWorkspaceSearchState(currentTab) ||
       parseSearchSequence(currentTab.searchResponse?.searchId) >
         parseSearchSequence(restoredTab.searchResponse?.searchId) ||
-      (currentTab.searchResponse !== null && restoredTab.searchResponse === null) ||
+      (currentTab.searchResponse !== null &&
+        restoredTab.searchResponse === null) ||
       (currentTab.results.length > 0 && restoredTab.results.length === 0);
 
     return {
@@ -4841,7 +5653,8 @@ function mergeWorkspaceTabsWithTransientState(
   for (const currentTab of currentTabs) {
     if (
       !restoredTabIds.has(currentTab.id) &&
-      (protectedTabIds.has(currentTab.id) || hasTransientWorkspaceSearchState(currentTab))
+      (protectedTabIds.has(currentTab.id) ||
+        hasTransientWorkspaceSearchState(currentTab))
     ) {
       mergedTabs.push(currentTab);
     }
@@ -4870,7 +5683,7 @@ function resolveActiveWorkspaceTabId(
     : protectedTabIds.has(currentActiveTabId) &&
         restoredTabs.some((tab) => tab.id === currentActiveTabId)
       ? currentActiveTabId
-    : restoredTabs[0]?.id ?? "";
+      : (restoredTabs[0]?.id ?? "");
 }
 
 function restoreSavedSearchTab(
@@ -4884,13 +5697,23 @@ function restoreSavedSearchTab(
     return null;
   }
   const mode: SearchTabMode = source.mode === "unread" ? "unread" : "default";
-  const searchParams = normalizeSavedSearchParams(source.searchParams, mode, session, settings);
+  const searchParams = normalizeSavedSearchParams(
+    source.searchParams,
+    mode,
+    session,
+    settings,
+  );
   const results = normalizeSubmissionCards(
     Array.isArray(source.results) ? [...source.results] : [],
   );
-  const searchResponse = normalizeSavedSearchResponse(source.searchResponse, session);
+  const searchResponse = normalizeSavedSearchResponse(
+    source.searchResponse,
+    session,
+  );
   const activeSubmissionId =
-    (typeof source.activeSubmissionId === "string" ? source.activeSubmissionId : "") ||
+    (typeof source.activeSubmissionId === "string"
+      ? source.activeSubmissionId
+      : "") ||
     results[0]?.submissionId ||
     "";
 
@@ -4898,9 +5721,13 @@ function restoreSavedSearchTab(
     id,
     mode,
     searchParams,
-    artistDraft: typeof source.artistDraft === "string" ? source.artistDraft : "",
+    artistDraft:
+      typeof source.artistDraft === "string" ? source.artistDraft : "",
     artistAvatars: getStringRecord(source.artistAvatars),
-    artistValidation: getStringRecord(source.artistValidation) as Record<string, ArtistValidationState>,
+    artistValidation: getStringRecord(source.artistValidation) as Record<
+      string,
+      ArtistValidationState
+    >,
     searchResponse,
     results,
     activeSubmissionId,
@@ -4915,9 +5742,12 @@ function restoreSavedSearchTab(
     resultsRefreshToken: 0,
     loadMoreState: createIdleLoadMoreState(),
     autoQueueEnabled: getBoolean(source.autoQueueEnabled, false),
-    trackedDownloadSubmissionIds: getStringArray(source.trackedDownloadSubmissionIds),
+    trackedDownloadSubmissionIds: getStringArray(
+      source.trackedDownloadSubmissionIds,
+    ),
     autoQueueNextRunAt:
-      getBoolean(source.autoQueueEnabled, false) && getNumber(source.autoQueueNextRunAt, 0) > 0
+      getBoolean(source.autoQueueEnabled, false) &&
+      getNumber(source.autoQueueNextRunAt, 0) > 0
         ? getNumber(source.autoQueueNextRunAt, 0)
         : 0,
     autoQueuePhase: "idle",
@@ -4945,7 +5775,10 @@ function getTrackedActiveSubmissionIds(
   queue: QueueSnapshot,
   pendingDownloadSubmissionIds: string[],
 ) {
-  const inFlight = getTrackedSubmissionIdsInFlight(queue, pendingDownloadSubmissionIds);
+  const inFlight = getTrackedSubmissionIdsInFlight(
+    queue,
+    pendingDownloadSubmissionIds,
+  );
   return tab.trackedDownloadSubmissionIds.filter((submissionId) =>
     inFlight.has(submissionId),
   );
@@ -4956,7 +5789,10 @@ function hasTrackedQueueActivity(
   queue: QueueSnapshot,
   pendingDownloadSubmissionIds: string[],
 ) {
-  return getTrackedActiveSubmissionIds(tab, queue, pendingDownloadSubmissionIds).length > 0;
+  return (
+    getTrackedActiveSubmissionIds(tab, queue, pendingDownloadSubmissionIds)
+      .length > 0
+  );
 }
 
 function shouldRunAutoQueue(
@@ -5004,7 +5840,10 @@ function isSearchTabUntouched(
 ) {
   return (
     tab.mode === "default" &&
-    areSearchParamsEqual(tab.searchParams, buildDefaultSearch(session, settings)) &&
+    areSearchParamsEqual(
+      tab.searchParams,
+      buildDefaultSearch(session, settings),
+    ) &&
     tab.artistDraft === "" &&
     Object.keys(tab.artistAvatars).length === 0 &&
     Object.keys(tab.artistValidation).length === 0 &&
@@ -5044,9 +5883,13 @@ function areSearchParamsEqual(left: SearchParams, right: SearchParams) {
     left.maxActive === right.maxActive &&
     left.saveKeywords === right.saveKeywords &&
     left.artistNames.length === right.artistNames.length &&
-    left.artistNames.every((value, index) => value === right.artistNames[index]) &&
+    left.artistNames.every(
+      (value, index) => value === right.artistNames[index],
+    ) &&
     left.submissionTypes.length === right.submissionTypes.length &&
-    left.submissionTypes.every((value, index) => value === right.submissionTypes[index])
+    left.submissionTypes.every(
+      (value, index) => value === right.submissionTypes[index],
+    )
   );
 }
 

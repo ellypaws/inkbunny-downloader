@@ -9,7 +9,9 @@ import {
   File,
   FileImage,
   FileText,
+  FolderOpen,
   LoaderCircle,
+  Search,
   RefreshCw,
   Square,
   Star,
@@ -24,8 +26,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 
+import {
+  ContextMenu,
+  type ContextMenuSection,
+} from "./ContextMenu";
 import { SubmissionContent } from "./SubmissionContent";
 import { SubmissionWritingReader } from "./SubmissionWritingReader";
 import { DEFAULT_AVATAR_URL } from "../lib/constants";
@@ -44,6 +51,7 @@ export type SubmissionModalPreviewSource = {
 
 export type SubmissionModalMediaItem = {
   key: string;
+  fileId?: string;
   alt: string;
   label: string;
   fileName?: string;
@@ -65,8 +73,29 @@ type SubmissionImageModalProps = {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onDownload: () => void;
+  onDownloadCurrentFile: () => void;
+  onStopCurrentFileDownload: () => void;
+  onRedownloadCurrentFile: () => void;
+  canRedownloadCurrentFile: boolean;
+  canOpenCurrentFileInFolder: boolean;
+  currentFileDownloadState: "idle" | "queued" | "downloading" | "downloaded" | "failed";
+  onOpenCurrentFileInFolder: () => void;
+  onSearchArtist: (username: string, avatarUrl?: string) => void;
+  onSearchFavoritesBy: (username: string) => void;
   onSearchKeyword: (keywordId: string, keywordName: string) => void;
 };
+
+type ModalContextMenuState =
+  | {
+      kind: "sidebar";
+      x: number;
+      y: number;
+    }
+  | {
+      kind: "media";
+      x: number;
+      y: number;
+    };
 
 export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const keywordListRef = useRef<HTMLDivElement | null>(null);
@@ -97,6 +126,9 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     submissionKey,
     index: 0,
   }));
+  const [contextMenu, setContextMenu] = useState<ModalContextMenuState | null>(
+    null,
+  );
   const [descriptionState, setDescriptionState] = useState(() => ({
     submissionKey,
     value: null as SubmissionDescription | null,
@@ -157,6 +189,192 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     keywordsOverflowState.key === keywordsOverflowKey
       ? keywordsOverflowState.value
       : false;
+  const currentFileActionLabel =
+    props.currentFileDownloadState === "queued" ||
+    props.currentFileDownloadState === "downloading"
+      ? "Stop file download"
+      : props.currentFileDownloadState === "downloaded" ||
+          props.currentFileDownloadState === "failed"
+        ? "Redownload file"
+        : "Download file";
+  const currentFileActionDisabled =
+    (props.currentFileDownloadState === "downloaded" ||
+      props.currentFileDownloadState === "failed") &&
+    !props.canRedownloadCurrentFile;
+  const artistSectionLabel = (
+    <span className="flex min-w-0 items-center gap-2">
+      <img
+        src={resolveMediaURL(avatarSrc) ?? avatarSrc}
+        srcSet={resolveMediaSrcSet(effectiveAvatarSrcSet || undefined)}
+        sizes="20px"
+        alt={props.submission.username}
+        referrerPolicy={MEDIA_REFERRER_POLICY}
+        className="h-5 w-5 shrink-0 rounded-full border border-white/70 bg-white object-cover"
+      />
+      <span className="truncate text-[var(--theme-title)]">
+        @{props.submission.username}
+      </span>
+    </span>
+  );
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const openSidebarContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setContextMenu({
+        kind: "sidebar",
+        x: event.clientX,
+        y: event.clientY,
+      });
+    },
+    [],
+  );
+
+  const openMediaContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setContextMenu({
+        kind: "media",
+        x: event.clientX,
+        y: event.clientY,
+      });
+    },
+    [],
+  );
+
+  const sidebarContextSections: ContextMenuSection[] = [
+    {
+      id: "submission",
+      label: "Submission",
+      items: [
+        {
+          id: "download-submission",
+          label:
+            props.cancellable
+              ? "Stop submission download"
+              : props.retryable
+                ? "Retry submission download"
+                : "Download submission",
+          leftSection:
+            props.cancellable || props.retryable ? (
+              props.cancellable ? (
+                <Square size={14} />
+              ) : (
+                <RefreshCw size={14} />
+              )
+            ) : (
+              <Download size={14} />
+            ),
+          disabled: props.downloadState === "downloaded",
+          onClick: props.onDownload,
+        },
+        {
+          id: "open-submission-page",
+          label: "Open submission page",
+          leftSection: <Eye size={14} />,
+          disabled: !props.submission.submissionUrl,
+          onClick: () => {
+            void openExternal(props.submission.submissionUrl);
+          },
+        },
+      ],
+    },
+    {
+      id: "artist",
+      label: artistSectionLabel,
+      items: [
+        {
+          id: "search-artist",
+          label: "Search for artist",
+          leftSection: <Search size={14} />,
+          onClick: () =>
+            props.onSearchArtist(
+              props.submission.username,
+              props.submission.userIconUrlMedium ||
+                props.submission.userIconUrlSmall ||
+                props.submission.userIconUrlLarge ||
+                "",
+            ),
+        },
+        {
+          id: "search-favorites",
+          label: "Search favorites",
+          leftSection: <Star size={14} />,
+          onClick: () => props.onSearchFavoritesBy(props.submission.username),
+        },
+        {
+          id: "open-artist-page",
+          label: "Open artist page",
+          leftSection: <Eye size={14} />,
+          disabled: !props.submission.userUrl,
+          onClick: () => {
+            void openExternal(props.submission.userUrl);
+          },
+        },
+      ],
+    },
+  ];
+
+  const mediaContextSections: ContextMenuSection[] = [
+    {
+      id: "file",
+      label: props.item.fileName || props.item.label,
+      items: [
+        {
+          id: "download-current-file",
+          label: currentFileActionLabel,
+          leftSection:
+            props.currentFileDownloadState === "queued" ||
+            props.currentFileDownloadState === "downloading" ? (
+              <Square size={14} />
+            ) : props.currentFileDownloadState === "downloaded" ||
+                props.currentFileDownloadState === "failed" ? (
+              <RefreshCw size={14} />
+            ) : (
+              <Download size={14} />
+            ),
+          disabled: currentFileActionDisabled,
+          onClick: () => {
+            if (
+              props.currentFileDownloadState === "queued" ||
+              props.currentFileDownloadState === "downloading"
+            ) {
+              props.onStopCurrentFileDownload();
+              return;
+            }
+            if (
+              props.currentFileDownloadState === "downloaded" ||
+              props.currentFileDownloadState === "failed"
+            ) {
+              props.onRedownloadCurrentFile();
+              return;
+            }
+            props.onDownloadCurrentFile();
+          },
+        },
+        {
+          id: "download-submission-files",
+          label: "Download all for submission",
+          leftSection: <Download size={14} />,
+          disabled: props.downloadState === "downloaded",
+          onClick: props.onDownload,
+        },
+        {
+          id: "open-current-file-folder",
+          label: "Open file in folder",
+          leftSection: <FolderOpen size={14} />,
+          disabled: !props.canOpenCurrentFileInFolder,
+          onClick: props.onOpenCurrentFileInFolder,
+        },
+      ],
+    },
+    ...sidebarContextSections,
+  ];
 
   useEffect(() => {
     const keywordList = keywordListRef.current;
@@ -550,6 +768,9 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       className="fixed inset-0 z-[200] text-[var(--theme-text)] backdrop-blur-md"
       style={{ backgroundColor: "rgba(10, 14, 20, 0.82)" }}
       onClick={props.onClose}
+      onContextMenu={(event) => {
+        event.stopPropagation();
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={`${props.submission.title} media viewer`}
@@ -590,6 +811,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
             onClick={(event) => {
               event.stopPropagation();
             }}
+            onContextMenu={openSidebarContextMenu}
             className="theme-panel-strong relative z-10 flex h-full flex-col px-4 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl md:px-6 md:py-7"
           >
             <div className="sim-panel-item flex items-start gap-3">
@@ -836,6 +1058,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               sources={props.item.sources}
               thumbnail={props.item.thumbnail}
               alt={props.item.alt}
+              onContextMenu={openMediaContextMenu}
             />
 
             {hasMultipleItems ? (
@@ -902,6 +1125,23 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
           ) : null}
         </div>
       </div>
+      <ContextMenu
+        opened={contextMenu !== null}
+        position={
+          contextMenu
+            ? {
+                x: contextMenu.x,
+                y: contextMenu.y,
+              }
+            : null
+        }
+        sections={
+          contextMenu?.kind === "media"
+            ? mediaContextSections
+            : sidebarContextSections
+        }
+        onClose={closeContextMenu}
+      />
     </div>
   );
 }
@@ -912,10 +1152,16 @@ function SubmissionModalImage(props: {
   sources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
+  onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
 }) {
   if (isWritingSubmission(props.submission)) {
     return (
-      <SubmissionWritingReader submissionId={props.submission.submissionId} />
+      <div
+        onClick={(event) => event.stopPropagation()}
+        onContextMenu={props.onContextMenu}
+      >
+        <SubmissionWritingReader submissionId={props.submission.submissionId} />
+      </div>
     );
   }
 
@@ -926,6 +1172,7 @@ function SubmissionModalImage(props: {
         sources={props.sources}
         thumbnail={props.thumbnail}
         alt={props.alt}
+        onContextMenu={props.onContextMenu}
       />
     );
   }
@@ -936,6 +1183,7 @@ function SubmissionModalImage(props: {
       sources={props.sources}
       thumbnail={props.thumbnail}
       alt={props.alt}
+      onContextMenu={props.onContextMenu}
     />
   );
 }
@@ -945,6 +1193,7 @@ function SubmissionModalVisual(props: {
   sources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
+  onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
 }) {
   const sourcesKey = useMemo(
     () =>
@@ -962,6 +1211,7 @@ function SubmissionModalVisualInner(props: {
   sources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
+  onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
 }) {
   const [sourceIndex, setSourceIndex] = useState(0);
   const [loadedSourceKey, setLoadedSourceKey] = useState("");
@@ -983,6 +1233,7 @@ function SubmissionModalVisualInner(props: {
       <div
         className="relative inline-flex max-h-[min(90vh,80rem)] max-w-full min-w-0 items-center justify-center"
         onClick={(event) => event.stopPropagation()}
+        onContextMenu={props.onContextMenu}
       >
         {props.thumbnail?.src ? (
           <img
@@ -1029,6 +1280,7 @@ function SubmissionModalVideo(props: {
   sources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
+  onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
 }) {
   const sourcesKey = useMemo(
     () =>
@@ -1046,6 +1298,7 @@ function SubmissionModalVideoInner(props: {
   sources: SubmissionModalPreviewSource[];
   thumbnail: SubmissionModalPreviewSource | null;
   alt: string;
+  onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
 }) {
   const [sourceIndex, setSourceIndex] = useState(0);
   const [loadedSourceKey, setLoadedSourceKey] = useState("");
@@ -1067,6 +1320,7 @@ function SubmissionModalVideoInner(props: {
       <div
         className="relative inline-flex max-h-[min(90vh,80rem)] max-w-full min-w-0 items-center justify-center"
         onClick={(event) => event.stopPropagation()}
+        onContextMenu={props.onContextMenu}
       >
         {props.thumbnail?.src ? (
           <img

@@ -299,6 +299,7 @@ export function DownloadQueuePanel(props: DownloadQueuePanelProps) {
 
   function openPanelContextMenu(event: ReactMouseEvent<HTMLElement>) {
     event.preventDefault();
+    event.stopPropagation();
     setContextMenu({
       kind: "panel",
       x: event.clientX,

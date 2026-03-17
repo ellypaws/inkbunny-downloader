@@ -3,11 +3,13 @@ import type { ReactNode } from "react";
 
 export type ContextMenuItem = {
   id: string;
-  label: string;
+  label: ReactNode;
   leftSection?: ReactNode;
   disabled?: boolean;
   color?: string;
+  closeOnClick?: boolean;
   onClick?: () => void;
+  customContent?: ReactNode;
 };
 
 export type ContextMenuSection = {
@@ -67,7 +69,7 @@ export function ContextMenu(props: ContextMenuProps) {
             props.onClose();
           }
         }}
-        closeOnItemClick
+        closeOnItemClick={false}
         withinPortal
         position="bottom-start"
         offset={8}
@@ -130,21 +132,30 @@ export function ContextMenu(props: ContextMenuProps) {
             <div key={section.id}>
               {section.label ? <Menu.Label>{section.label}</Menu.Label> : null}
               {section.items.map((item) => (
-                <Menu.Item
-                  key={item.id}
-                  leftSection={item.leftSection}
-                  disabled={item.disabled}
-                  color={item.color}
-                  onClick={() => {
-                    if (item.disabled) {
-                      return;
-                    }
-                    item.onClick?.();
-                    props.onClose();
-                  }}
-                >
-                  {item.label}
-                </Menu.Item>
+                item.customContent ? (
+                  <div key={item.id} className="px-1 py-1">
+                    {item.customContent}
+                  </div>
+                ) : (
+                  <Menu.Item
+                    key={item.id}
+                    leftSection={item.leftSection}
+                    disabled={item.disabled}
+                    color={item.color}
+                    closeMenuOnClick={item.closeOnClick !== false}
+                    onClick={() => {
+                      if (item.disabled) {
+                        return;
+                      }
+                      item.onClick?.();
+                      if (item.closeOnClick !== false) {
+                        props.onClose();
+                      }
+                    }}
+                  >
+                    {item.label}
+                  </Menu.Item>
+                )
               ))}
               {index < props.sections.length - 1 ? <Menu.Divider /> : null}
             </div>

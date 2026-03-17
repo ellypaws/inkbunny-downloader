@@ -46,6 +46,7 @@ import {
   resolveMediaURL,
 } from "../lib/wails";
 import type {
+  DownloadJobSnapshot,
   QueueSnapshot,
   SearchResponse,
   SubmissionCard,
@@ -94,6 +95,10 @@ type ResultsShowcaseProps = {
   onSearchArtist: (username: string, avatarUrl?: string) => void;
   onSearchFavoritesBy: (username: string) => void;
   onSearchKeyword: (keywordId: string, keywordName: string) => void;
+  onDownloadSubmissionFile: (submissionId: string, fileId?: string) => void;
+  onOpenJobInFolder: (jobId: string) => void;
+  onCancelDownloadJob: (jobId: string) => void;
+  onRedownloadJob: (jobId: string) => void;
 };
 
 type SubmissionDownloadState =
@@ -318,12 +323,29 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     ? (downloadSummaries.get(activeModalSubmission.submissionId) ??
       IDLE_DOWNLOAD_SUMMARY)
     : null;
+  const activeModalJob = useMemo(
+    () =>
+      activeModalSubmission && activeModalItem
+        ? findQueueJobForModalItem(
+            props.queue,
+            activeModalSubmission.submissionId,
+            activeModalItem.fileId,
+            activeModalItem.fileName,
+          )
+        : null,
+    [activeModalItem, activeModalSubmission, props.queue],
+  );
   const activeModalCancellable = isSubmissionCancellable(
     activeModalDownloadSummary?.state ?? "idle",
   );
   const activeModalRetryable = isSubmissionRetryable(
     activeModalDownloadSummary?.state ?? "idle",
   );
+  const activeModalFileDownloadState = getQueueJobDownloadState(activeModalJob);
+  const activeModalCanOpenCurrentFile =
+    backend.capabilities.openLocalPaths && Boolean(activeModalJob?.fileExists);
+  const activeModalCanRedownloadCurrentFile =
+    backend.isDesktopRuntime && Boolean(activeModalJob?.id);
   const contextSubmission =
     contextMenu?.kind === "submission"
       ? props.results.find(
@@ -628,6 +650,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
 
   function openGalleryContextMenu(event: ReactMouseEvent<HTMLElement>) {
     event.preventDefault();
+    event.stopPropagation();
     setContextMenu({
       kind: "gallery",
       x: event.clientX,
@@ -1462,6 +1485,35 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           onClose={() => setActiveModal(null)}
           onNavigate={setActiveModalIndex}
           onDownload={handleActiveModalDownload}
+          onDownloadCurrentFile={() =>
+            props.onDownloadSubmissionFile(
+              activeModalSubmission.submissionId,
+              activeModalItem.fileId,
+            )
+          }
+          onStopCurrentFileDownload={() => {
+            if (!activeModalJob?.id) {
+              return;
+            }
+            props.onCancelDownloadJob(activeModalJob.id);
+          }}
+          onRedownloadCurrentFile={() => {
+            if (!activeModalJob?.id) {
+              return;
+            }
+            props.onRedownloadJob(activeModalJob.id);
+          }}
+          canRedownloadCurrentFile={activeModalCanRedownloadCurrentFile}
+          canOpenCurrentFileInFolder={activeModalCanOpenCurrentFile}
+          currentFileDownloadState={activeModalFileDownloadState}
+          onOpenCurrentFileInFolder={() => {
+            if (!activeModalJob?.id) {
+              return;
+            }
+            props.onOpenJobInFolder(activeModalJob.id);
+          }}
+          onSearchArtist={props.onSearchArtist}
+          onSearchFavoritesBy={props.onSearchFavoritesBy}
           onSearchKeyword={props.onSearchKeyword}
         />
       ) : null}
@@ -1865,6 +1917,10 @@ function getSubmissionModalMediaItems(
 
       return {
         key: file.fileId || `${submission.submissionId}-${index}`,
+        fileId:
+          file.fileId ||
+          submission.fileIds?.[index] ||
+          (submission.fileIds?.length === 1 ? submission.fileIds[0] : undefined),
         alt: `${submission.title} - page ${index + 1}`,
         label: `Page ${index + 1}`,
         fileName: file.fileName,
@@ -1889,6 +1945,11 @@ function getSubmissionModalMediaItems(
   return [
     {
       key: `${submission.submissionId}-fallback`,
+      fileId:
+        submission.fileIds?.[0] ||
+        (submission.mediaFiles?.length === 1
+          ? submission.mediaFiles[0]?.fileId
+          : undefined),
       alt: submission.title,
       label: "Page 1",
       fileName: submission.fileName,
@@ -2661,6 +2722,61 @@ function getAggregateSubmissionProgress(aggregate: {
     );
   }
   return 0;
+}
+
+function getQueueJobDownloadState(
+  job: DownloadJobSnapshot | null,
+): SubmissionDownloadState {
+  if (!job) {
+    return "idle";
+  }
+  if (job.status === "queued") {
+    return "queued";
+  }
+  if (job.status === "active") {
+    return "downloading";
+  }
+  if (job.status === "completed") {
+    return "downloaded";
+  }
+  if (job.status === "failed") {
+    return "failed";
+  }
+  return "idle";
+}
+
+function findQueueJobForModalItem(
+  queue: QueueSnapshot,
+  submissionId: string,
+  fileId?: string,
+  fileName?: string,
+) {
+  const matchingJobs = queue.jobs.filter(
+    (job) => job.submissionId === submissionId,
+  );
+  if (matchingJobs.length === 0) {
+    return null;
+  }
+
+  if (fileId) {
+    const exactFileIdMatch = [...matchingJobs]
+      .reverse()
+      .find((job) => job.fileId === fileId);
+    if (exactFileIdMatch) {
+      return exactFileIdMatch;
+    }
+  }
+
+  if (fileName) {
+    const exactFileNameMatch = [...matchingJobs]
+      .reverse()
+      .find((job) => job.fileName === fileName);
+    if (exactFileNameMatch) {
+      return exactFileNameMatch;
+    }
+  }
+
+  return matchingJobs.length === 1 ? matchingJobs[0] ?? null : null;
 }
 
 function renderDownloadIcon(state: SubmissionDownloadState, size: number) {

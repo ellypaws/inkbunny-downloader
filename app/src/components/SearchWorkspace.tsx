@@ -3,12 +3,17 @@ import {
   ChevronDown,
   Eye,
   LoaderCircle,
+  Plus,
   Search as SearchIcon,
   Shuffle,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
+import {
+  ContextMenu,
+  type ContextMenuSection,
+} from "./ContextMenu";
 import {
   DEFAULT_AVATAR_URL,
   FIND_OPTIONS,
@@ -53,6 +58,8 @@ type SearchWorkspaceProps = {
   onToggleMyWatches: () => void;
   onSearch: () => void;
   onStopSearch: () => void;
+  onClearForm: () => void;
+  onNewTab: () => void;
   onToggleAutoQueue: (enabled: boolean) => void;
   onToggleCollapse: () => void;
   onToggleRating: (index: number) => void;
@@ -69,6 +76,10 @@ type ChoiceTone =
 
 export function SearchWorkspace(props: SearchWorkspaceProps) {
   const [focusedField, setFocusedField] = useState<SuggestionField>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [pinnedField, setPinnedField] = useState<SuggestionField>(null);
   const [pinnedKeywordSuggestions, setPinnedKeywordSuggestions] = useState<
     KeywordSuggestion[]
@@ -124,13 +135,72 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
         : props.searchButtonMode === "waiting"
           ? "theme-button-secondary"
           : "theme-button-accent";
+  const searchContextSections: ContextMenuSection[] = [
+    {
+      id: "search",
+      label: "Search",
+      items: [
+        {
+          id: "run-search",
+          label: searchStops ? "Stop search" : "Search",
+          leftSection: searchStops ? <X size={14} /> : <SearchIcon size={14} />,
+          disabled: props.searchButtonDisabled,
+          onClick: searchStops ? props.onStopSearch : props.onSearch,
+        },
+        {
+          id: "clear-form",
+          label: "Clear form",
+          leftSection: <X size={14} />,
+          onClick: props.onClearForm,
+        },
+        {
+          id: "new-tab",
+          label: "New tab",
+          leftSection: <Plus size={14} />,
+          onClick: props.onNewTab,
+        },
+      ],
+    },
+    {
+      id: "workspace",
+      label: "Workspace",
+      items: [
+        {
+          id: "toggle-auto-queue",
+          label: props.autoQueueEnabled
+            ? "Disable auto queue"
+            : "Enable auto queue",
+          leftSection: <Eye size={14} />,
+          onClick: () => props.onToggleAutoQueue(!props.autoQueueEnabled),
+        },
+        {
+          id: "toggle-collapse",
+          label: props.collapsed ? "Expand search" : "Collapse search",
+          leftSection: <ChevronDown size={14} />,
+          onClick: props.onToggleCollapse,
+        },
+      ],
+    },
+  ];
 
   const clearPinnedField = (field: SuggestionField) => {
     setPinnedField((current) => (current === field ? null : current));
   };
 
+  function openContextMenu(event: ReactMouseEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenuPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
   return (
-    <section className="relative overflow-hidden rounded-toy-sm bg-transparent backdrop-blur-xl">
+    <section
+      className="relative overflow-hidden rounded-toy-sm bg-transparent backdrop-blur-xl"
+      onContextMenu={openContextMenu}
+    >
       <div className="pointer-events-none absolute inset-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay bg-[radial-gradient(circle_at_top_right,var(--theme-accent-soft),transparent_30%),radial-gradient(circle_at_bottom_left,var(--theme-border-soft),transparent_22%)]" />
       <div className="theme-panel relative z-10 overflow-hidden rounded-toy-sm border shadow-pop backdrop-blur-xl">
         <button
@@ -716,6 +786,12 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
           {props.error}
         </div>
       ) : null}
+      <ContextMenu
+        opened={contextMenuPosition !== null}
+        position={contextMenuPosition}
+        sections={searchContextSections}
+        onClose={() => setContextMenuPosition(null)}
+      />
     </section>
   );
 }
