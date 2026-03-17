@@ -183,6 +183,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const autoScrollIgnoreUntilRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
   const lastObservedScrollTopRef = useRef(0);
+  const previousResultsLengthRef = useRef(props.results.length);
+  const previousFollowLatestResultsRef = useRef(false);
   const selectedCount = props.selectedSubmissionIds.length;
   const activeSubmission =
     props.results.find(
@@ -290,7 +292,6 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     overscan: 4,
   });
   const hasResults = props.results.length > 0;
-  const loadingMoreResults = props.loadMoreState.mode !== "idle";
   const emptyState = getEmptyResultsState(
     props.searchResponse,
     props.searchPhase,
@@ -462,21 +463,38 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   }, [followLatestResults, props.results.length, resultColumnCount]);
 
   useEffect(() => {
-    if (!followLatestResults || !hasResults || !loadingMoreResults) {
+    const previousResultsLength = previousResultsLengthRef.current;
+    const followJustEnabled =
+      followLatestResults && !previousFollowLatestResultsRef.current;
+    const resultsAppended =
+      previousResultsLength > 0 && props.results.length > previousResultsLength;
+
+    previousResultsLengthRef.current = props.results.length;
+    previousFollowLatestResultsRef.current = followLatestResults;
+
+    if (!followLatestResults || !hasResults) {
       return;
     }
     if (resultRowCount <= 0) {
       return;
     }
-    autoScrollIgnoreUntilRef.current = performance.now() + AUTO_SCROLL_IGNORE_MS;
-    resultRowVirtualizer.scrollToIndex(resultRowCount - 1, {
-      align: "end",
-      behavior: "smooth",
+    if (!followJustEnabled && !resultsAppended) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      autoScrollIgnoreUntilRef.current =
+        performance.now() + AUTO_SCROLL_IGNORE_MS;
+      resultRowVirtualizer.scrollToIndex(resultRowCount - 1, {
+        align: "end",
+        behavior: "smooth",
+      });
     });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [
     followLatestResults,
     hasResults,
-    loadingMoreResults,
     resultRowCount,
     props.results.length,
     resultRowVirtualizer,
