@@ -1,3 +1,6 @@
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { gsap } from "gsap";
+
 type NewSubmissionsBadgeProps = {
   unreadTotal?: number;
   newUnreadCount?: number;
@@ -13,7 +16,114 @@ export function NewSubmissionsBadge({
   onOpenUnread,
   className,
 }: NewSubmissionsBadgeProps) {
-  const spinDegrees = unreadTotal * 360;
+  const burstRef = useRef<HTMLSpanElement | null>(null);
+  const countRef = useRef<HTMLSpanElement | null>(null);
+  const spinTweenRef = useRef<gsap.core.Timeline | null>(null);
+  const burstRotationRef = useRef(0);
+  const previousUnreadRef = useRef(unreadTotal);
+  const initializedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const burst = burstRef.current;
+    const count = countRef.current;
+    if (!burst || !count) {
+      return;
+    }
+
+    const ctx = gsap.context(() => {
+      gsap.set(burst, {
+        rotate: burstRotationRef.current,
+        scale: 1,
+        transformOrigin: "50% 50%",
+      });
+      gsap.set(count, {
+        rotate: -burstRotationRef.current,
+        transformOrigin: "50% 50%",
+      });
+    });
+
+    return () => ctx.revert();
+  }, []);
+
+  useEffect(() => {
+    const burst = burstRef.current;
+    const count = countRef.current;
+    if (!burst || !count) {
+      return;
+    }
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      previousUnreadRef.current = unreadTotal;
+      return;
+    }
+
+    const previousUnread = previousUnreadRef.current;
+    const delta = unreadTotal - previousUnread;
+    previousUnreadRef.current = unreadTotal;
+
+    if (delta === 0) {
+      return;
+    }
+
+    const currentRotation = Number(gsap.getProperty(burst, "rotation"));
+    if (Number.isFinite(currentRotation)) {
+      burstRotationRef.current = currentRotation;
+    }
+
+    spinTweenRef.current?.kill();
+
+    const direction = delta > 0 ? 1 : -1;
+    const spinDistance =
+      direction *
+      Math.min(1080, 240 + Math.max(1, Math.abs(delta)) * 110);
+    const targetRotation = burstRotationRef.current + spinDistance;
+    burstRotationRef.current = targetRotation;
+
+    spinTweenRef.current = gsap
+      .timeline()
+      .to(
+        burst,
+        {
+          scale: 1.14,
+          duration: 0.16,
+          ease: "power2.out",
+        },
+        0,
+      )
+      .to(
+        burst,
+        {
+          rotate: targetRotation,
+          duration: 0.88,
+          ease: "back.out(1.45)",
+        },
+        0,
+      )
+      .to(
+        count,
+        {
+          rotate: -targetRotation,
+          duration: 0.88,
+          ease: "back.out(1.45)",
+        },
+        0,
+      )
+      .to(
+        burst,
+        {
+          scale: 1,
+          duration: 0.5,
+          ease: "elastic.out(1, 0.5)",
+        },
+        0.18,
+      );
+
+    return () => {
+      spinTweenRef.current?.kill();
+      spinTweenRef.current = null;
+    };
+  }, [unreadTotal]);
 
   return (
     <div
@@ -69,21 +179,16 @@ export function NewSubmissionsBadge({
             }`}
           >
             <span
+              ref={burstRef}
               className="flex h-[56px] w-[56px] items-center justify-center bg-gradient-to-b from-[#875d8a] to-[#6a446d] md:h-[60px] md:w-[60px]"
               style={{
                 clipPath:
                   "polygon(50% 0%, 61% 10%, 75% 6%, 80% 20%, 93% 25%, 90% 39%, 100% 50%, 90% 61%, 93% 75%, 80% 80%, 75% 94%, 61% 90%, 50% 100%, 39% 90%, 25% 94%, 20% 80%, 7% 75%, 10% 61%, 0% 50%, 10% 39%, 7% 25%, 20% 20%, 25% 6%, 39% 10%)",
-                transform: `rotate(${spinDegrees}deg)`,
-                transition: "transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             >
               <span
+                ref={countRef}
                 className="font-sans text-[18px] font-black leading-none tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)] md:text-[20px]"
-                style={{
-                  transform: `rotate(-${spinDegrees}deg)`,
-                  transition:
-                    "transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                }}
               >
                 {unreadTotal}
               </span>
