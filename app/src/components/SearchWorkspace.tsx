@@ -1283,6 +1283,10 @@ function applyKeywordSuggestion(query: string, suggestion: string) {
     return suggestion;
   }
 
+  if (/\s$/.test(query)) {
+    return `${trimmed} ${suggestion} `;
+  }
+
   const parts = trimmed.split(/\s+/);
   const lastPart = parts[parts.length - 1] ?? "";
 
