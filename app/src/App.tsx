@@ -31,6 +31,7 @@ import {
   denormalizeSubmissionCard,
   denormalizeSubmissionCards,
   getSubmissionArtistStoreStats,
+  normalizeSubmissionCard,
   normalizeSubmissionCards,
 } from "./lib/submissionMemory";
 import type {
@@ -2387,7 +2388,10 @@ export default function App() {
             return result;
           }
           tabChanged = true;
-          return { ...result, downloaded: true };
+          return normalizeSubmissionCard({
+            ...denormalizeSubmissionCard(result),
+            downloaded: true,
+          });
         });
         const nextSelectedSubmissionIds = tab.selectedSubmissionIds.filter(
           (submissionId) => !nextDownloadedSubmissionIds.has(submissionId),
