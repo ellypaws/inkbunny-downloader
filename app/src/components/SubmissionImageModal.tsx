@@ -73,12 +73,7 @@ type SubmissionImageModalProps = {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onDownload: () => void;
-  onDownloadCurrentFile: () => void;
-  onStopCurrentFileDownload: () => void;
-  onRedownloadCurrentFile: () => void;
-  canRedownloadCurrentFile: boolean;
   canOpenCurrentFileInFolder: boolean;
-  currentFileDownloadState: "idle" | "queued" | "downloading" | "downloaded" | "failed";
   onOpenCurrentFileInFolder: () => void;
   onSearchArtist: (username: string, avatarUrl?: string) => void;
   onSearchFavoritesBy: (username: string) => void;
@@ -189,18 +184,15 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     keywordsOverflowState.key === keywordsOverflowKey
       ? keywordsOverflowState.value
       : false;
-  const currentFileActionLabel =
-    props.currentFileDownloadState === "queued" ||
-    props.currentFileDownloadState === "downloading"
-      ? "Stop file download"
-      : props.currentFileDownloadState === "downloaded" ||
-          props.currentFileDownloadState === "failed"
-        ? "Redownload file"
-        : "Download file";
-  const currentFileActionDisabled =
-    (props.currentFileDownloadState === "downloaded" ||
-      props.currentFileDownloadState === "failed") &&
-    !props.canRedownloadCurrentFile;
+  const currentItemLabel = (props.item.fileName || props.item.label).trim();
+  const fileSectionLabel = (
+    <span
+      className="block max-w-[14rem] truncate text-[var(--theme-title)]"
+      title={currentItemLabel}
+    >
+      {currentItemLabel}
+    </span>
+  );
   const artistSectionLabel = (
     <span className="flex min-w-0 items-center gap-2">
       <img
@@ -323,40 +315,8 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const mediaContextSections: ContextMenuSection[] = [
     {
       id: "file",
-      label: props.item.fileName || props.item.label,
+      label: fileSectionLabel,
       items: [
-        {
-          id: "download-current-file",
-          label: currentFileActionLabel,
-          leftSection:
-            props.currentFileDownloadState === "queued" ||
-            props.currentFileDownloadState === "downloading" ? (
-              <Square size={14} />
-            ) : props.currentFileDownloadState === "downloaded" ||
-                props.currentFileDownloadState === "failed" ? (
-              <RefreshCw size={14} />
-            ) : (
-              <Download size={14} />
-            ),
-          disabled: currentFileActionDisabled,
-          onClick: () => {
-            if (
-              props.currentFileDownloadState === "queued" ||
-              props.currentFileDownloadState === "downloading"
-            ) {
-              props.onStopCurrentFileDownload();
-              return;
-            }
-            if (
-              props.currentFileDownloadState === "downloaded" ||
-              props.currentFileDownloadState === "failed"
-            ) {
-              props.onRedownloadCurrentFile();
-              return;
-            }
-            props.onDownloadCurrentFile();
-          },
-        },
         {
           id: "download-submission-files",
           label: "Download all for submission",

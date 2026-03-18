@@ -47,7 +47,6 @@ import {
   resolveMediaURL,
 } from "../lib/wails";
 import type {
-  DownloadJobSnapshot,
   QueueSnapshot,
   SearchResponse,
   SubmissionCard,
@@ -99,10 +98,7 @@ type ResultsShowcaseProps = {
   onSearchArtist: (username: string, avatarUrl?: string) => void;
   onSearchFavoritesBy: (username: string) => void;
   onSearchKeyword: (keywordId: string, keywordName: string) => void;
-  onDownloadSubmissionFile: (submissionId: string, fileId?: string) => void;
   onOpenJobInFolder: (jobId: string) => void;
-  onCancelDownloadJob: (jobId: string) => void;
-  onRedownloadJob: (jobId: string) => void;
 };
 
 type SubmissionDownloadState =
@@ -347,11 +343,8 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   const activeModalRetryable = isSubmissionRetryable(
     activeModalDownloadSummary?.state ?? "idle",
   );
-  const activeModalFileDownloadState = getQueueJobDownloadState(activeModalJob);
   const activeModalCanOpenCurrentFile =
     backend.capabilities.openLocalPaths && Boolean(activeModalJob?.fileExists);
-  const activeModalCanRedownloadCurrentFile =
-    backend.isDesktopRuntime && Boolean(activeModalJob?.id);
   const contextSubmission =
     contextMenu?.kind === "submission"
       ? props.results.find(
@@ -1537,27 +1530,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
           onClose={() => setActiveModal(null)}
           onNavigate={setActiveModalIndex}
           onDownload={handleActiveModalDownload}
-          onDownloadCurrentFile={() =>
-            props.onDownloadSubmissionFile(
-              activeModalSubmission.submissionId,
-              activeModalItem.fileId,
-            )
-          }
-          onStopCurrentFileDownload={() => {
-            if (!activeModalJob?.id) {
-              return;
-            }
-            props.onCancelDownloadJob(activeModalJob.id);
-          }}
-          onRedownloadCurrentFile={() => {
-            if (!activeModalJob?.id) {
-              return;
-            }
-            props.onRedownloadJob(activeModalJob.id);
-          }}
-          canRedownloadCurrentFile={activeModalCanRedownloadCurrentFile}
           canOpenCurrentFileInFolder={activeModalCanOpenCurrentFile}
-          currentFileDownloadState={activeModalFileDownloadState}
           onOpenCurrentFileInFolder={() => {
             if (!activeModalJob?.id) {
               return;
@@ -2781,27 +2754,6 @@ function getAggregateSubmissionProgress(aggregate: {
     );
   }
   return 0;
-}
-
-function getQueueJobDownloadState(
-  job: DownloadJobSnapshot | null,
-): SubmissionDownloadState {
-  if (!job) {
-    return "idle";
-  }
-  if (job.status === "queued") {
-    return "queued";
-  }
-  if (job.status === "active") {
-    return "downloading";
-  }
-  if (job.status === "completed") {
-    return "downloaded";
-  }
-  if (job.status === "failed") {
-    return "failed";
-  }
-  return "idle";
 }
 
 function findQueueJobForModalItem(

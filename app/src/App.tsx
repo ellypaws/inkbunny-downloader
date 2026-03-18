@@ -3352,81 +3352,6 @@ export default function App() {
     }
   }
 
-  async function handleDownloadSubmissionFile(
-    submissionId: string,
-    fileId?: string,
-    targetTabId = activeTabIdRef.current,
-  ) {
-    const normalizedSubmissionId = submissionId.trim();
-    const normalizedFileId = (fileId ?? "").trim();
-    if (!normalizedSubmissionId) {
-      return;
-    }
-    if (!normalizedFileId) {
-      await handleDownloadSubmissions([normalizedSubmissionId], targetTabId);
-      return;
-    }
-
-    const tab = tabsRef.current.find((item) => item.id === targetTabId);
-    if (!tab?.searchResponse) {
-      return;
-    }
-    if (unavailableSubmissionIdsRef.current.has(normalizedSubmissionId)) {
-      updateQueueMessage(
-        "That file is already downloading or downloaded.",
-        "warning",
-        "queue-no-eligible-file",
-      );
-      return;
-    }
-
-    setQueueMessage("");
-    updateTab(targetTabId, (currentTab) => ({
-      ...currentTab,
-      trackedDownloadSubmissionIds: mergeSubmissionIds(
-        currentTab.trackedDownloadSubmissionIds,
-        [normalizedSubmissionId],
-      ),
-    }));
-    setPendingDownloadSubmissionIds((previous) =>
-      mergeSubmissionIds(previous, [normalizedSubmissionId]),
-    );
-
-    try {
-      const snapshot = await backend.enqueueDownloads(
-        tab.searchResponse.searchId,
-        {
-          submissions: [
-            {
-              submissionId: normalizedSubmissionId,
-              fileIds: [normalizedFileId],
-            },
-          ],
-        },
-        {
-          saveKeywords: tab.searchParams.saveKeywords,
-          maxActive: settingsRef.current.maxActive,
-          downloadDirectory: settingsRef.current.downloadDirectory,
-          downloadPattern: settingsRef.current.downloadPattern,
-        },
-      );
-      applyQueueSnapshot(snapshot);
-      updateQueueMessage(
-        "Queued file download.",
-        "success",
-        "queue-file-success",
-      );
-    } catch (error) {
-      const message = getErrorMessage(error, "Failed to queue file download.");
-      updateQueueMessage(message);
-      pushErrorToast(message, "queue-file-error");
-    } finally {
-      setPendingDownloadSubmissionIds((previous) =>
-        previous.filter((value) => value !== normalizedSubmissionId),
-      );
-    }
-  }
-
   async function runAutoQueue(targetTabId: string) {
     const tab = tabsRef.current.find((item) => item.id === targetTabId);
     if (!tab || !tab.autoQueueEnabled || tab.autoQueuePhase !== "idle") {
@@ -4205,14 +4130,9 @@ export default function App() {
               onSearchKeyword={(keywordId, keywordName) =>
                 void handleKeywordSearch(keywordId, keywordName)
               }
-              onDownloadSubmissionFile={(submissionId, fileId) =>
-                void handleDownloadSubmissionFile(submissionId, fileId)
-              }
               onOpenJobInFolder={(jobId) =>
                 void handleOpenQueuedJobInFolder(jobId)
               }
-              onCancelDownloadJob={(jobId) => void handleCancelDownload(jobId)}
-              onRedownloadJob={(jobId) => void handleRedownloadJob(jobId)}
             />
           </div>
           <DownloadQueuePanel
