@@ -113,6 +113,8 @@ func parse(args []string, program string, output io.Writer) (Config, error) {
 		fmt.Fprintf(out, "      %s\n", descStyle.Render("Maximum number of concurrent downloads."))
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--active 5"))
 
+		fmt.Fprintf(out, "%s\n\n", headingStyle.Render("AUTHENTICATION:"))
+
 		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--username <username>"))
 		fmt.Fprintf(out, "      %s\n", descStyle.Render("Username for non-interactive login. Use with --password, or use guest with an empty password."))
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--username \"Elly\" --password \"hunter2\""))
@@ -124,6 +126,8 @@ func parse(args []string, program string, output io.Writer) (Config, error) {
 		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--sid <session_id>"))
 		fmt.Fprintf(out, "      %s\n", descStyle.Render("Existing session ID for non-interactive authentication. Overrides username/password and saved sessions."))
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--sid \"abc123\""))
+
+		fmt.Fprintf(out, "%s\n\n", headingStyle.Render("HEADLESS:"))
 
 		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--caption"))
 		fmt.Fprintf(out, "      %s\n", descStyle.Render("Whether to save hydrated submission metadata as a .json file alongside the download (default false)."))

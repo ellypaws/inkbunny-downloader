@@ -53,7 +53,7 @@ Inkbunny Downloader is a desktop and terminal app for searching Inkbunny, review
 - Filter by artist, favorites, time range, sort order, and submission type.
 - Switch between a desktop app, terminal UI, or headless CLI workflow.
 - Queue multiple downloads and control concurrent jobs.
-- Save submission keywords beside downloads as `.txt` files if you want captions.
+- Save submission metadata beside downloads as `.json` sidecar files if you want captions.
 - Reuse saved sessions so you do not need to log in every time.
 
 ## Installation
@@ -175,11 +175,20 @@ If you prefer scripts or one-shot commands, you can pass flags and run headless.
 Example:
 
 ```bash
-inkbunny-downloader-tui-linux-amd64 --search "fox -comic" --artist "artist_name" --order favs --limit 25 --caption
+inkbunny-downloader-tui-linux-amd64 --search "fox -comic" --artist "artist_name" --order favs --limit 25 --username "Elly" --password "hunter2" --caption
+```
+
+Or reuse an existing session without passing a password:
+
+```bash
+inkbunny-downloader-tui-linux-amd64 --sid "abc123" --search "fox -comic" --artist "artist_name" --order favs --limit 25
 ```
 
 Useful flags:
 
+- `--username` username for non-interactive login
+- `--password` password for non-interactive login
+- `--sid` existing session ID for non-interactive login; overrides username/password
 - `--search` search text, including exclusions like `tag -excludedtag`
 - `--join` combine terms with `and`, `or`, or `exact`
 - `--in` choose search fields such as `keywords,title,description,md5`
@@ -190,9 +199,15 @@ Useful flags:
 - `--order` sort by `create_datetime`, `favs`, or `views`
 - `--limit` cap how many submissions are downloaded
 - `--active` set max concurrent downloads
-- `--caption` save keywords to `.txt`
+- `--caption` save submission metadata to `.json`
 - `--tui` force terminal UI mode
 - `--headless` force non-interactive mode
+
+Authentication notes:
+
+- Use `--username` together with `--password` for a direct login.
+- Use `--sid` if you already have a valid Inkbunny session ID.
+- Use `--username guest` for guest mode without a password.
 
 ## Download Behavior
 
@@ -200,9 +215,57 @@ Useful flags:
 - The queue can run multiple downloads in parallel.
 - Existing files are skipped where possible rather than downloaded again.
 - Some submissions contain multiple files, and those are queued separately.
-- If keyword saving is enabled, the app writes a sibling `.txt` file beside the downloaded file.
+- If metadata saving is enabled, the app writes a sibling `.json` file beside the downloaded file.
 
 ![Download queue](docs/download-queue.webp)
+
+## Build From Source
+
+If you want to build the desktop app yourself, start with a clean machine setup.
+
+1. Install Go from https://go.dev/dl/
+2. Install Bun from https://bun.sh
+3. Download the source code.
+
+If you have Git installed:
+
+```bash
+git clone https://github.com/ellypaws/inkbunny-downloader.git
+cd inkbunny-downloader
+```
+
+If you do not have Git installed:
+
+> [!TIP]
+> You can also download the ZIP directly at https://github.com/ellypaws/inkbunny-downloader/archive/refs/heads/main.zip
+
+- On the top of the page click `Code`
+- Click `Download ZIP`
+- Extract the ZIP somewhere easy to find
+- Open a terminal inside the extracted `inkbunny-downloader` folder
+
+4. After [installing Go](https://go.dev/dl/), install the Wails CLI:
+
+```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+```
+
+5. Install frontend dependencies:
+
+```bash
+cd app
+bun install
+cd ..
+```
+
+6. Build the desktop app:
+
+```bash
+wails build
+```
+
+`wails build` uses the `app` frontend configured in `wails.json` and produces the desktop app binary.
+
 
 ## Troubleshooting
 
