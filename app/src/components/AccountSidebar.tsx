@@ -305,9 +305,7 @@ export function AccountSidebar(props: AccountSidebarProps) {
                 }
                 className="mt-0.5 h-[1.05rem] w-[1.05rem] accent-[#73D216]"
               />
-              <span className="min-w-0 leading-5">
-                Save keywords as text files
-              </span>
+              <span className="min-w-0 leading-5">Save metadata as JSON</span>
             </label>
             {!props.session.hasSession ? (
               <div className="flex items-start gap-2 rounded-2xl bg-[#4ED2D6]/18 p-4 text-sm font-semibold text-[#2D2D44]/80 dark:bg-[#FFFACD]/14 dark:text-gray-200">

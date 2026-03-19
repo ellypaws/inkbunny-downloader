@@ -560,7 +560,6 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 		user = currentUser
 
 		for _, submission := range batch.Submissions {
-			keywords := joinKeywords(submission.Keywords)
 			allowed := selectedFiles[submission.SubmissionID.String()]
 			searchResult, hasSearchResult := searchResultsByID[submission.SubmissionID.String()]
 			for _, file := range submission.Files {
@@ -579,7 +578,7 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 					FileMD5:      file.FullFileMD5,
 					URL:          file.FileURLFull.String(),
 					IsPublic:     submission.Public.Bool(),
-					Keywords:     keywords,
+					Metadata:     downloads.NewSubmissionFileMetadata(submission, file),
 					PreviewURL:   queuePreviewURL(submission, file, user.SID),
 					SaveKeywords: saveKeywords,
 					DownloadRoot: downloadRoot,
@@ -687,14 +686,6 @@ func ratingsOf(user *inkbunny.User) string {
 	return user.Ratings.String()
 }
 
-func joinKeywords(keywords []inkbunny.Keyword) string {
-	parts := make([]string, 0, len(keywords))
-	for _, keyword := range keywords {
-		parts = append(parts, keyword.KeywordName)
-	}
-	return strings.Join(parts, ", ")
-}
-
 func (a *App) lookupSeenSearchResults(searchID string, submissionIDs []string) map[string]inkbunny.SubmissionSearch {
 	searchID = strings.TrimSpace(searchID)
 	if searchID == "" || len(submissionIDs) == 0 {
@@ -762,13 +753,9 @@ func (a *App) fetchSubmissionDetailsBatchWithoutCache(
 		if err != nil {
 			return inkbunny.SubmissionDetailsResponse{}, err
 		}
-		request := inkbunny.SubmissionDetailsRequest{
-			SID:               current.SID,
-			SubmissionIDSlice: submissionIDs,
-		}
-		if includePools {
-			request.ShowPools = inkbunny.Yes
-		}
+		request := downloads.MetadataSubmissionDetailsRequest()
+		request.SID = current.SID
+		request.SubmissionIDSlice = submissionIDs
 		return current.SubmissionDetails(request)
 	})
 }
@@ -994,15 +981,10 @@ func (a *App) fetchSubmissionDetailsBatch(
 		if err != nil {
 			return inkbunny.SubmissionDetailsResponse{}, err
 		}
-		return current.SubmissionDetails(inkbunny.SubmissionDetailsRequest{
-			SID:                         current.SID,
-			SubmissionIDSlice:           submissionIDs,
-			ShowDescription:             inkbunny.Yes,
-			ShowDescriptionBbcodeParsed: inkbunny.Yes,
-			ShowWriting:                 inkbunny.Yes,
-			ShowWritingBbcodeParsed:     inkbunny.Yes,
-			ShowPools:                   inkbunny.Yes,
-		})
+		request := downloads.MetadataSubmissionDetailsRequest()
+		request.SID = current.SID
+		request.SubmissionIDSlice = submissionIDs
+		return current.SubmissionDetails(request)
 	})
 }
 

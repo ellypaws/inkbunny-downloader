@@ -29,7 +29,7 @@ type Task struct {
 	FileMD5      string
 	URL          string
 	IsPublic     bool
-	Keywords     string
+	Metadata     SubmissionFileMetadata
 	PreviewURL   string
 	SaveKeywords bool
 	DownloadRoot string
@@ -644,8 +644,8 @@ func (m *Manager) download(ctx context.Context, jobID string) error {
 		if err := ensureDownloadTargetsFromSource(source, destinations, task.FileMD5); err != nil {
 			return err
 		}
-		if task.SaveKeywords && task.Keywords != "" {
-			return writeKeywordSidecars(destinations, task.Keywords)
+		if task.SaveKeywords {
+			return WriteSubmissionMetadata(destinations, task.Metadata)
 		}
 		return nil
 	}
@@ -674,8 +674,8 @@ func (m *Manager) download(ctx context.Context, jobID string) error {
 			if copyErr := ensureDownloadTargetsFromSource(filename, destinations, task.FileMD5); copyErr != nil {
 				return copyErr
 			}
-			if task.SaveKeywords && task.Keywords != "" {
-				return writeKeywordSidecars(destinations, task.Keywords)
+			if task.SaveKeywords {
+				return WriteSubmissionMetadata(destinations, task.Metadata)
 			}
 			return nil
 		}
@@ -975,8 +975,11 @@ func deleteJobArtifacts(job *downloadJob) error {
 		if err := os.Remove(destination); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-		sidecar := stringsTrimExt(destination) + ".txt"
-		if err := os.Remove(sidecar); err != nil && !os.IsNotExist(err) {
+		metadataPath := submissionMetadataPath(destination)
+		if metadataPath == "" {
+			continue
+		}
+		if err := os.Remove(metadataPath); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}

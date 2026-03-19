@@ -374,14 +374,6 @@ Process:
 				}
 				gather.Title("Gathering files to download...\n[" + strconv.Itoa(pageCount) + " pages]\n[" + strconv.Itoa(submissionCount) + " submissions]\n[" + strconv.Itoa(fileCount) + " files]")
 
-				var keywords strings.Builder
-				for i, keyword := range d.Keywords {
-					if i > 0 {
-						keywords.WriteString(", ")
-					}
-					keywords.WriteString(keyword.KeywordName)
-				}
-
 				for _, file := range d.Files {
 					key := submissionID + ":" + file.FileID.String()
 					if _, ok := seenFiles[key]; ok {
@@ -402,7 +394,7 @@ Process:
 						FileName:     filepath.Base(file.FileName),
 						FileMD5:      file.FullFileMD5,
 						IsPublic:     d.Public.Bool(),
-						Keywords:     keywords.String(),
+						Metadata:     appdownloads.NewSubmissionFileMetadata(d, file),
 						DownloadRoot: downloadDir,
 						Destinations: appdownloads.ResolveDestinations(downloadDir, downloadPath, d, file),
 						Spinner:      spinnerModel.New(spinnerModel.WithSpinner(spinnerModel.Dot)),
@@ -416,8 +408,9 @@ Process:
 			return true
 		}
 
+		detailsRequest := appdownloads.MetadataSubmissionDetailsRequest()
 		for _, req := range requests {
-			for details, detailsErr := range req.AllDetails(inkbunny.SubmissionDetailsRequest{}) {
+			for details, detailsErr := range req.AllDetails(detailsRequest) {
 				if detailsErr != nil {
 					err = detailsErr
 					return

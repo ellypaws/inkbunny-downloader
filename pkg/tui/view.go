@@ -378,8 +378,8 @@ func (m *Model) renderFooterSection() string {
 	downloadPatternLabel := labelStyle.Render("Download pattern:")
 	downloadPatternInput := m.renderInput("download_pattern", m.DownloadPath, FieldDownloadPattern)
 
-	dlCaptionLabel := labelStyle.Render("Download keywords:")
-	dlCaptionCheckbox := m.renderCheckbox("chk_dl_caption", m.DownloadCaption, "Save as .txt")
+	dlCaptionLabel := labelStyle.Render("Download metadata:")
+	dlCaptionCheckbox := m.renderCheckbox("chk_dl_caption", m.DownloadCaption, "Save as .json")
 
 	patternHint := helperTextStyle.Render("Pattern tokens use {name}, e.g. {artist}, {submission_id}, {file_name_full}, {ext}.")
 	patternPreview := m.renderDownloadPatternPreview()

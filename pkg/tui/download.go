@@ -24,6 +24,7 @@ import (
 
 	"github.com/ellypaws/inkbunny"
 
+	appdownloads "github.com/ellypaws/inkbunny/cmd/downloader/pkg/app/downloads"
 	"github.com/ellypaws/inkbunny/cmd/downloader/pkg/utils"
 )
 
@@ -56,7 +57,7 @@ type DownloadItem struct {
 	FileName     string
 	FileMD5      string
 	IsPublic     bool
-	Keywords     string
+	Metadata     appdownloads.SubmissionFileMetadata
 	DownloadRoot string
 	Destinations []string
 
@@ -787,8 +788,8 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 			if err := ensureDownloadTargetsFromSource(filename, destinations); err != nil {
 				return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 			}
-			if saveCaption && item.Keywords != "" {
-				if err := writeKeywordSidecars(destinations, item.Keywords); err != nil {
+			if saveCaption {
+				if err := appdownloads.WriteSubmissionMetadata(destinations, item.Metadata); err != nil {
 					return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 				}
 			}
@@ -897,8 +898,8 @@ func startDownloadCmd(item *DownloadItem, user *inkbunny.User, client *http.Clie
 		if err := ensureDownloadTargetsFromSource(filename, destinations); err != nil {
 			return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 		}
-		if saveCaption && item.Keywords != "" {
-			err := writeKeywordSidecars(destinations, item.Keywords)
+		if saveCaption {
+			err := appdownloads.WriteSubmissionMetadata(destinations, item.Metadata)
 			if err != nil {
 				return DownloadErrorMsg{Item: item, Err: err, RunID: runID}
 			}
@@ -940,22 +941,6 @@ func ensureDownloadTargetsFromSource(source string, destinations []string) error
 			return err
 		}
 		if err := copyFile(cleanSource, cleanDestination); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeKeywordSidecars(destinations []string, keywords string) error {
-	if strings.TrimSpace(keywords) == "" {
-		return nil
-	}
-	for _, destination := range uniqueNonEmptyPaths(destinations) {
-		sidecar := strings.TrimSuffix(destination, filepath.Ext(destination)) + ".txt"
-		if err := os.MkdirAll(filepath.Dir(sidecar), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(sidecar, []byte(keywords), 0o600); err != nil {
 			return err
 		}
 	}

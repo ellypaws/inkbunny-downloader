@@ -386,22 +386,6 @@ func ensureDownloadTargetsFromSource(source string, destinations []string, expec
 	return nil
 }
 
-func writeKeywordSidecars(destinations []string, keywords string) error {
-	if strings.TrimSpace(keywords) == "" {
-		return nil
-	}
-	for _, destination := range uniqueNonEmptyPaths(destinations) {
-		sidecar := stringsTrimExt(destination) + ".txt"
-		if err := os.MkdirAll(filepath.Dir(sidecar), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(sidecar, []byte(keywords), 0o600); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func copyFile(source, destination string) error {
 	in, err := os.Open(source)
 	if err != nil {

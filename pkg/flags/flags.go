@@ -126,7 +126,7 @@ func parse(args []string, program string, output io.Writer) (Config, error) {
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--sid \"abc123\""))
 
 		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--caption"))
-		fmt.Fprintf(out, "      %s\n", descStyle.Render("Whether to save keywords as a .txt file alongside the download (default false)."))
+		fmt.Fprintf(out, "      %s\n", descStyle.Render("Whether to save hydrated submission metadata as a .json file alongside the download (default false)."))
 		fmt.Fprintf(out, "      %s %s\n\n", descStyle.Render("Example:"), exampleStyle.Render("--caption=false"))
 
 		fmt.Fprintf(out, "  %s\n", flagStyle.Render("--headless"))
@@ -163,7 +163,7 @@ func parse(args []string, program string, output io.Writer) (Config, error) {
 	fs.StringVar(&c.Username, "username", "", "Username for non-interactive login")
 	fs.StringVar(&c.Password, "password", "", "Password for non-interactive login")
 	fs.StringVar(&c.SID, "sid", "", "Session ID for non-interactive login")
-	fs.BoolVar(&c.DownloadCaption, "caption", false, "Download keywords as .txt")
+	fs.BoolVar(&c.DownloadCaption, "caption", false, "Download submission metadata as .json")
 	fs.BoolVar(&c.Headless, "headless", false, "Force headless mode")
 	fs.BoolVar(&c.TUI, "tui", false, "Force TUI mode")
 
