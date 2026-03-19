@@ -94,6 +94,8 @@ type ModalContextMenuState =
       y: number;
     };
 
+const MODAL_DRAG_CLOSE_THRESHOLD_PX = 8;
+
 export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const keywordListRef = useRef<HTMLDivElement | null>(null);
   const activeIndex = props.activeIndex;
@@ -101,7 +103,10 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const submissionKey = props.submission.submissionId;
   const hasMultipleItems = props.items.length > 1;
   const dragStartXRef = useRef(0);
+  const didDragMediaRef = useRef(false);
   const dragPointerIdRef = useRef<number | null>(null);
+  const suppressBackdropClickRef = useRef(false);
+  const suppressBackdropClickTimeoutRef = useRef<number | null>(null);
   const modalRootRef = useRef<HTMLDivElement | null>(null);
   const panelShellRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -221,6 +226,41 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
     setContextMenu(null);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (suppressBackdropClickTimeoutRef.current !== null) {
+        window.clearTimeout(suppressBackdropClickTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const suppressNextBackdropClick = useCallback(() => {
+    suppressBackdropClickRef.current = true;
+    if (suppressBackdropClickTimeoutRef.current !== null) {
+      window.clearTimeout(suppressBackdropClickTimeoutRef.current);
+    }
+    suppressBackdropClickTimeoutRef.current = window.setTimeout(() => {
+      suppressBackdropClickRef.current = false;
+      suppressBackdropClickTimeoutRef.current = null;
+    }, 0);
+  }, []);
+
+  const handleBackdropClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (suppressBackdropClickRef.current) {
+        suppressBackdropClickRef.current = false;
+        if (suppressBackdropClickTimeoutRef.current !== null) {
+          window.clearTimeout(suppressBackdropClickTimeoutRef.current);
+          suppressBackdropClickTimeoutRef.current = null;
+        }
+        event.stopPropagation();
+        return;
+      }
+      props.onClose();
+    },
+    [props.onClose],
+  );
+
   const paginate = useCallback(
     (nextDirection: number) => {
       setDirection(nextDirection);
@@ -247,6 +287,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       }
 
       event.preventDefault();
+      didDragMediaRef.current = false;
       dragStartXRef.current = event.clientX;
       dragPointerIdRef.current = event.pointerId;
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -265,13 +306,18 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       }
 
       event.preventDefault();
-      dragOffsetX.jump(event.clientX - dragStartXRef.current);
+      const deltaX = event.clientX - dragStartXRef.current;
+      if (Math.abs(deltaX) >= MODAL_DRAG_CLOSE_THRESHOLD_PX) {
+        didDragMediaRef.current = true;
+      }
+      dragOffsetX.jump(deltaX);
     },
     [dragOffsetX, hasMultipleItems],
   );
 
   const resetDraggedMediaPosition = useCallback(() => {
     dragPointerIdRef.current = null;
+    didDragMediaRef.current = false;
     animate(dragOffsetX, 0, { type: "spring", bounce: 0.3 });
   }, [dragOffsetX]);
 
@@ -306,6 +352,11 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
 
+      if (didDragMediaRef.current) {
+        suppressNextBackdropClick();
+      }
+      didDragMediaRef.current = false;
+
       if (swipe < -50) {
         dragOffsetX.jump(0);
         paginate(1);
@@ -316,7 +367,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
         animate(dragOffsetX, 0, { type: "spring", bounce: 0.3 });
       }
     },
-    [dragOffsetX, hasMultipleItems, paginate],
+    [dragOffsetX, hasMultipleItems, paginate, suppressNextBackdropClick],
   );
 
   const openSidebarContextMenu = useCallback(
@@ -833,7 +884,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
       ref={modalRootRef}
       className="fixed inset-0 z-[200] text-[var(--theme-text)] backdrop-blur-md"
       style={{ backgroundColor: "rgba(10, 14, 20, 0.82)" }}
-      onClick={props.onClose}
+      onClick={handleBackdropClick}
       onContextMenu={(event) => {
         event.stopPropagation();
       }}
