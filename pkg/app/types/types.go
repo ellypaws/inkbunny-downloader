@@ -205,6 +205,7 @@ type DownloadOptions struct {
 	MaxActive         int    `json:"maxActive"`
 	DownloadDirectory string `json:"downloadDirectory"`
 	DownloadPattern   string `json:"downloadPattern"`
+	ForceRedownload   bool   `json:"forceRedownload"`
 }
 
 type QueueSnapshot struct {

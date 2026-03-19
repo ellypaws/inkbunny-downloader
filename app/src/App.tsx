@@ -3337,6 +3337,79 @@ export default function App() {
     }
   }
 
+  async function handleForceRedownloadSubmission(
+    submissionId: string,
+    targetTabId = activeTabIdRef.current,
+  ) {
+    const tab = tabsRef.current.find((item) => item.id === targetTabId);
+    if (!tab?.searchResponse || !submissionId) {
+      return false;
+    }
+
+    const alreadyDownloading =
+      pendingDownloadSubmissionIdsRef.current.includes(submissionId) ||
+      queueRef.current.jobs.some(
+        (job) =>
+          job.submissionId === submissionId &&
+          (job.status === "queued" || job.status === "active"),
+      );
+    if (alreadyDownloading) {
+      updateQueueMessage(
+        "This submission is already downloading.",
+        "warning",
+        "redownload-submission-busy",
+      );
+      return false;
+    }
+
+    setQueueMessage("");
+    updateTab(targetTabId, (currentTab) => ({
+      ...currentTab,
+      trackedDownloadSubmissionIds: mergeSubmissionIds(
+        currentTab.trackedDownloadSubmissionIds,
+        [submissionId],
+      ),
+    }));
+    setPendingDownloadSubmissionIds((previous) =>
+      mergeSubmissionIds(previous, [submissionId]),
+    );
+
+    try {
+      const snapshot = await backend.enqueueDownloads(
+        tab.searchResponse.searchId,
+        {
+          submissions: [{ submissionId }],
+        },
+        {
+          saveKeywords: tab.searchParams.saveKeywords,
+          maxActive: settingsRef.current.maxActive,
+          downloadDirectory: settingsRef.current.downloadDirectory,
+          downloadPattern: settingsRef.current.downloadPattern,
+          forceRedownload: true,
+        },
+      );
+      applyQueueSnapshot(snapshot);
+      updateQueueMessage(
+        "Redownloading submission files.",
+        "success",
+        "redownload-submission-success",
+      );
+      return true;
+    } catch (error) {
+      const message = getErrorMessage(
+        error,
+        "Failed to redownload the submission.",
+      );
+      updateQueueMessage(message);
+      pushErrorToast(message, "redownload-submission-error");
+      return false;
+    } finally {
+      setPendingDownloadSubmissionIds((previous) =>
+        previous.filter((currentId) => currentId !== submissionId),
+      );
+    }
+  }
+
   async function runAutoQueue(targetTabId: string) {
     const tab = tabsRef.current.find((item) => item.id === targetTabId);
     if (!tab || !tab.autoQueueEnabled || tab.autoQueuePhase !== "idle") {
@@ -3508,6 +3581,12 @@ export default function App() {
         error,
         "Failed to redownload the submission.",
       );
+      if (
+        message.includes("submission jobs not found") &&
+        (await handleForceRedownloadSubmission(submissionId))
+      ) {
+        return;
+      }
       updateQueueMessage(message);
       pushErrorToast(message, "redownload-submission-error");
     }
@@ -4096,6 +4175,9 @@ export default function App() {
               }
               onRetrySubmission={(submissionId) =>
                 void handleRetrySubmission(submissionId)
+              }
+              onRedownloadSubmission={(submissionId) =>
+                void handleRedownloadSubmission(submissionId)
               }
               onStopAll={() => void handleStopAllDownloads()}
               onRefresh={() => void handleRefreshSearch()}

@@ -193,6 +193,7 @@ export type DownloadOptions = {
   maxActive: number
   downloadDirectory: string
   downloadPattern: string
+  forceRedownload?: boolean
 }
 
 export type DownloadJobSnapshot = {

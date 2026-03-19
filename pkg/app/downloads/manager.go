@@ -971,20 +971,10 @@ func jobDestinations(job *downloadJob) []string {
 }
 
 func deleteJobArtifacts(job *downloadJob) error {
-	for _, destination := range jobDestinations(job) {
-		if err := os.Remove(destination); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		metadataPath := submissionMetadataPath(destination)
-		if metadataPath == "" {
-			continue
-		}
-		if err := os.Remove(metadataPath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
+	if job == nil {
+		return nil
 	}
-
-	return nil
+	return DeleteTaskArtifacts(job.task)
 }
 
 func max64(a, b int64) int64 {

@@ -602,6 +602,13 @@ func (a *App) EnqueueDownloads(searchID string, selection types.DownloadSelectio
 	if len(tasks) == 0 {
 		return a.GetQueueSnapshot(), nil
 	}
+	if options.ForceRedownload {
+		for _, task := range tasks {
+			if err := downloads.DeleteTaskArtifacts(task); err != nil {
+				return types.QueueSnapshot{}, err
+			}
+		}
+	}
 	return a.downloadManager.Enqueue(tasks, maxActive), nil
 }
 

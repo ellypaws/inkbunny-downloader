@@ -86,6 +86,7 @@ type ResultsShowcaseProps = {
   onDownloadSubmission: (submissionId: string) => void;
   onCancelSubmission: (submissionId: string) => void;
   onRetrySubmission: (submissionId: string) => void;
+  onRedownloadSubmission: (submissionId: string) => void;
   onStopAll: () => void;
   onRefresh: () => void;
   onStopSearch: () => void;
@@ -666,6 +667,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     summary: SubmissionDownloadSummary,
   ) {
     if (summary.state === "downloaded") {
+      props.onRedownloadSubmission(submissionId);
       return;
     }
     if (isSubmissionCancellable(summary.state)) {
@@ -803,7 +805,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
               id: "download-submission",
               label:
                 contextDownloadSummary?.state === "downloaded"
-                  ? "Already downloaded"
+                  ? "Redownload submission"
                   : contextSubmissionCancellable
                     ? "Cancel download"
                     : contextSubmissionRetryable
@@ -816,7 +818,9 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
               ) : (
                 <Download size={14} />
               ),
-              disabled: contextSubmissionDownloaded,
+              disabled:
+                contextSubmissionDownloaded &&
+                contextDownloadSummary?.state !== "downloaded",
               onClick: () =>
                 handleSubmissionDownloadAction(
                   contextSubmission.submissionId,
