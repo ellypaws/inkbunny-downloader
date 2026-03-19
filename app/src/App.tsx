@@ -2993,13 +2993,30 @@ export default function App() {
     const runId = startSearchRequestRun(resolvedTabId);
     let clearSearchLoadingInFinally = true;
     try {
-      const response = await backend.refreshSearch(
-        tab.searchResponse.searchId,
-        resolvedTabId,
-      );
+      const [response, queueSnapshot] = await Promise.all([
+        backend.refreshSearch(tab.searchResponse.searchId, resolvedTabId),
+        backend.getQueueSnapshot(),
+      ]);
       if (isSearchRequestStopRequested(resolvedTabId, runId)) {
         return;
       }
+      applyQueueSnapshot(queueSnapshot);
+      const refreshedTabs = tabsRef.current.map((currentTab) =>
+        currentTab.id === resolvedTabId
+          ? {
+              ...currentTab,
+              results: response.results,
+              searchResponse: {
+                ...response,
+                results: response.results,
+              },
+            }
+          : currentTab,
+      );
+      const refreshedDownloadedSubmissionIds = getDownloadedSubmissionIds(
+        refreshedTabs,
+        getCompletedQueueSubmissionIds(queueSnapshot),
+      );
       applySessionWithoutTabSync(response.session);
       const hydratedResults = applyPendingHydratedResults(
         response.searchId,
@@ -3024,7 +3041,7 @@ export default function App() {
         selectedSubmissionIds: getAutoSelectedSubmissionIds(
           hydratedResponse.results,
           mergeDownloadedSubmissionIds(
-            downloadedSubmissionIdsRef.current,
+            refreshedDownloadedSubmissionIds,
             hydratedResponse.results,
           ),
         ),
