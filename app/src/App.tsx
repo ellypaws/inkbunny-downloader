@@ -389,6 +389,19 @@ export default function App() {
     [recentCompletedPreviewImages],
   );
   const recentCompletedPreviewImagesRef = useRef(recentCompletedPreviewImages);
+  tabsRef.current = tabs;
+  activeTabIdRef.current = activeTabId;
+  queueRef.current = queue;
+  pendingDownloadSubmissionIdsRef.current = pendingDownloadSubmissionIds;
+  sessionRef.current = session;
+  settingsRef.current = settings;
+  buildInfoRef.current = buildInfo;
+  unreadTotalRef.current = unreadTotal;
+  downloadedSubmissionIdsRef.current = downloadedSubmissionIds;
+  unavailableSubmissionIdsRef.current = unavailableSubmissionIds;
+  toastsRef.current = toasts;
+  recentCompletedPreviewImagesRef.current = recentCompletedPreviewImages;
+  pendingRatingsMaskRef.current = session.ratingsMask;
   const canOpenWebviewDebugConsole =
     typeof (
       window as Window & {
@@ -1842,34 +1855,6 @@ export default function App() {
     }
   }
 
-  useEffect(() => void (tabsRef.current = tabs), [tabs]);
-  useEffect(() => void (activeTabIdRef.current = activeTabId), [activeTabId]);
-  useEffect(() => void (queueRef.current = queue), [queue]);
-  useEffect(
-    () =>
-      void (pendingDownloadSubmissionIdsRef.current =
-        pendingDownloadSubmissionIds),
-    [pendingDownloadSubmissionIds],
-  );
-  useEffect(() => void (sessionRef.current = session), [session]);
-  useEffect(() => void (settingsRef.current = settings), [settings]);
-  useEffect(() => void (buildInfoRef.current = buildInfo), [buildInfo]);
-  useEffect(() => void (unreadTotalRef.current = unreadTotal), [unreadTotal]);
-  useEffect(
-    () => void (downloadedSubmissionIdsRef.current = downloadedSubmissionIds),
-    [downloadedSubmissionIds],
-  );
-  useEffect(
-    () => void (unavailableSubmissionIdsRef.current = unavailableSubmissionIds),
-    [unavailableSubmissionIds],
-  );
-  useEffect(() => void (toastsRef.current = toasts), [toasts]);
-  useEffect(
-    () =>
-      void (recentCompletedPreviewImagesRef.current =
-        recentCompletedPreviewImages),
-    [recentCompletedPreviewImages],
-  );
   useEffect(() => {
     writeFrontendSearchLog("active tab state", {
       tabId: activeTab?.id ?? "",
@@ -2338,10 +2323,6 @@ export default function App() {
       autoClearPendingSubmissionIdsRef.current.delete(submissionId);
     }
   }, [completedQueueSubmissionIds, settings.autoClearCompleted]);
-
-  useEffect(() => {
-    pendingRatingsMaskRef.current = session.ratingsMask;
-  }, [session.ratingsMask]);
 
   useEffect(
     () => () => {

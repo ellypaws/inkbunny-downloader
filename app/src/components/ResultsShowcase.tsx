@@ -321,6 +321,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     ? clampIndex(activeModal.fileIndex, activeModalMediaItems.length)
     : 0;
   const activeModalItem = activeModalMediaItems[activeModalIndex] ?? null;
+  const activeModalVisible = activeModalSubmission !== null && activeModalItem !== null;
   const activeModalDownloadSummary = activeModalSubmission
     ? (downloadSummaries.get(activeModalSubmission.submissionId) ??
       IDLE_DOWNLOAD_SUMMARY)
@@ -502,27 +503,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   }, [onPanelPreviewImagesChange, panelPreviewImages, panelPreviewImagesKey]);
 
   useEffect(() => {
-    if (!activeModal) {
-      return;
-    }
-    if (!activeModalSubmission) {
-      setActiveModal(null);
-      return;
-    }
-    if (activeModal.fileIndex !== activeModalIndex) {
-      setActiveModal((current) =>
-        current
-          ? {
-              ...current,
-              fileIndex: activeModalIndex,
-            }
-          : current,
-      );
-    }
-  }, [activeModal, activeModalIndex, activeModalSubmission]);
-
-  useEffect(() => {
-    if (!activeModal) {
+    if (!activeModalVisible) {
       return;
     }
 
@@ -531,7 +512,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [activeModal]);
+  }, [activeModalVisible]);
 
   useEffect(() => {
     if (contextMenu?.kind === "submission" && !contextSubmission) {
@@ -540,7 +521,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
   }, [contextMenu, contextSubmission]);
 
   useEffect(() => {
-    if (!activeModal) {
+    if (!activeModalVisible) {
       return;
     }
 
@@ -551,38 +532,30 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        setActiveModal((current) =>
-          current
-            ? {
-                ...current,
-                fileIndex: current.fileIndex - 1,
-              }
-            : current,
-        );
+        setActiveModalIndex(activeModalIndex - 1);
         return;
       }
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        setActiveModal((current) =>
-          current
-            ? {
-                ...current,
-                fileIndex: current.fileIndex + 1,
-              }
-            : current,
-        );
+        setActiveModalIndex(activeModalIndex + 1);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeModal]);
+  }, [activeModalIndex, activeModalVisible]);
 
   const openSubmissionModal = (submissionId: string, fileIndex = 0) => {
     props.onSelectActive(submissionId);
+    const submission = props.results.find(
+      (item) => item.submissionId === submissionId,
+    );
+    const mediaItemCount = submission
+      ? getSubmissionModalMediaItems(submission, props.showCustomThumbnails).length
+      : 0;
     setActiveModal({
       submissionId,
-      fileIndex,
+      fileIndex: clampIndex(fileIndex, mediaItemCount),
     });
   };
 
@@ -591,7 +564,7 @@ export function ResultsShowcase(props: ResultsShowcaseProps) {
       current
         ? {
             ...current,
-            fileIndex,
+            fileIndex: clampIndex(fileIndex, activeModalMediaItems.length),
           }
         : current,
     );
