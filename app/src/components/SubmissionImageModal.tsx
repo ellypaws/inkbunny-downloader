@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { gsap } from "gsap";
+import { animate, motion, useMotionValue } from "motion/react";
 import {
   useCallback,
   useEffect,
@@ -27,6 +28,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import {
@@ -94,8 +96,12 @@ type ModalContextMenuState =
 
 export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const keywordListRef = useRef<HTMLDivElement | null>(null);
+  const activeIndex = props.activeIndex;
+  const onNavigate = props.onNavigate;
   const submissionKey = props.submission.submissionId;
   const hasMultipleItems = props.items.length > 1;
+  const dragStartXRef = useRef(0);
+  const dragPointerIdRef = useRef<number | null>(null);
   const modalRootRef = useRef<HTMLDivElement | null>(null);
   const panelShellRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -124,6 +130,8 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const [contextMenu, setContextMenu] = useState<ModalContextMenuState | null>(
     null,
   );
+  const [direction, setDirection] = useState(0);
+  const dragOffsetX = useMotionValue(0);
   const [descriptionState, setDescriptionState] = useState(() => ({
     submissionKey,
     value: null as SubmissionDescription | null,
@@ -212,6 +220,104 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
+
+  const paginate = useCallback(
+    (nextDirection: number) => {
+      setDirection(nextDirection);
+      onNavigate(activeIndex + nextDirection);
+    },
+    [activeIndex, onNavigate],
+  );
+
+  const navigateTo = useCallback(
+    (index: number) => {
+      if (index === activeIndex) {
+        return;
+      }
+      setDirection(index > activeIndex ? 1 : -1);
+      onNavigate(index);
+    },
+    [activeIndex, onNavigate],
+  );
+
+  const handleMediaPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!hasMultipleItems) {
+        return;
+      }
+
+      event.preventDefault();
+      dragStartXRef.current = event.clientX;
+      dragPointerIdRef.current = event.pointerId;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [hasMultipleItems],
+  );
+
+  const handleMediaPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        !hasMultipleItems ||
+        dragPointerIdRef.current === null ||
+        dragPointerIdRef.current !== event.pointerId
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      dragOffsetX.jump(event.clientX - dragStartXRef.current);
+    },
+    [dragOffsetX, hasMultipleItems],
+  );
+
+  const resetDraggedMediaPosition = useCallback(() => {
+    dragPointerIdRef.current = null;
+    animate(dragOffsetX, 0, { type: "spring", bounce: 0.3 });
+  }, [dragOffsetX]);
+
+  const handleMediaPointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        dragPointerIdRef.current !== null &&
+        dragPointerIdRef.current === event.pointerId &&
+        event.currentTarget.hasPointerCapture(event.pointerId)
+      ) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      resetDraggedMediaPosition();
+    },
+    [resetDraggedMediaPosition],
+  );
+
+  const handleMediaPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        !hasMultipleItems ||
+        dragPointerIdRef.current === null ||
+        dragPointerIdRef.current !== event.pointerId
+      ) {
+        return;
+      }
+
+      const swipe = event.clientX - dragStartXRef.current;
+      dragPointerIdRef.current = null;
+
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
+      if (swipe < -50) {
+        dragOffsetX.jump(0);
+        paginate(1);
+      } else if (swipe > 50) {
+        dragOffsetX.jump(0);
+        paginate(-1);
+      } else {
+        animate(dragOffsetX, 0, { type: "spring", bounce: 0.3 });
+      }
+    },
+    [dragOffsetX, hasMultipleItems, paginate],
+  );
 
   const openSidebarContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
@@ -997,13 +1103,13 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
             </button>
           </div>
 
-          <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden px-2 py-2 md:px-4 md:py-4">
+          <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
             {hasMultipleItems ? (
               <button
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  props.onNavigate(props.activeIndex - 1);
+                  paginate(-1);
                 }}
                 aria-label="Previous image"
                 className="theme-panel-strong theme-hover absolute left-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border text-[var(--theme-title)] shadow-sm transition-colors md:left-5"
@@ -1012,21 +1118,48 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
               </button>
             ) : null}
 
-            <SubmissionModalImage
-              submission={props.submission}
-              kind={props.item.kind}
-              sources={props.item.sources}
-              thumbnail={props.item.thumbnail}
-              alt={props.item.alt}
-              onContextMenu={openMediaContextMenu}
-            />
+            <motion.div
+              style={{ x: dragOffsetX, zIndex: 1 }}
+              onPointerDown={handleMediaPointerDown}
+              onPointerMove={handleMediaPointerMove}
+              onPointerUp={handleMediaPointerUp}
+              onPointerCancel={handleMediaPointerCancel}
+              onLostPointerCapture={resetDraggedMediaPosition}
+              className="absolute inset-0 flex touch-none select-none items-center justify-center px-2 py-2 md:px-4 md:py-4"
+            >
+              <motion.div
+                key={props.item.key}
+                animate={{
+                  x: [direction > 0 ? 300 : -300, 0],
+                  opacity: [0, 1],
+                  scale: [0.95, 1],
+                }}
+                transition={{
+                  x: { type: "spring", stiffness: 300, damping: 30 },
+                  opacity: { duration: 0.2 },
+                  scale: { type: "spring", stiffness: 300, damping: 30 },
+                }}
+                className={`flex touch-none select-none items-center justify-center ${
+                  hasMultipleItems ? "cursor-grab active:cursor-grabbing" : ""
+                }`}
+              >
+                <SubmissionModalImage
+                  submission={props.submission}
+                  kind={props.item.kind}
+                  sources={props.item.sources}
+                  thumbnail={props.item.thumbnail}
+                  alt={props.item.alt}
+                  onContextMenu={openMediaContextMenu}
+                />
+              </motion.div>
+            </motion.div>
 
             {hasMultipleItems ? (
               <button
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  props.onNavigate(props.activeIndex + 1);
+                  paginate(1);
                 }}
                 aria-label="Next media"
                 className="theme-panel-strong theme-hover absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border text-[var(--theme-title)] shadow-sm transition-colors md:right-5"
@@ -1046,7 +1179,7 @@ export function SubmissionImageModal(props: SubmissionImageModalProps) {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        props.onNavigate(index);
+                        navigateTo(index);
                       }}
                       aria-label={`View ${item.label}`}
                       className={`theme-panel-strong h-20 w-20 shrink-0 overflow-hidden rounded-xl border transition-all md:h-24 md:w-24 ${
@@ -1183,7 +1316,7 @@ function SubmissionModalVisualInner(props: {
     return (
       <ModalPreviewFallback
         submission={props.submission}
-        className="max-h-[min(86vh,72rem)] w-[min(92vw,72rem)] max-w-full"
+        className="h-96 w-[min(50vw,72rem)] max-h-[min(86vh,72rem)] max-w-full"
       />
     );
   }
@@ -1202,6 +1335,7 @@ function SubmissionModalVisualInner(props: {
             alt={props.alt}
             aria-hidden={loaded}
             referrerPolicy={MEDIA_REFERRER_POLICY}
+            draggable={false}
             className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
               loaded ? "opacity-0" : "opacity-100"
             }`}
@@ -1219,6 +1353,7 @@ function SubmissionModalVisualInner(props: {
           srcSet={resolveMediaSrcSet(source.srcSet)}
           alt={props.alt}
           referrerPolicy={MEDIA_REFERRER_POLICY}
+          draggable={false}
           onLoad={() => {
             setLoadedSourceKey(sourceKey);
           }}
@@ -1270,7 +1405,7 @@ function SubmissionModalVideoInner(props: {
     return (
       <ModalPreviewFallback
         submission={props.submission}
-        className="max-h-[min(86vh,72rem)] h-96 w-[min(50vw,72rem)] max-w-full"
+        className="h-96 w-[min(50vw,72rem)] max-h-[min(86vh,72rem)] max-w-full"
       />
     );
   }
@@ -1289,6 +1424,7 @@ function SubmissionModalVideoInner(props: {
             alt={props.alt}
             aria-hidden={loaded}
             referrerPolicy={MEDIA_REFERRER_POLICY}
+            draggable={false}
             className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-[250ms] ${
               loaded ? "opacity-0" : "opacity-100"
             }`}
@@ -1314,6 +1450,7 @@ function SubmissionModalVideoInner(props: {
           loop
           playsInline
           preload="metadata"
+          draggable={false}
           ref={(element) => {
             element?.setAttribute("referrerpolicy", MEDIA_REFERRER_POLICY);
           }}
