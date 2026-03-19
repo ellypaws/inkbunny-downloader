@@ -95,9 +95,10 @@ export const DOWNLOAD_PATTERN_TOKENS: DownloadPatternToken[] = [
   },
   {
     name: "file_name_ext",
-    label: "Filename stem",
-    description: "Alias for the file name segment without the extension.",
-    example: "star-patrol",
+    label: "Filename with extension",
+    description:
+      "Original file name after the file ID and artist prefix, including the extension.",
+    example: "star-patrol.png",
   },
   {
     name: "file_id",
@@ -189,7 +190,7 @@ const PREVIEW_VALUES: Record<string, string> = {
   minute: "27",
   file_name_full: "27491_elly_star-patrol.png",
   file_name: "star-patrol",
-  file_name_ext: "star-patrol",
+  file_name_ext: "star-patrol.png",
   file_id: "27491",
   submission_name: "Star Patrol",
   submission_name_auto_omit: "Star Patrol",

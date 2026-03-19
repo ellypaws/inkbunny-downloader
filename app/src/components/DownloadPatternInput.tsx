@@ -225,8 +225,8 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
       <div className="space-y-2">
         <div className="relative">
           <div
-            className={`flex flex-wrap gap-1.5 overflow-hidden transition-[max-height] duration-300 ${
-              tokensExpanded ? "max-h-96" : "max-h-[4rem]"
+            className={`flex flex-wrap items-start gap-1 overflow-hidden transition-[max-height] duration-300 ${
+              tokensExpanded ? "max-h-96" : "max-h-[4.5rem]"
             }`}
           >
             {DOWNLOAD_PATTERN_TOKENS.map((token: DownloadPatternToken) => (
@@ -236,14 +236,14 @@ export function DownloadPatternInput(props: DownloadPatternInputProps) {
                 title={`${token.description} Example: ${token.example}`}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => handleTokenInsert(token.name)}
-                className="rounded-full border border-[#2A7FA6]/18 bg-[#2A7FA6]/8 px-2 py-0.5 text-[9px] font-semibold text-[#2A7FA6] transition-colors hover:border-[#2A7FA6]/30 hover:bg-[#2A7FA6]/14 dark:border-[#89CFF0]/18 dark:bg-[#89CFF0]/10 dark:text-[#89CFF0] dark:hover:border-[#89CFF0]/28 dark:hover:bg-[#89CFF0]/16"
+                className="rounded-full border border-[#2A7FA6]/18 bg-[#2A7FA6]/8 px-1.5 py-px text-[8px] font-semibold leading-4 text-[#2A7FA6] transition-colors hover:border-[#2A7FA6]/30 hover:bg-[#2A7FA6]/14 dark:border-[#89CFF0]/18 dark:bg-[#89CFF0]/10 dark:text-[#89CFF0] dark:hover:border-[#89CFF0]/28 dark:hover:bg-[#89CFF0]/16"
               >
                 {token.name}
               </button>
             ))}
           </div>
           {tokensExpanded ? null : (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 bg-gradient-to-t from-white/90 to-transparent dark:from-[#1A1733]/92" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-white/85 via-white/55 to-transparent dark:from-[#1A1733]/88 dark:via-[#1A1733]/48" />
           )}
         </div>
         <button
@@ -274,7 +274,7 @@ function EditorContent(props: {
             <span
               key={`invalid-${index}`}
               title={`Unknown token ${segment.value}`}
-              className={`inline-flex rounded-full border px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
+              className={`inline-flex rounded-full border px-1.25 py-px align-middle text-[9px] font-semibold leading-4 ${
                 props.muted
                   ? "border-[#8A1538]/20 bg-[#FFE8E8]/75 text-[#8A1538]/45 dark:border-[#FFB6C1]/15 dark:bg-[#3B1622]/45 dark:text-[#FFB6C1]/40"
                   : "border-[#8A1538]/30 bg-[#FFE8E8] text-[#8A1538] dark:border-[#FFB6C1]/18 dark:bg-[#3B1622] dark:text-[#FFB6C1]"
@@ -289,7 +289,7 @@ function EditorContent(props: {
           <span
             key={`token-${segment.token.name}-${index}`}
             title={`${segment.token.description} Example: ${segment.token.example}`}
-            className={`inline-flex rounded-full border px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
+            className={`inline-flex rounded-full border px-1.25 py-px align-middle text-[9px] font-semibold leading-4 ${
               props.muted
                 ? "border-[#2A7FA6]/14 bg-[#2A7FA6]/8 text-[#2A7FA6]/45 dark:border-[#89CFF0]/12 dark:bg-[#89CFF0]/8 dark:text-[#89CFF0]/38"
                 : "border-[#2A7FA6]/22 bg-[#2A7FA6]/12 text-[#2A7FA6] dark:border-[#89CFF0]/18 dark:bg-[#89CFF0]/12 dark:text-[#89CFF0]"

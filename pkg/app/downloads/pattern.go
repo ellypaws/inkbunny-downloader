@@ -244,7 +244,7 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 	case "file_name":
 		return parts.name, true
 	case "file_name_ext":
-		return parts.name, true
+		return parts.nameExt, true
 	case "file_id":
 		return ctx.File.FileID.String(), true
 	case "submission_name":
@@ -283,9 +283,10 @@ func downloadTokenValue(name string, ctx downloadPathContext) (string, bool) {
 }
 
 type downloadFileNameParts struct {
-	full string
-	name string
-	ext  string
+	full    string
+	name    string
+	nameExt string
+	ext     string
 }
 
 func splitDownloadFileName(username string, file inkbunny.File) downloadFileNameParts {
@@ -293,9 +294,10 @@ func splitDownloadFileName(username string, file inkbunny.File) downloadFileName
 	extWithDot := filepath.Ext(full)
 	stem := strings.TrimSuffix(full, extWithDot)
 	parts := downloadFileNameParts{
-		full: full,
-		name: stem,
-		ext:  strings.TrimPrefix(strings.ToLower(extWithDot), "."),
+		full:    full,
+		name:    stem,
+		nameExt: full,
+		ext:     strings.TrimPrefix(strings.ToLower(extWithDot), "."),
 	}
 
 	fileID := strings.TrimSpace(file.FileID.String())
