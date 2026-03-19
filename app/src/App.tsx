@@ -5355,24 +5355,49 @@ function formatMemoryBytes(value: number) {
   return `${current.toFixed(current >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function getStringArray(value: unknown) {
+function getStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
   return value.filter((item): item is string => typeof item === "string");
 }
 
-function getStringRecord(value: unknown) {
+function getStringRecord(value: unknown): Record<string, string> {
   if (!isRecord(value)) {
     return {};
   }
-  return Object.fromEntries(
-    Object.entries(value).filter(([, item]) => typeof item === "string"),
-  );
+  const next: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string") {
+      next[key] = item;
+    }
+  }
+  return next;
+}
+
+function isArtistValidationState(
+  value: unknown,
+): value is ArtistValidationState {
+  return value === "pending" || value === "valid" || value === "invalid";
+}
+
+function getArtistValidationRecord(
+  value: unknown,
+): Record<string, ArtistValidationState> {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const next: Record<string, ArtistValidationState> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (isArtistValidationState(item)) {
+      next[key] = item;
+    }
+  }
+  return next;
 }
 
 function getBoolean(value: unknown, fallback: boolean) {
@@ -5756,10 +5781,7 @@ function restoreSavedSearchTab(
     artistDraft:
       typeof source.artistDraft === "string" ? source.artistDraft : "",
     artistAvatars: getStringRecord(source.artistAvatars),
-    artistValidation: getStringRecord(source.artistValidation) as Record<
-      string,
-      ArtistValidationState
-    >,
+    artistValidation: getArtistValidationRecord(source.artistValidation),
     searchResponse,
     results,
     activeSubmissionId,
