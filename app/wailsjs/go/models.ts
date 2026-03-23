@@ -570,6 +570,7 @@ export namespace types {
 	    maxActive: number;
 	    downloadDirectory: string;
 	    downloadPattern: string;
+	    forceRedownload: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DownloadOptions(source);
@@ -581,6 +582,7 @@ export namespace types {
 	        this.maxActive = source["maxActive"];
 	        this.downloadDirectory = source["downloadDirectory"];
 	        this.downloadPattern = source["downloadPattern"];
+	        this.forceRedownload = source["forceRedownload"];
 	    }
 	}
 	export class SelectedSubmission {

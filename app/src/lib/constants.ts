@@ -7,6 +7,7 @@ export const MAX_CONCURRENT_DOWNLOADS = 16
 export const DEFAULT_ORDER_BY = 'create_datetime'
 export const UNREAD_DEFAULT_ORDER_BY = 'unread_datetime'
 export const UNREAD_OLDEST_ORDER_BY = 'unread_datetime_reverse'
+export const FAVORITES_DEFAULT_ORDER_BY = 'fav_datetime'
 export const FAVORITES_ORDER_VALUES = new Set(['fav_datetime', 'fav_stars'])
 export const UNREAD_ONLY_ORDER_VALUES = new Set([
   UNREAD_DEFAULT_ORDER_BY,

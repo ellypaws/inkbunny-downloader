@@ -17,11 +17,14 @@ import { StarBackground } from "./components/StarBackground";
 import { ToastHost, type ToastItem } from "./components/ToastHost";
 import {
   DEFAULT_SEARCH,
+  DEFAULT_ORDER_BY,
   EMPTY_QUEUE,
   EMPTY_SESSION,
+  FAVORITES_DEFAULT_ORDER_BY,
   MAX_CONCURRENT_DOWNLOADS,
   MIN_CONCURRENT_DOWNLOADS,
   normalizeOrderByValue,
+  UNREAD_DEFAULT_ORDER_BY,
 } from "./lib/constants";
 import {
   registerDebugControls,
@@ -3273,15 +3276,20 @@ export default function App() {
     if (!normalizedUsername) {
       return;
     }
+    const baseSearch = buildDefaultSearch(sessionRef.current, settingsRef.current);
 
     await openSearchTab({
       ...createSearchTab(sessionRef.current, settingsRef.current),
       searchParams: normalizeSearchParamsForMode(
-        {
-          ...buildDefaultSearch(sessionRef.current, settingsRef.current),
+        applyFavoriteSearchDefaultOrder(
+          baseSearch,
+          {
+            ...baseSearch,
           favoritesBy: normalizedUsername,
           page: 1,
-        },
+          },
+          "default",
+        ),
         "default",
         sessionRef.current,
         settingsRef.current,
@@ -3946,9 +3954,13 @@ export default function App() {
                 updateTab(activeTab.id, (currentTab) => ({
                   ...currentTab,
                   searchParams: normalizeSearchParamsForMode(
-                    clearKeywordSearchSelectionOnQueryChange(
+                    applyFavoriteSearchDefaultOrder(
                       currentTab.searchParams,
-                      updater(currentTab.searchParams),
+                      clearKeywordSearchSelectionOnQueryChange(
+                        currentTab.searchParams,
+                        updater(currentTab.searchParams),
+                      ),
+                      currentTab.mode,
                     ),
                     currentTab.mode,
                     sessionRef.current,
@@ -4922,6 +4934,29 @@ function normalizeSearchParamsForMode(
   };
 }
 
+function applyFavoriteSearchDefaultOrder(
+  previous: SearchParams,
+  next: SearchParams,
+  mode: SearchTabMode,
+) {
+  const previousFavoritesBy = previous.favoritesBy.trim();
+  const nextFavoritesBy = next.favoritesBy.trim();
+  if (previousFavoritesBy || !nextFavoritesBy) {
+    return next;
+  }
+
+  const defaultOrderBy =
+    mode === "unread" ? UNREAD_DEFAULT_ORDER_BY : DEFAULT_ORDER_BY;
+  if (next.orderBy !== defaultOrderBy) {
+    return next;
+  }
+
+  return {
+    ...next,
+    orderBy: FAVORITES_DEFAULT_ORDER_BY,
+  };
+}
+
 function createSearchTab(
   session: SessionInfo,
   settings: AppSettings,
@@ -5444,6 +5479,13 @@ function normalizeSavedSearchParams(
         )
       : [],
   };
+  if (
+    typeof value.orderBy !== "string" &&
+    typeof value.favoritesBy === "string" &&
+    value.favoritesBy.trim()
+  ) {
+    base.orderBy = FAVORITES_DEFAULT_ORDER_BY;
+  }
   return syncSearchParamsWithSession(base, session, settings, mode);
 }
 
