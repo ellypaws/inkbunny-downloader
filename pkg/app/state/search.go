@@ -43,16 +43,29 @@ type searchState struct {
 	CacheKey        searchCacheKey
 }
 
+const orderByUnreadDatetimeReverse inkbunny.OrderBy = "unread_datetime_reverse"
+
 func normalizeSearchOrderBy(
 	orderBy inkbunny.OrderBy,
 	favsUserID inkbunny.IntString,
+	unreadSubmissions inkbunny.BooleanYN,
 ) inkbunny.OrderBy {
 	normalizedOrderBy := strings.TrimSpace(orderBy)
+	defaultOrderBy := inkbunny.OrderByCreateDatetime
+	if unreadSubmissions == inkbunny.Yes {
+		defaultOrderBy = inkbunny.OrderByUnreadDatetime
+	}
 	if normalizedOrderBy == "" {
-		return inkbunny.OrderByCreateDatetime
+		return defaultOrderBy
+	}
+	if unreadSubmissions == inkbunny.Yes && normalizedOrderBy == inkbunny.OrderByCreateDatetime {
+		normalizedOrderBy = inkbunny.OrderByUnreadDatetime
+	}
+	if unreadSubmissions != inkbunny.Yes && (normalizedOrderBy == inkbunny.OrderByUnreadDatetime || normalizedOrderBy == orderByUnreadDatetimeReverse) {
+		normalizedOrderBy = inkbunny.OrderByCreateDatetime
 	}
 	if favsUserID <= 0 && (normalizedOrderBy == inkbunny.OrderByFavDatetime || normalizedOrderBy == inkbunny.OrderByFavStars) {
-		return inkbunny.OrderByCreateDatetime
+		return defaultOrderBy
 	}
 	return normalizedOrderBy
 }
@@ -862,7 +875,7 @@ func (a *App) buildSearchRequest(
 			}
 		}
 	}
-	req.OrderBy = normalizeSearchOrderBy(req.OrderBy, req.FavsUserID)
+	req.OrderBy = normalizeSearchOrderBy(req.OrderBy, req.FavsUserID, req.UnreadSubmissions)
 
 	if req.Username != "" {
 		member, ok, err := a.lookupUsernameSuggestion(ctx, user, req.Username)
@@ -2500,7 +2513,7 @@ func (a *App) sortPendingSearchResults(
 	if state == nil || len(state.PendingResults) < 2 {
 		return nil
 	}
-	orderBy := normalizeSearchOrderBy(state.Request.OrderBy, state.Request.FavsUserID)
+	orderBy := normalizeSearchOrderBy(state.Request.OrderBy, state.Request.FavsUserID, state.Request.UnreadSubmissions)
 
 	detailsByID := map[string]inkbunny.SubmissionDetails{}
 	if orderBy == inkbunny.OrderByFavs || orderBy == inkbunny.OrderByViews {
@@ -2550,6 +2563,14 @@ func compareSearchSubmissions(
 	case inkbunny.OrderByFavStars:
 		if left.Stars != right.Stars {
 			return left.Stars > right.Stars
+		}
+	case inkbunny.OrderByUnreadDatetime:
+		if left.UnreadDateSystem != right.UnreadDateSystem {
+			return left.UnreadDateSystem > right.UnreadDateSystem
+		}
+	case string(orderByUnreadDatetimeReverse):
+		if left.UnreadDateSystem != right.UnreadDateSystem {
+			return left.UnreadDateSystem < right.UnreadDateSystem
 		}
 	}
 

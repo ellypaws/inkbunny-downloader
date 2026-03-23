@@ -5,16 +5,33 @@ export const DEFAULT_AVATAR_URL = 'https://inkbunny.net/images80/usericons/large
 export const MIN_CONCURRENT_DOWNLOADS = 1
 export const MAX_CONCURRENT_DOWNLOADS = 16
 export const DEFAULT_ORDER_BY = 'create_datetime'
+export const UNREAD_DEFAULT_ORDER_BY = 'unread_datetime'
+export const UNREAD_OLDEST_ORDER_BY = 'unread_datetime_reverse'
 export const FAVORITES_ORDER_VALUES = new Set(['fav_datetime', 'fav_stars'])
+export const UNREAD_ONLY_ORDER_VALUES = new Set([
+  UNREAD_DEFAULT_ORDER_BY,
+  UNREAD_OLDEST_ORDER_BY,
+])
 
 export function isFavoritesOnlyOrderValue(orderBy: string) {
   return FAVORITES_ORDER_VALUES.has(orderBy.trim())
 }
 
-export function normalizeOrderByValue(orderBy: string, favoritesBy: string) {
-  const normalizedOrderBy = orderBy.trim() || DEFAULT_ORDER_BY
+export function normalizeOrderByValue(
+  orderBy: string,
+  favoritesBy: string,
+  unreadMode: boolean,
+) {
+  const defaultOrderBy = unreadMode ? UNREAD_DEFAULT_ORDER_BY : DEFAULT_ORDER_BY
+  let normalizedOrderBy = orderBy.trim() || defaultOrderBy
+  if (unreadMode && normalizedOrderBy === DEFAULT_ORDER_BY) {
+    normalizedOrderBy = UNREAD_DEFAULT_ORDER_BY
+  }
+  if (!unreadMode && UNREAD_ONLY_ORDER_VALUES.has(normalizedOrderBy)) {
+    normalizedOrderBy = DEFAULT_ORDER_BY
+  }
   if (!favoritesBy.trim() && isFavoritesOnlyOrderValue(normalizedOrderBy)) {
-    return DEFAULT_ORDER_BY
+    return defaultOrderBy
   }
   return normalizedOrderBy
 }
@@ -33,6 +50,7 @@ export const TIME_OPTIONS = [
 
 export const ORDER_OPTIONS = [
   { label: 'Newest First', value: 'create_datetime' },
+  { label: 'Oldest First', value: UNREAD_OLDEST_ORDER_BY },
   { label: 'Most Popular by Favs', value: 'favs' },
   { label: 'Most Popular by Views', value: 'views' },
   { label: 'Sort by Faved Date', value: 'fav_datetime' },

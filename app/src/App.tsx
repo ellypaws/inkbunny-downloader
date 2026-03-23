@@ -4909,6 +4909,7 @@ function normalizeSearchParamsForMode(
     orderBy: normalizeOrderByValue(
       searchParams.orderBy,
       searchParams.favoritesBy,
+      mode === "unread",
     ),
     unreadSubmissions: mode === "unread",
     perPage: normalizedPerPage,
