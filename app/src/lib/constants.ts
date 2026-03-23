@@ -4,6 +4,20 @@ import { DEFAULT_DOWNLOAD_PATTERN } from './downloadPattern'
 export const DEFAULT_AVATAR_URL = 'https://inkbunny.net/images80/usericons/large/noicon.png'
 export const MIN_CONCURRENT_DOWNLOADS = 1
 export const MAX_CONCURRENT_DOWNLOADS = 16
+export const DEFAULT_ORDER_BY = 'create_datetime'
+export const FAVORITES_ORDER_VALUES = new Set(['fav_datetime', 'fav_stars'])
+
+export function isFavoritesOnlyOrderValue(orderBy: string) {
+  return FAVORITES_ORDER_VALUES.has(orderBy.trim())
+}
+
+export function normalizeOrderByValue(orderBy: string, favoritesBy: string) {
+  const normalizedOrderBy = orderBy.trim() || DEFAULT_ORDER_BY
+  if (!favoritesBy.trim() && isFavoritesOnlyOrderValue(normalizedOrderBy)) {
+    return DEFAULT_ORDER_BY
+  }
+  return normalizedOrderBy
+}
 
 export const TIME_OPTIONS = [
   { label: 'Any Time', value: 0 },
@@ -21,6 +35,9 @@ export const ORDER_OPTIONS = [
   { label: 'Newest First', value: 'create_datetime' },
   { label: 'Most Popular by Favs', value: 'favs' },
   { label: 'Most Popular by Views', value: 'views' },
+  { label: 'Sort by Faved Date', value: 'fav_datetime' },
+  { label: 'Sort by Stars', value: 'fav_stars' },
+  { label: 'Sort by Artist', value: 'username' },
 ]
 
 export const SCRAPS_OPTIONS = [
@@ -76,7 +93,7 @@ export const DEFAULT_SEARCH: SearchParams = {
   scraps: 'both',
   timeRangeDays: 0,
   submissionTypes: [],
-  orderBy: 'create_datetime',
+  orderBy: DEFAULT_ORDER_BY,
   randomize: false,
   page: 1,
   perPage: 30,

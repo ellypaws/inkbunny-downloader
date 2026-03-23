@@ -16,6 +16,7 @@ import {
 } from "./ContextMenu";
 import {
   DEFAULT_AVATAR_URL,
+  FAVORITES_ORDER_VALUES,
   FIND_OPTIONS,
   ORDER_OPTIONS,
   RATING_OPTIONS,
@@ -96,6 +97,7 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
     !props.session.isGuest &&
     props.session.username !== "";
   const anyTypeSelected = props.searchParams.submissionTypes.length === 0;
+  const favoritesOrderEnabled = props.searchParams.favoritesBy.trim() !== "";
 
   const ratingRows = useMemo(
     () =>
@@ -622,7 +624,14 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
                       className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm outline-none backdrop-blur-md"
                     >
                       {ORDER_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
+                        <option
+                          key={option.value}
+                          value={option.value}
+                          disabled={
+                            !favoritesOrderEnabled &&
+                            FAVORITES_ORDER_VALUES.has(option.value)
+                          }
+                        >
                           {option.label}
                         </option>
                       ))}

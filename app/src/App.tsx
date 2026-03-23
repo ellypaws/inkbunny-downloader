@@ -21,6 +21,7 @@ import {
   EMPTY_SESSION,
   MAX_CONCURRENT_DOWNLOADS,
   MIN_CONCURRENT_DOWNLOADS,
+  normalizeOrderByValue,
 } from "./lib/constants";
 import {
   registerDebugControls,
@@ -4905,6 +4906,10 @@ function normalizeSearchParamsForMode(
   const normalizedPerPage = normalizeSearchPerPage(searchParams.perPage);
   return {
     ...cloneSearchParams(searchParams),
+    orderBy: normalizeOrderByValue(
+      searchParams.orderBy,
+      searchParams.favoritesBy,
+    ),
     unreadSubmissions: mode === "unread",
     perPage: normalizedPerPage,
     maxActive:

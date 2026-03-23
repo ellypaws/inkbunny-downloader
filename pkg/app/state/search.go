@@ -43,6 +43,20 @@ type searchState struct {
 	CacheKey        searchCacheKey
 }
 
+func normalizeSearchOrderBy(
+	orderBy inkbunny.OrderBy,
+	favsUserID inkbunny.IntString,
+) inkbunny.OrderBy {
+	normalizedOrderBy := strings.TrimSpace(orderBy)
+	if normalizedOrderBy == "" {
+		return inkbunny.OrderByCreateDatetime
+	}
+	if favsUserID <= 0 && (normalizedOrderBy == inkbunny.OrderByFavDatetime || normalizedOrderBy == inkbunny.OrderByFavStars) {
+		return inkbunny.OrderByCreateDatetime
+	}
+	return normalizedOrderBy
+}
+
 type artistSearchState struct {
 	Username           string
 	RID                string
@@ -806,9 +820,6 @@ func (a *App) buildSearchRequest(
 	if req.StringJoinType == "" {
 		req.StringJoinType = inkbunny.JoinTypeAnd
 	}
-	if req.OrderBy == "" {
-		req.OrderBy = inkbunny.OrderByCreateDatetime
-	}
 	if !params.UseWatchingArtists && len(artistFilters) == 1 {
 		req.Username = artistFilters[0]
 	}
@@ -851,6 +862,7 @@ func (a *App) buildSearchRequest(
 			}
 		}
 	}
+	req.OrderBy = normalizeSearchOrderBy(req.OrderBy, req.FavsUserID)
 
 	if req.Username != "" {
 		member, ok, err := a.lookupUsernameSuggestion(ctx, user, req.Username)
@@ -2488,10 +2500,7 @@ func (a *App) sortPendingSearchResults(
 	if state == nil || len(state.PendingResults) < 2 {
 		return nil
 	}
-	orderBy := strings.TrimSpace(state.Request.OrderBy)
-	if orderBy == "" {
-		orderBy = inkbunny.OrderByCreateDatetime
-	}
+	orderBy := normalizeSearchOrderBy(state.Request.OrderBy, state.Request.FavsUserID)
 
 	detailsByID := map[string]inkbunny.SubmissionDetails{}
 	if orderBy == inkbunny.OrderByFavs || orderBy == inkbunny.OrderByViews {
@@ -2537,6 +2546,10 @@ func compareSearchSubmissions(
 		rightDetails := detailsByID[right.SubmissionID.String()]
 		if leftDetails.Views != rightDetails.Views {
 			return leftDetails.Views > rightDetails.Views
+		}
+	case inkbunny.OrderByFavStars:
+		if left.Stars != right.Stars {
+			return left.Stars > right.Stars
 		}
 	}
 
